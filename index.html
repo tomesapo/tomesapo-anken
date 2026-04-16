@@ -1191,6 +1191,8 @@ function addParkingLotCard(pl={}) {
         '<div class="form-group"><label>駐車場名</label><input type="text" name="pl_name" placeholder="○○駐車場" value="'+esc(pl.name||'')+'" oninput="updateParkingCardTitle(this)"></div>' +
         '<div class="form-group span-2"><label>駐車場住所</label><input type="text" name="pl_address" value="'+esc(pl.address||'')+'" placeholder="住所を入力"></div>' +
         '<div class="form-group"><label>徒歩</label><div style="display:flex;align-items:center;gap:6px"><input type="number" name="pl_walkMinutes" min="0" placeholder="0" value="'+(pl.walkMinutes!=null?pl.walkMinutes:'')+'" style="width:70px"><span style="font-size:12px;color:var(--gray-500)">分</span></div></div>' +
+        '<div class="form-group"><label>対応車両</label><select name="pl_vehicleType"><option value=""'+(!(pl.vehicleType)?' selected':'')+'>（未選択）</option><option value="軽自動車のみ"'+(pl.vehicleType==='軽自動車のみ'?' selected':'')+'>軽自動車のみ</option><option value="普通車まで"'+(pl.vehicleType==='普通車まで'?' selected':'')+'>普通車まで</option><option value="普通車・工事関係車両(ハイエース程度)"'+(pl.vehicleType==='普通車・工事関係車両(ハイエース程度)'?' selected':'')+'>普通車・工事関係車両(ハイエース程度)</option><option value="工事関係車両可(条件有り)"'+(pl.vehicleType==='工事関係車両可(条件有り)'?' selected':'')+'>工事関係車両可(条件有り)</option></select></div>' +
+        '<div class="form-group"><label>空き台数</label><input type="number" name="pl_vacancyUnits" min="0" placeholder="0" value="'+(pl.vacancyUnits!=null?pl.vacancyUnits:'')+'"></div>' +
         '<div class="form-group"><label>仕入先名</label><input type="text" name="pl_supplierName" value="'+esc(pl.supplierName||'')+'" placeholder="○○不動産"></div>' +
         '<div class="form-group"><label>仕入先電話</label><input type="tel" name="pl_supplierPhone" value="'+esc(pl.supplierPhone||'')+'" placeholder="03-0000-0000"></div>' +
         '<div class="form-group"><label>仕入先FAX</label><input type="tel" name="pl_supplierFax" value="'+esc(pl.supplierFax||'')+'" placeholder="03-0000-0000"></div>' +
@@ -1275,6 +1277,8 @@ function getParkingLotsFromForm(){
       estimateStart:g('pl_estimateStart')?g('pl_estimateStart').value||'':'',
       estimateEnd:g('pl_estimateEnd')?g('pl_estimateEnd').value||'':'',
       estimateUnits:g('pl_estimateUnits')?(parseInt(g('pl_estimateUnits').value)||null):null,
+      vehicleType:g('pl_vehicleType')?g('pl_vehicleType').value:'',
+      vacancyUnits:g('pl_vacancyUnits')?(parseInt(g('pl_vacancyUnits').value)||null):null,
       monthlyRent:rt==='monthly'?(parseFloat(g('pl_monthlyRent').value)||null):null,
       dailyRent:rt==='daily'?(parseFloat(g('pl_dailyRent').value)||null):null,
       adminFee:parseFloat(g('pl_adminFee').value)||null,keyMoney:parseFloat(g('pl_keyMoney').value)||null,deposit:parseFloat(g('pl_deposit').value)||null,
@@ -1300,6 +1304,8 @@ function renderParkingLotsDetail(c){
       ['料金タイプ',pl.rateType==='daily'?'日額':'月額'],
       ['見積期間',estPeriodStr],
       ['見積台数',pl.estimateUnits!=null?(pl.estimateUnits+' 台'):''],
+      ['対応車両',pl.vehicleType||''],
+      ['空き台数',pl.vacancyUnits!=null?pl.vacancyUnits+' 台':''],
       ['契約台数',pl.units!=null?pl.units+' 台':''],
       ['開始月日割',pl.startProRate?'可':'不可'],['終了月日割',pl.endProRate?'可':'不可'],
       ['保証金',pl.deposit!=null?'¥'+fmt(pl.deposit):'']];
@@ -1531,7 +1537,7 @@ function generateProposal(caseId){
     '.ma input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}',
     '.ma.has-img .map-ph{display:none}',
     // 情報パネル
-    '.ia{padding:6px 8px;display:flex;flex-direction:column;gap:3px;overflow:hidden;font-size:10px}',
+    '.ia{padding:6px 8px;display:flex;flex-direction:column;gap:3px;overflow:visible;font-size:10px}',
     '.gh{border-bottom:2px solid #222;padding-bottom:3px;margin-bottom:3px}',
     '.gt{font-size:13px;font-weight:bold;letter-spacing:.5px}',
     '.gm{font-size:9px;color:#555;margin-top:1px}',
@@ -1564,7 +1570,7 @@ function generateProposal(caseId){
     pageLots.forEach((pl,j)=>{
       const rm=pl.rateType!=='daily';
       const rent=rm?(pl.quoteMonthlyRent??pl.monthlyRent):(pl.quoteDailyRent??pl.dailyRent);
-      const tu=pl.estimateUnits||pl.units;
+      const tu=pl.vacancyUnits;
       const estStart=pl.estimateStart||c.contractStart;
       const estEnd=pl.estimateEnd||c.contractEnd;
       inf+='<div class="ph">駐車場'+NUMS[j]+'</div>';
@@ -1573,10 +1579,11 @@ function generateProposal(caseId){
       if(pl.walkMinutes!=null)inf+='<tr><th>徒歩</th><td>'+pl.walkMinutes+'分</td></tr>';
       if(pl.address)inf+='<tr><th>住所</th><td>'+e(pl.address)+'</td></tr>';
       inf+='<tr><th>日割</th><td>'+(rm?'無':'有')+'</td></tr>';
-      if(estStart)inf+='<tr><th>開始月</th><td>'+fmtD(estStart)+'</td></tr>';
-      if(estEnd)inf+='<tr><th>終了月</th><td>'+fmtD(estEnd)+'</td></tr>';
+      if(pl.vehicleType)inf+='<tr><th>対応車両</th><td>'+e(pl.vehicleType)+'</td></tr>';
+      // 開始月 removed
+      // 終了月 removed
       if(pl.quoteKeyMoney!=null)inf+='<tr><th>礼金</th><td>¥'+fmtN(pl.quoteKeyMoney)+'</td></tr>';
-      if(rent!=null)inf+='<tr><th>賃料</th><td>¥'+fmtN(rent)+(rm?'/月':'/日')+'</td></tr>';
+      // 賃料 removed
       if(tu)inf+='<tr><th>空き台数</th><td>'+tu+'台</td></tr>';
       inf+='<tr><th>備考</th><td>&nbsp;</td></tr>';
       inf+='</table>';
@@ -1674,6 +1681,8 @@ function generateProposal(caseId){
         keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
         units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
         estStart:pl.estimateStart||c.contractStart||'',
+        vehicleType:pl.vehicleType||'',
+        vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
         estEnd:pl.estimateEnd||c.contractEnd||'',
       };
     })
