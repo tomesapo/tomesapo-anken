@@ -1549,7 +1549,7 @@ function generateProposal(caseId){
     '.pt{width:100%;border-collapse:collapse}',
     '.pt th{background:#f5f5f5;border:1px solid #ccc;padding:2px 4px;font-size:9px;white-space:nowrap;width:30%}',
     '.pt td{border:1px solid #ccc;padding:2px 4px;font-size:9px;word-break:break-all}',
-    '.pl-photo{width:100%;max-height:70px;object-fit:cover;border:1px solid #ccc;border-radius:2px;margin-bottom:1px;display:block}',
+    '.pl-photo{width:100%;max-height:110px;object-fit:cover;border:1px solid #ccc;border-radius:2px;margin-bottom:1px;display:block}',
     '.cf{margin-top:auto;padding-top:3px;font-size:8px;color:#555;border-top:1px solid #ccc;line-height:1.5}',
     '.ds{font-size:7px;color:#999;line-height:1.4;margin-top:1px}',
     '@media print{.tb{display:none}body{background:white}',
@@ -1579,8 +1579,7 @@ function generateProposal(caseId){
       inf+='<table class="pt">';
       if(pl.walkMinutes!=null)inf+='<tr><th>徒歩</th><td>'+pl.walkMinutes+'分</td></tr>';
       if(pl.address)inf+='<tr><th>住所</th><td>'+e(pl.address)+'</td></tr>';
-      inf+='<tr><th>開始月日割</th><td>'+(pl.startProRate?'可':'不可')+'</td></tr>';
-      inf+='<tr><th>終了月日割</th><td>'+(pl.endProRate?'可':'不可')+'</td></tr>';
+      inf+='<tr><th>日割（開始/終了）</th><td>'+(pl.startProRate?'可':'不可')+'／'+(pl.endProRate?'可':'不可')+'</td></tr>';
       if(pl.vehicleType)inf+='<tr><th>対応車両</th><td>'+e(pl.vehicleType)+'</td></tr>';
       // 開始月 removed
       // 終了月 removed
@@ -1653,7 +1652,7 @@ function generateProposal(caseId){
     +'function fitPanels(){'
     +'document.querySelectorAll(".ia").forEach(function(ia){'
     +'var inner=ia.querySelector(".ia-inner");if(!inner)return;'
-    +'var avail=ia.clientHeight;'
+    +'var avail=ia.clientHeight*0.97;'
     +'var natural=inner.offsetHeight;'
     +'if(natural>0&&natural>avail){'
     +'var s=(avail/natural);'
@@ -1803,4 +1802,4 @@ document.addEventListener('keydown',e=>{
 initApp();
 </script>
 </body>
-</html>    
+</html>                                          
