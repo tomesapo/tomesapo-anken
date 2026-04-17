@@ -1706,6 +1706,7 @@ function generateProposal(caseId){
         startProRate:!!pl.startProRate,
         endProRate:!!pl.endProRate,
         lotNote:pl.lotNote||'',
+        photo:pl.photo||'',
       };
     })
   });
@@ -1810,15 +1811,17 @@ async function generateParkingMapExcel(){
     while(ws['\!cols'].length<18)ws['\!cols'].push({});
     ws['\!cols'][17]={wch:16};
 
+    // A4横・1ページ印刷設定
+    ws['\!pageSetup']={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1};
+
     // xlsx バイナリ生成
     var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
 
     // ── JSZip で写真を埋め込む ──
-    var photos=window._pkgPhotos||[];
     var addedPhotos=[];
     var zip=await JSZip.loadAsync(out);
     for(var i=0;i<3;i++){
-      var src=photos[i];
+      var src=(ed.lots[i]&&ed.lots[i].photo)||'';
       if(src&&src.startsWith('data:')){
         var mimeMatch=src.match(/data:([^;]+);base64,/);
         var mime=mimeMatch?mimeMatch[1]:'image/jpeg';
