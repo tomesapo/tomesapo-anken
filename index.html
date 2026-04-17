@@ -1728,7 +1728,7 @@ async function generateParkingMapExcel(){
     // セル書き込みヘルパー
     function sc(addr,val){if(!ws[addr])ws[addr]={};ws[addr].v=(val==null?'':val);ws[addr].t='s';delete ws[addr].f;delete ws[addr].r;}
     function nc(addr,val){if(!ws[addr])ws[addr]={};ws[addr].v=val;ws[addr].t='n';delete ws[addr].f;delete ws[addr].r;}
-    function dc(addr,dateStr){if(!dateStr||dateStr.length<10)return;var d=new Date(dateStr.slice(0,10)+'T00:00:00');if(isNaN(d.getTime()))return;var serial=Math.round((d.getTime()-new Date(1899,11,30).getTime())/86400000);if(!ws[addr])ws[addr]={};ws[addr].v=serial;ws[addr].t='n';ws[addr].z='yyyy/m/d';delete ws[addr].f;delete ws[addr].r;}
+    function dc(addr,dateStr){if(!dateStr||dateStr.length<10)return;var d=new Date(dateStr.slice(0,10)+'T00:00:00');if(isNaN(d.getTime()))return;var serial=Math.round((d.getTime()-new Date(1899,11,30).getTime())/86400000);if(!ws[addr])ws[addr]={};ws[addr].v=serial;ws[addr].t='n';ws[addr].z='yyyy"年"m"月"d"日"';delete ws[addr].f;delete ws[addr].r;}
 
     // データ書き込み
     sc('M1',(ed.caseNo?ed.caseNo+'\uff5c':'')+ed.siteName);
@@ -1789,7 +1789,11 @@ async function generateParkingMapExcel(){
     // 行3: 依頼期間 14pt（A3は除外）
     for(var C=1;C<=24;C++){var a=XLSX.utils.encode_cell({r:2,c:C});ss(a,14,'left');}
     ss('W3',14,'right'); // W3は右揃え
-    // ヘッダーセル #E7E6E6（A3・A4は除外）
+    // A3・A4: 14pt + #E7E6E6塗りつぶし
+    ss('A3',14,'left',HC);ss('A4',14,'left',HC);
+    // C4: 14pt
+    ss('C4',14,'left');
+    // ヘッダーセル #E7E6E6
     ['B3','U3','V3','B4'].forEach(function(a){ss(a,14,'left',HC);});
     ['R5','W5','R6','R7','S7','U7','W7','R8','U8','R9','R10','R11','R12','R13','R14','R15','R16',
      'R19','W19','R20','R21','S21','U21','W21','R22','U22','R23','R24','R25','R26','R27','R28','R29','R30',
