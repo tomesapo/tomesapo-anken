@@ -1578,7 +1578,8 @@ function generateProposal(caseId){
       inf+='<table class="pt">';
       if(pl.walkMinutes!=null)inf+='<tr><th>徒歩</th><td>'+pl.walkMinutes+'分</td></tr>';
       if(pl.address)inf+='<tr><th>住所</th><td>'+e(pl.address)+'</td></tr>';
-      inf+='<tr><th>日割</th><td>'+(rm?'無':'有')+'</td></tr>';
+      inf+='<tr><th>開始月日割</th><td>'+(pl.startProRate?'可':'不可')+'</td></tr>';
+      inf+='<tr><th>終了月日割</th><td>'+(pl.endProRate?'可':'不可')+'</td></tr>';
       if(pl.vehicleType)inf+='<tr><th>対応車両</th><td>'+e(pl.vehicleType)+'</td></tr>';
       // 開始月 removed
       // 終了月 removed
@@ -1684,6 +1685,8 @@ function generateProposal(caseId){
         vehicleType:pl.vehicleType||'',
         vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
         estEnd:pl.estimateEnd||c.contractEnd||'',
+        startProRate:!!pl.startProRate,
+        endProRate:!!pl.endProRate,
       };
     })
   });
@@ -1698,35 +1701,21 @@ function generateProposal(caseId){
     +'await waitXLSX();'
     +'var wb=XLSX.utils.book_new();'
     +'var rows=[];'
-    // ヘッダー情報
-    +'rows.push(["\u99d0\u8eca\u5834\u6848\u5185\u56f3"]);'  // 駐車場案内図
+    +'rows.push(["\u99d0\u8eca\u5834\u6848\u5185\u56f3"]);'
     +'rows.push([]);'
-    +'rows.push(["\u6848\u4ef6\u756a\u53f7",__ed.caseNo,"\u9867\u5ba2\u540d",__ed.customerName]);'
+    +'rows.push(["\u6848\u4ef6\u756a\u53f7",__ed.caseNo,"","","\u9867\u5ba2\u540d",__ed.customerName]);'
     +'rows.push(["\u73fe\u5834\u540d",__ed.siteName]);'
     +'rows.push(["\u73fe\u5834\u4f4f\u6240",__ed.siteAddress]);'
-    +'rows.push(["\u4f9d\u983c\u671f\u9593",__ed.requestStart+(__ed.requestEnd?" \uff5e "+__ed.requestEnd:""),"\u4f9d\u983c\u53f0\u6570",__ed.requestUnits+"\u53f0"]);'
+    +'rows.push(["\u4f9d\u983c\u671f\u9593",__ed.requestStart+(__ed.requestEnd?" \u301c "+__ed.requestEnd:""),"","","\u4f9d\u983c\u53f0\u6570",__ed.requestUnits!=""?__ed.requestUnits+"\u53f0":""]);'
     +'rows.push(["\u4f5c\u6210\u65e5",__ed.createdAt]);'
     +'rows.push([]);'
-    // 駐車場一覧ヘッダー
-    +'rows.push(["\u756a\u53f7","\u99d0\u8eca\u5834\u540d","\u4f4f\u6240","\u5f92\u6b69(\u5206)","\u8cde\u6599\u5358\u4fa1","\u6255\u3044","\u624b\u6570\u6599","\u793c\u91d1","\u898b\u7a4d\u53f0\u6570","\u958b\u59cb\u6708","\u7d42\u4e86\u6708"]);'
+    +'rows.push(["\u756a\u53f7","\u99d0\u8eca\u5834\u540d","\u4f4f\u6240","\u5f92\u6b69(\u5206)","\u5bfe\u5fdc\u8eca\u4e21","\u7a7a\u304d\u53f0\u6570","\u8cc3\u6599\u5358\u4fa1","\u6255\u3044","\u624b\u6570\u6599","\u793c\u91d1","\u898b\u7a4d\u53f0\u6570","\u958b\u59cb\u6708","\u7d42\u4e86\u6708","\u958b\u59cb\u6708\u65e5\u5272","\u7d42\u4e86\u6708\u65e5\u5272"]);'
     +'__ed.lots.forEach(function(pl){'
-    +'rows.push(['
-    +'pl.num,'
-    +'pl.name,'
-    +'pl.address,'
-    +'pl.walkMinutes!==""?pl.walkMinutes+"\u5206":"",'
-    +'pl.rent!==""?pl.rent:"",'
-    +'pl.rentUnit,'
-    +'pl.adminFee!==""?pl.adminFee:"",'
-    +'pl.keyMoney!==""?pl.keyMoney:"",'
-    +'pl.units!==""?pl.units+"\u53f0":"",'
-    +'pl.estStart,'
-    +'pl.estEnd'
-    +']);});'
+    +'rows.push([pl.num,pl.name,pl.address,pl.walkMinutes!==""?pl.walkMinutes+"\u5206":"",pl.vehicleType!=null?pl.vehicleType:"",pl.vacancyUnits!=null?pl.vacancyUnits+"\u53f0"+"":"",pl.rent!==""?pl.rent:"",pl.rentUnit,pl.adminFee!==""?pl.adminFee:"",pl.keyMoney!==""?pl.keyMoney:"",pl.units!==""?pl.units+"\u53f0":"",pl.estStart,pl.estEnd,pl.startProRate?"\u53ef":"\u4e0d\u53ef",pl.endProRate?"\u53ef":"\u4e0d\u53ef"]);'
+    +'});'
     +'var ws=XLSX.utils.aoa_to_sheet(rows);'
-    +'ws["!cols"]=[{wch:6},{wch:20},{wch:30},{wch:8},{wch:10},{wch:6},{wch:10},{wch:10},{wch:8},{wch:12},{wch:12}];'
-    // セル結合（ヘッダー行）
-    +'ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:10}}];'
+    +'ws["!cols"]=[{wch:5},{wch:20},{wch:25},{wch:8},{wch:20},{wch:7},{wch:10},{wch:5},{wch:8},{wch:8},{wch:7},{wch:12},{wch:12},{wch:9},{wch:9}];'
+    +'ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:14}},{s:{r:2,c:1},e:{r:2,c:4}},{s:{r:3,c:1},e:{r:3,c:4}},{s:{r:4,c:1},e:{r:4,c:4}}];'
     +'XLSX.utils.book_append_sheet(wb,ws,"\u99d0\u8eca\u5834\u6848\u5185\u56f3");'
     +'XLSX.writeFile(wb,"\u99d0\u8eca\u5834\u6848\u5185\u56f3_"+__ed.siteName+".xlsx");'
     +'});'
@@ -1797,4 +1786,4 @@ document.addEventListener('keydown',e=>{
 initApp();
 </script>
 </body>
-</html>   
+</html>     
