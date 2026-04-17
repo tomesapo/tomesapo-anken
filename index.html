@@ -1615,7 +1615,7 @@ function generateProposal(caseId){
     +'<style>'+css+'</style></head><body>'
     +'<div class="tb"><strong>🗺️ 駐車場案内図</strong>'
     +'<button class="bp" onclick="window.print()">🖨️ 印刷 / PDF保存</button>'
-    +'<button class="be" id="xlsBtn" onclick="var p=[0,1,2].map(function(i){var a=document.getElementById(\'mapArea-\'+i);var img=a&&a.querySelector(\'img\');return img&&img.src&&img.src.startsWith(\'data:\')?img.src:null;});if(window.opener)window.opener._pkgPhotos=p;else window._pkgPhotos=p;(window.opener||window).generateParkingMapExcel();">📊 Excel出力</button>'
+    +'<button class="be" id="xlsBtn" onclick="var p=Array.from(document.querySelectorAll(\'.pl-photo\')).slice(0,3).map(function(img){return img&&img.src&&img.src.startsWith(\'data:\')?img.src:null;});if(window.opener)window.opener._pkgPhotos=p;else window._pkgPhotos=p;(window.opener||window).generateParkingMapExcel();">📊 Excel出力</button>'
     +'<button class="bc" onclick="window.close()">✕ 閉じる</button></div>'
     +pagesHtml;
 
@@ -1811,17 +1811,16 @@ async function generateParkingMapExcel(){
     while(ws['\!cols'].length<18)ws['\!cols'].push({});
     ws['\!cols'][17]={wch:16};
 
-    // A4横・1ページ印刷設定
-    ws['\!pageSetup']={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1};
-
     // xlsx バイナリ生成
     var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
 
     // ── JSZip で写真を埋め込む ──
+    var pkgPhotos=window._pkgPhotos||[];
     var addedPhotos=[];
     var zip=await JSZip.loadAsync(out);
     for(var i=0;i<3;i++){
-      var src=(ed.lots[i]&&ed.lots[i].photo)||'';
+      // 第一優先: Firestoreに保存された写真、フォールバック: ポップアップのDOM画像
+      var src=(ed.lots[i]&&ed.lots[i].photo&&ed.lots[i].photo.startsWith('data:'))?ed.lots[i].photo:(pkgPhotos[i]||'');
       if(src&&src.startsWith('data:')){
         var mimeMatch=src.match(/data:([^;]+);base64,/);
         var mime=mimeMatch?mimeMatch[1]:'image/jpeg';
@@ -1879,6 +1878,15 @@ async function generateParkingMapExcel(){
       });
       zip.file('[Content_Types].xml',ct);
     }
+    // ── A4横・1ページ印刷設定をXMLで直接適用 ──
+    var s1ps=await zip.file('xl/worksheets/sheet1.xml').async('string');
+    // sheetPr (fitToPage) を worksheet 直後に挿入
+    if(!s1ps.includes('<sheetPr'))s1ps=s1ps.replace(/(<worksheet[^>]*>)/,'$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+    // pageSetup を pageMargins の直後に挿入
+    s1ps=s1ps.replace(/(<pageMargins[^\/]*\/>)/,'$1<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/>');
+    if(!s1ps.includes('<pageSetup '))s1ps=s1ps.replace('</worksheet>','<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>');
+    zip.file('xl/worksheets/sheet1.xml',s1ps);
+
     var finalBytes=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
@@ -1927,6 +1935,14 @@ function openInvoiceMail(data){
   const s=data.contractStart?data.contractStart.replace(/-/g,'/'):'',
         e=data.contractEnd?data.contractEnd.replace(/-/g,'/'):'';
   const body=encodeURIComponent((data.staffName?data.staffName+' 様':'ご担当者 様')+
-    '\n\nお世話になっております。株式会社TomeSapoの古田です。\n\n'+
+    '\n\nお世話になっております。株式会示TomeSapoの古田です。\n\n'+
     data.siteName+'の駐車場手配が完了しましたのでご連絡いたします。\n\n'+
-    '「現場�
+    '「現場名」'+data.siteName+'\n「契約期間」'+(s&&e?s+' ～ '+e:'未定')+'\n\n'+
+    '詳細につきましては別途ご連絡いたします。'+MAIL_SIGNATURE);
+  window.open('https://mail.google.com/mail/?view=cm&fs=1'+(to?'&to='+encodeURIComponent(to):'')+
+    '&su='+su+'&body='+body,'_blank');
+}
+initApp();
+</script>
+</body>
+</html>
