@@ -1751,7 +1751,7 @@ async function generateParkingMapExcel(){
       sc(m.ep,pl.endProRate?'\u53ef':'\u4e0d\u53ef');
       sc(m.k,(pl.keyMoney!=''&&pl.keyMoney!=null&&Number(pl.keyMoney)>0)?'\u6709':'\u7121');
       if(pl.vacancyUnits!=null)nc(m.v,Number(pl.vacancyUnits));else sc(m.v,'');
-      sc(m.vt,pl.vehicleType||'');sc(m.r,'');
+      sc(m.vt,pl.vehicleType||'');sc(m.r,pl.lotNote||'');
     });
     sc('A5',''); // A5のマップ文字を消す
 
