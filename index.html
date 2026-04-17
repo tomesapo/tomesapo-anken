@@ -1769,11 +1769,12 @@ async function generateParkingMapExcel(){
       for(var C=rng.s.c;C<=rng.e.c;C++){
         var a=XLSX.utils.encode_cell({r:R,c:C});
         if(noStyle[a]){
-          // noStyleセルはフォントと縦揃えのみ適用
+          // noStyleセルはスタイルオブジェクトを再生成してフォント・縦揃えを確実に上書き
           if(!ws[a])ws[a]={t:'s',v:''};
-          if(!ws[a].s)ws[a].s={};
-          ws[a].s.font=Object.assign({},ws[a].s.font||{},{name:F});
-          ws[a].s.alignment=Object.assign({},ws[a].s.alignment||{},{vertical:'center'});
+          var oldS=ws[a].s||{};
+          var nf=Object.assign({},oldS.font||{});nf.name=F;
+          var na=Object.assign({},oldS.alignment||{});na.vertical='center';
+          ws[a].s=Object.assign({},oldS,{font:nf,alignment:na});
           continue;
         }
         var cur=(ws[a]&&ws[a].s)||{};
@@ -1787,14 +1788,15 @@ async function generateParkingMapExcel(){
     for(var C=0;C<=24;C++){var a=XLSX.utils.encode_cell({r:0,c:C});ss(a,22,C<12?'left':'right');}
     // 行3: 依頼期間 14pt（A3は除外）
     for(var C=1;C<=24;C++){var a=XLSX.utils.encode_cell({r:2,c:C});ss(a,14,'left');}
+    ss('W3',14,'right'); // W3は右揃え
     // ヘッダーセル #E7E6E6（A3・A4は除外）
     ['B3','U3','V3','B4'].forEach(function(a){ss(a,14,'left',HC);});
     ['R5','W5','R6','R7','S7','U7','W7','R8','U8','R9','R10','R11','R12','R13','R14','R15','R16',
      'R19','W19','R20','R21','S21','U21','W21','R22','U22','R23','R24','R25','R26','R27','R28','R29','R30',
      'R33','W33','R34','R35','S35','U35','W35','R36','U36','R37','R38','R39','R40','R41','R42','R43','R44'
     ].forEach(function(a){ss(a,12,'left',HC);});
-    // Y47・Y48: 右揃えのみ適用
-    ['Y47','Y48'].forEach(function(a){if(!ws[a])ws[a]={t:'s',v:''};ws[a].s={alignment:{horizontal:'right',vertical:'center'}};});
+    // Y47・Y48: Noto Sans JP + 右揃え + 縦中央
+    ['Y47','Y48'].forEach(function(a){if(!ws[a])ws[a]={t:'s',v:''};ws[a].s={font:{name:F},alignment:{horizontal:'right',vertical:'center'}};});
     // R列の列幅を広げて文字が見切れないようにする（R列=インデックス17）
     if(!ws['\!cols'])ws['\!cols']=[];
     while(ws['\!cols'].length<18)ws['\!cols'].push({});
