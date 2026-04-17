@@ -1537,7 +1537,8 @@ function generateProposal(caseId){
     '.ma input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}',
     '.ma.has-img .map-ph{display:none}',
     // 情報パネル
-    '.ia{padding:6px 8px;display:flex;flex-direction:column;gap:3px;overflow:visible;font-size:10px}',
+    '.ia{padding:6px 8px;overflow:hidden;}',
+    '.ia-inner{display:flex;flex-direction:column;gap:3px;font-size:10px;transform-origin:top left;}',
     '.gh{border-bottom:2px solid #222;padding-bottom:3px;margin-bottom:3px}',
     '.gt{font-size:13px;font-weight:bold;letter-spacing:.5px}',
     '.gm{font-size:9px;color:#555;margin-top:1px}',
@@ -1601,7 +1602,7 @@ function generateProposal(caseId){
       +'<input type="file" id="mapFile-'+pi+'" accept="image/*" onclick="event.stopPropagation()" onchange="loadMapImage('+pi+',this)">'
       +'</div>';
 
-    pagesHtml+='<div class="gp">'+mapHtml+'<div class="ia">'+inf+'</div></div>';
+    pagesHtml+='<div class="gp">'+mapHtml+'<div class="ia"><div class="ia-inner">'+inf+'</div></div></div>';
   });
 
   const doc='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'
@@ -1647,6 +1648,22 @@ function generateProposal(caseId){
     +'img.src=e.target.result;area.classList.add("has-img");'
     +'};reader.readAsDataURL(f);'
     +'});});'
+    // 情報パネル自動縮小
+    +'(function(){'
+    +'function fitPanels(){'
+    +'document.querySelectorAll(".ia").forEach(function(ia){'
+    +'var inner=ia.querySelector(".ia-inner");if(!inner)return;'
+    +'var avail=ia.clientHeight;'
+    +'var natural=inner.offsetHeight;'
+    +'if(natural>0&&natural>avail){'
+    +'var s=(avail/natural);'
+    +'inner.style.transform="scale("+s.toFixed(4)+")";'
+    +'inner.style.width=(100/s).toFixed(2)+"%";'
+    +'}});}'
+    +'if(document.readyState==="complete")fitPanels();'
+    +'else window.addEventListener("load",fitPanels);'
+    +'setTimeout(fitPanels,400);'
+    +'})();'
   );
   const _ui=win.document.createElement('script');
   _ui.textContent=uiJs;
@@ -1786,4 +1803,4 @@ document.addEventListener('keydown',e=>{
 initApp();
 </script>
 </body>
-</html>     
+</html>    
