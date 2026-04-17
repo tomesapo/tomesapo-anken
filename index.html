@@ -1242,6 +1242,7 @@ function addParkingLotCard(pl={}) {
           '</div>' +
           '<input type="file" accept="image/*" style="display:none" onchange="handleParkingPhoto(this)">' +
         '</div>' +
+        '<div class="form-group span-3"><label>備考</label><textarea name="pl_lotNote" rows="2" style="width:100%;resize:vertical" placeholder="備考・特記事項">'+esc(pl.lotNote||'')+'</textarea></div>' +
       '</div>' +
     '</div>';
   container.appendChild(card);
@@ -1288,7 +1289,8 @@ function getParkingLotsFromForm(){
       quoteDailyRent:rt==='daily'?(parseFloat(g('pl_quoteDailyRent').value)||null):null,
       quoteAdminFee:parseFloat(g('pl_quoteAdminFee').value)||null,quoteKeyMoney:parseFloat(g('pl_quoteKeyMoney').value)||null,
       startProRate:g('pl_startProRate').value==='true',endProRate:g('pl_endProRate').value==='true',
-      photo:pa?(pa.dataset.photo||''):'',};
+      photo:pa?(pa.dataset.photo||''):'',
+      lotNote:g('pl_lotNote')?g('pl_lotNote').value.trim():'',};
   }).filter(p=>p.name||p.supplierName||p.monthlyRent||p.dailyRent);
 }
 function renderParkingLotsDetail(c){
@@ -1310,7 +1312,8 @@ function renderParkingLotsDetail(c){
       ['空き台数',pl.vacancyUnits!=null?pl.vacancyUnits+' 台':''],
       ['契約台数',pl.units!=null?pl.units+' 台':''],
       ['開始月日割',pl.startProRate?'可':'不可'],['終了月日割',pl.endProRate?'可':'不可'],
-      ['保証金',pl.deposit!=null?'¥'+fmt(pl.deposit):'']];
+      ['保証金',pl.deposit!=null?'¥'+fmt(pl.deposit):''],
+      ['備考',pl.lotNote||'']];
     baseRows.filter(r=>r[1]).forEach(r=>{h+='<div class="detail-row"><span class="detail-label">'+r[0]+'</span><span class="detail-val">'+r[1]+'</span></div>';});
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">';
     h+='<div style="background:var(--gray-50);border-radius:6px;padding:8px"><div style="font-size:10px;font-weight:700;color:var(--gray-500);margin-bottom:4px">仕入価格</div>';
