@@ -1921,4 +1921,12 @@ function openInvoiceMail(data){
     '「現場名」'+data.siteName+'\n「現場住所」'+(data.siteAddress||'')+'\n'+
     '「契約期間」'+(s&&e?s+'～'+e:s||e||'')+'\n'+
     '「確定台数」'+(data.fixedUnits!=null?data.fixedUnits+' 台':'')+'\n'+
-    '「確定金額」¥'+(data.fixedSales!=null?data.fixedSale
+    '「確定金額」¥'+(data.fixedSales!=null?fmt(data.fixedSales):'')+MAIL_SIGNATURE);
+  window.open('https://mail.google.com/mail/?view=cm&fs=1'+(to?'&to='+encodeURIComponent(to):'')+
+    '&su='+su+'&body='+body,'_blank');
+}
+
+initApp();
+</script>
+</body>
+</html>
