@@ -1760,11 +1760,14 @@ async function generateParkingMapExcel(){
       return s;
     }
     function ss(addr,sz,h,fill){if(!ws[addr])ws[addr]={t:'s',v:''};ws[addr].s=mks(sz,h,fill);}
-    // 全セルにNoto Sans JP + 縦中央揃え
+    // 書式制御をしないセル（テンプレートのスタイルをそのまま使う）
+    var noStyle={'A3':1,'A4':1,'A47':1,'A48':1,'Y47':1,'Y48':1};
+    // 全セルにNoto Sans JP + 縦中央揃え（noStyleのセルは除外）
     var rng=XLSX.utils.decode_range(ws['\!ref']||'A1:Y48');
     for(var R=rng.s.r;R<=rng.e.r;R++){
       for(var C=rng.s.c;C<=rng.e.c;C++){
         var a=XLSX.utils.encode_cell({r:R,c:C});
+        if(noStyle[a])continue;
         var cur=(ws[a]&&ws[a].s)||{};
         var fsz=(cur.font&&cur.font.sz)||12;
         var fh=(cur.alignment&&cur.alignment.horizontal)||'left';
@@ -1774,14 +1777,20 @@ async function generateParkingMapExcel(){
     }
     // 行1: タイトル 22pt
     for(var C=0;C<=24;C++){var a=XLSX.utils.encode_cell({r:0,c:C});ss(a,22,C<12?'left':'right');}
-    // 行3: 依頼期間 14pt
-    for(var C=0;C<=24;C++){var a=XLSX.utils.encode_cell({r:2,c:C});ss(a,14,'left');}
-    // ヘッダーセル #E7E6E6
-    ['A3','B3','U3','V3','A4','B4'].forEach(function(a){ss(a,14,'left',HC);});
+    // 行3: 依頼期間 14pt（A3は除外）
+    for(var C=1;C<=24;C++){var a=XLSX.utils.encode_cell({r:2,c:C});ss(a,14,'left');}
+    // ヘッダーセル #E7E6E6（A3・A4は除外）
+    ['B3','U3','V3','B4'].forEach(function(a){ss(a,14,'left',HC);});
     ['R5','W5','R6','R7','S7','U7','W7','R8','U8','R9','R10','R11','R12','R13','R14','R15','R16',
      'R19','W19','R20','R21','S21','U21','W21','R22','U22','R23','R24','R25','R26','R27','R28','R29','R30',
      'R33','W33','R34','R35','S35','U35','W35','R36','U36','R37','R38','R39','R40','R41','R42','R43','R44'
     ].forEach(function(a){ss(a,12,'left',HC);});
+    // Y47・Y48: 右揃えのみ適用
+    ['Y47','Y48'].forEach(function(a){if(!ws[a])ws[a]={t:'s',v:''};ws[a].s={alignment:{horizontal:'right',vertical:'center'}};});
+    // R列の列幅を広げて文字が見切れないようにする（R列=インデックス17）
+    if(!ws['\!cols'])ws['\!cols']=[];
+    while(ws['\!cols'].length<18)ws['\!cols'].push({});
+    ws['\!cols'][17]={wch:16};
 
     // xlsx バイナリ生成
     var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
