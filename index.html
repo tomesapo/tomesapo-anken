@@ -213,6 +213,37 @@
     .form-group.span-2,.form-group.span-3{grid-column:span 1}
     .master-field-grid{grid-template-columns:1fr}
   }
+
+  /* ── Monthly Report Overlay ── */
+  .monthly-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;opacity:0;transition:opacity .2s;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto}
+  .monthly-overlay.open{opacity:1;pointer-events:all}
+  .monthly-panel{background:white;width:98vw;max-width:1400px;min-height:100vh;padding:0;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .2s}
+  .monthly-overlay.open .monthly-panel{transform:translateY(0)}
+  .monthly-header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--gray-200);background:var(--primary);color:white;position:sticky;top:0;z-index:10}
+  .monthly-header h2{font-size:18px;font-weight:700;flex:1;margin:0}
+  .monthly-year-nav{display:flex;align-items:center;gap:8px}
+  .monthly-year-nav button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:white;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:14px;font-family:inherit}
+  .monthly-year-nav button:hover{background:rgba(255,255,255,.35)}
+  .monthly-year-label{font-size:16px;font-weight:600;min-width:60px;text-align:center}
+  .monthly-close-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit}
+  .monthly-close-btn:hover{background:rgba(255,255,255,.3)}
+  .monthly-body{padding:20px;overflow-x:auto;flex:1}
+  .monthly-table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+  .monthly-table th{background:var(--gray-100);padding:8px 6px;text-align:center;font-weight:600;border:1px solid var(--gray-200);white-space:nowrap;font-size:12px}
+  .monthly-table th.row-hd{text-align:left;min-width:110px}
+  .monthly-table td{padding:7px 6px;text-align:right;border:1px solid var(--gray-200);white-space:nowrap}
+  .monthly-table td.row-hd{text-align:left;font-weight:600;background:var(--gray-50);padding-left:8px}
+  .monthly-table td.row-hd.sub{font-weight:400;color:var(--gray-600);font-size:12px;padding-left:20px}
+  .monthly-table tr.profit-row td{color:var(--success);font-weight:600}
+  .monthly-table tr.profit-row td.neg{color:var(--danger)}
+  .monthly-table tr.units-row td{color:var(--gray-600)}
+  .monthly-table tr.total-row td{background:var(--primary);color:white;font-weight:700}
+  .monthly-table tr.total-row td.row-hd{background:var(--primary);color:white}
+  .monthly-table tr.section-sep td{background:var(--gray-200);font-size:11px;color:var(--gray-600);font-weight:600;padding:4px 8px;border:1px solid var(--gray-300)}
+  .monthly-table .col-total{background:var(--gray-100);font-weight:700}
+  .monthly-table tr.profit-row .col-total{background:var(--gray-100)}
+  .monthly-table tr.total-row .col-total{background:var(--primary-dark,#1a5fa8)}
+  .monthly-empty{text-align:center;padding:60px 20px;color:var(--gray-500);font-size:15px}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -235,6 +266,9 @@
     </button>
     <button class="btn btn-ghost" onclick="openMasterModal()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM2 20a10 10 0 0 1 20 0"/></svg>マスタ管理
+    </button>
+    <button class="btn btn-ghost" onclick="openMonthlyReport()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><rect x="12" y="13" width="3" height="5" fill="currentColor" stroke="none"/><rect x="16" y="11" width="3" height="7" fill="currentColor" stroke="none"/><rect x="8" y="15" width="3" height="3" fill="currentColor" stroke="none"/></svg>月次レポート
     </button>
     <button class="btn btn-ghost" onclick="openModal()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新規案件
@@ -261,6 +295,25 @@
     <button class="drawer-btn" onclick="triggerImport();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV読込
     </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openMonthlyReport();closeDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>月次レポート
+    </button>
+  </div>
+</div>
+
+<div class="monthly-overlay" id="monthlyOverlay">
+  <div class="monthly-panel">
+    <div class="monthly-header">
+      <h2>&#128202; 月次レポート</h2>
+      <div class="monthly-year-nav">
+        <button onclick="changeMonthlyYear(-1)">&#8592;</button>
+        <span class="monthly-year-label" id="monthlyYearLabel"></span>
+        <button onclick="changeMonthlyYear(1)">&#8594;</button>
+      </div>
+      <button class="monthly-close-btn" onclick="closeMonthlyReport()">&#10005; 閉じる</button>
+    </div>
+    <div class="monthly-body" id="monthlyBody"></div>
   </div>
 </div>
 
@@ -381,8 +434,8 @@
         <div class="form-section-title">受注・確定情報</div>
         <div class="form-grid">
           <div class="form-group"><label>受注日</label><input type="date" id="f_orderDate"></div>
-          <div class="form-group"><label>契約開始日</label><input type="date" id="f_contractStart"></div>
-          <div class="form-group"><label>契約終了日</label><input type="date" id="f_contractEnd"></div>
+          <div class="form-group"><label>契約開始日 <span class="auto-tag">自動</span></label><input type="text" id="f_contractStart" class="readonly-calc" readonly placeholder="駐車場から自動集計"></div>
+          <div class="form-group"><label>契約終了日 <span class="auto-tag">自動</span></label><input type="text" id="f_contractEnd" class="readonly-calc" readonly placeholder="駐車場から自動集計"></div>
           <div class="form-group"><label>確定売上 <span class="auto-tag">自動・税別</span></label><input type="text" id="f_fixedSales" class="readonly-calc" readonly placeholder="駐車場から自動計算"></div>
           <div class="form-group"><label>確定仕入 <span class="auto-tag">自動・税別</span></label><input type="text" id="f_fixedPurchase" class="readonly-calc" readonly placeholder="駐車場から自動計算"></div>
           <div class="form-group"><label>確定粗利 <span class="auto-tag">自動・税別</span></label><input type="text" id="f_fixedProfit" class="readonly-calc" readonly placeholder="自動計算"></div>
@@ -813,33 +866,32 @@ function updateCaseFixedPurchase(){
   let totalP=0,totalS=0,totalU=0,hasAny=false;
   document.querySelectorAll('#parkingLotCards .parking-card').forEach(card=>{
     const g=n=>card.querySelector('[name="'+n+'"]');
-    // 確定仕入
-    const pa=g('pl_purchaseAmount');
-    if(pa&&pa.value){const v=parseFloat(pa.value.replace(/,/g,''));if(!isNaN(v)){totalP+=v;hasAny=true;}}
-    // 確定売上：見積月額賃料 × 契約台数 × 月数 + 見積礼金 × 契約台数
     const start=g('pl_contractStart')?g('pl_contractStart').value:'';
     const end=g('pl_contractEnd')?g('pl_contractEnd').value:'';
     const units=parseInt(g('pl_units')?g('pl_units').value:0)||0;
     const months=calcPlMonths(start,end);
+    // 確定仕入・確定売上・確定台数（契約期間＋台数がある駐車場のみ集計）
     if(months&&units){
+      const pa=g('pl_purchaseAmount');
+      if(pa&&pa.value){const v=parseFloat(pa.value.replace(/,/g,''));if(!isNaN(v))totalP+=v;}
       const quoteMonthly=parseFloat(g('pl_quoteMonthlyRent')?g('pl_quoteMonthlyRent').value:0)||0;
       const quoteKey=parseFloat(g('pl_quoteKeyMoney')?g('pl_quoteKeyMoney').value:0)||0;
       totalS+=quoteMonthly*units*months+quoteKey*units;
+      totalU+=units;
       hasAny=true;
     }
-    // 確定台数
-    if(units)totalU+=units;
   });
-  if(hasAny){
-    const fp=document.getElementById('f_fixedPurchase');
-    const fs=document.getElementById('f_fixedSales');
-    const fu=document.getElementById('f_fixedUnits');
-    if(fp)fp.value=totalP?fmt(Math.round(totalP/1.1)):'';
-    if(fs)fs.value=totalS?fmt(totalS):'';
-    if(fu)fu.value=totalU||'';
-    calcFixedProfit();
-  }
+  // hasAny の有無にかかわらず常に更新（古い値を残さない）
+  const fp=document.getElementById('f_fixedPurchase');
+  const fs=document.getElementById('f_fixedSales');
+  const fu=document.getElementById('f_fixedUnits');
+  if(fp)fp.value=totalP?fmt(Math.round(totalP/1.1)):'';
+  if(fs)fs.value=totalS?fmt(totalS):'';
+  if(fu)fu.value=totalU||'';
+  calcFixedProfit();
+  updateContractDateDisplay();
 }
+
 function calcFixedProfit() {
   const s=parseFloat((document.getElementById('f_fixedSales').value||'').replace(/,/g,''))||0;
   const p=parseFloat((document.getElementById('f_fixedPurchase').value||'').replace(/,/g,''))||0;
@@ -888,6 +940,21 @@ function clearForm() {
   });
   document.getElementById('parkingLotCards').innerHTML='';
 }
+// 駐車場の契約日から案件契約期間を自動集計
+function autoCalcContractDates(parkingLots){
+  var lots=(parkingLots||[]);
+  var starts=lots.map(function(p){return p.contractStart||"";}).filter(Boolean).sort();
+  var ends=lots.map(function(p){return p.contractEnd||"";}).filter(Boolean).sort();
+  return{contractStart:starts.length?starts[0]:"",contractEnd:ends.length?ends[ends.length-1]:""};
+}
+function updateContractDateDisplay(){
+  var lots=getParkingLotsFromForm();
+  var cd=autoCalcContractDates(lots);
+  var cs=document.getElementById("f_contractStart");
+  var ce=document.getElementById("f_contractEnd");
+  if(cs)cs.value=cd.contractStart?cd.contractStart.replace(/-/g,"/"):"";
+  if(ce)ce.value=cd.contractEnd?cd.contractEnd.replace(/-/g,"/"):"";
+}
 function populateForm(c) {
   restoreCascade(c.customerName,c.baseName,c.staffName);
   document.getElementById('f_caseNo').value=c.caseNo||'';
@@ -903,8 +970,9 @@ function populateForm(c) {
   document.getElementById('f_estSales').value=c.estSales!=null?c.estSales:'';
   document.getElementById('f_estPurchase').value=c.estPurchase!=null?c.estPurchase:'';
   document.getElementById('f_orderDate').value=c.orderDate||'';
-  document.getElementById('f_contractStart').value=c.contractStart||'';
-  document.getElementById('f_contractEnd').value=c.contractEnd||'';
+  var _cd=autoCalcContractDates(c.parkingLots);
+  document.getElementById('f_contractStart').value=_cd.contractStart?_cd.contractStart.replace(/-/g,'/'):''; 
+  document.getElementById('f_contractEnd').value=_cd.contractEnd?_cd.contractEnd.replace(/-/g,'/'):'';
   document.getElementById('f_fixedSales').value=c.fixedSales!=null?c.fixedSales:'';
   document.getElementById('f_fixedPurchase').value=c.fixedPurchase!=null?c.fixedPurchase:'';
   document.getElementById('f_fixedUnits').value=c.fixedUnits!=null?c.fixedUnits:'';
@@ -914,7 +982,7 @@ function populateForm(c) {
   document.getElementById('f_paymentAmount').value=c.paymentAmount!=null?c.paymentAmount:'';
   document.getElementById('f_caseNote').value=c.caseNote||'';
   renderParkingLotCards(c.parkingLots||[]);
-  calcEstProfit(); calcFixedProfit();
+  calcEstProfit(); updateCaseFixedPurchase();
 }
 
 // ── 保存（Firebase対応）──
@@ -947,8 +1015,8 @@ async function saveCase() {
     estSales:estS, estPurchase:estP,
     estProfit:(estS!=null||estP!=null)?(estS||0)-(estP||0):null,
     orderDate:document.getElementById('f_orderDate').value,
-    contractStart:document.getElementById('f_contractStart').value,
-    contractEnd:document.getElementById('f_contractEnd').value,
+    contractStart:(autoCalcContractDates(getParkingLotsFromForm())).contractStart,
+    contractEnd:(autoCalcContractDates(getParkingLotsFromForm())).contractEnd,
     fixedSales:fixS, fixedPurchase:fixP,
     fixedProfit:(fixS!=null||fixP!=null)?(fixS||0)-(fixP||0):null,
     taxIncludedSales:fixS!=null?Math.round(fixS*1.1):null,
@@ -1129,7 +1197,7 @@ function renderCards(){
 const ORDERED_STATUSES=['未請求','請求済','入金済'];
 function renderStats(){
   const total=cases.length;
-  const active=cases.filter(c=>['調査中','再調査','提案済','契約中'].includes(c.status)).length;
+  const active=cases.filter(c=>['調査中','再調査','提案済','未申込','契約中'].includes(c.status)).length;
   const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
   const totalFS=ordered.reduce((s,c)=>s+(c.fixedSales||0),0);
   const totalFP=ordered.reduce((s,c)=>s+(c.fixedProfit||0),0);
@@ -1137,7 +1205,7 @@ function renderStats(){
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">総案件数</div><div class="stat-value">'+total+'</div><div class="stat-sub">全案件</div></div>'+
-    '<div class="stat-card"><div class="stat-label">進行中</div><div class="stat-value" style="color:var(--primary)">'+active+'</div><div class="stat-sub">調査・提案・契約</div></div>'+
+    '<div class="stat-card"><div class="stat-label">進行中</div><div class="stat-value" style="color:var(--primary)">'+active+'</div><div class="stat-sub">調査・提案・未申込・契約</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+(totalFP>=0?'var(--success)':'var(--danger)')+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
@@ -1373,8 +1441,8 @@ function renderParkingLotsDetail(c){
     h+='<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
     h+='<span style="font-weight:700;font-size:13px;color:var(--primary)">🅿 '+(pl.name?esc(pl.name):'駐車場'+(i+1))+'</span>';
-    h+='<button class="btn" style="background:#0891b2;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-right:4px" onclick="generateProposal(\''+c.id+'\')">📋 案内図</button>';
-    h+='<button style="background:#16a34a;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateEstimateExcel(\''+c.id+'\',\''+pl.id+'\')">📥 見積書Excel</button>';
+    h+='<button class="btn" style="background:#0891b2;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-right:4px" onclick="generateParkingMapExcelDirect(\''+c.id+'\')">📋 案内図</button>';
+    h+='<button style="background:#16a34a;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateEstimateExcel(\''+c.id+'\',\''+pl.id+'\')">📥 見積書</button>';
     if(c.status==='\u5951\u7d04\u4e2d'){
       if(i===0)h+='<button style="background:#7c3aed;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateKukakuzu(\''+c.id+'\')">🗺 区画図</button>';
       if(pl.contractStart&&pl.contractEnd&&pl.units)h+='<button style="background:#ea580c;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateKakuteiMeisai(\''+c.id+'\',\''+pl.id+'\')">📋 確定明細</button>';
@@ -1796,6 +1864,50 @@ function generateProposal(caseId){
 }
 
 
+
+// 案内図Excelダイレクト出力
+async function generateParkingMapExcelDirect(caseId){
+  var c=cases.find(function(x){return x.id===caseId;});
+  if(!c){alert('ケースが見つかりません');return;}
+  var today=new Date();
+  var todayStr=today.getFullYear()+'年'+(today.getMonth()+1)+'月'+today.getDate()+'日';
+  window._pkgExcelData={
+    caseNo:c.caseNo||'',
+    siteName:c.siteName||'',
+    siteAddress:c.siteAddress||'',
+    customerName:c.customerName||'',
+    requestStart:c.requestStart||'',
+    requestEnd:c.requestEnd||'',
+    requestUnits:c.requestUnits!=null?c.requestUnits:'',
+    createdAt:todayStr,
+    lots:(c.parkingLots||[]).map(function(pl,idx){
+      var rm=pl.rateType!=='daily';
+      var rent=rm?(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent):(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent);
+      return{
+        num:idx+1,
+        name:pl.name||'',
+        address:pl.address||'',
+        walkMinutes:pl.walkMinutes!=null?pl.walkMinutes:'',
+        rateType:rm?'月払':'日払',
+        rent:rent!=null?rent:'',
+        rentUnit:rm?'/月':'/日',
+        adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee!=null?pl.adminFee:''),
+        keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
+        units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
+        estStart:pl.estimateStart||c.contractStart||'',
+        vehicleType:pl.vehicleType||'',
+        vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
+        estEnd:pl.estimateEnd||c.contractEnd||'',
+        startProRate:!!pl.startProRate,
+        endProRate:!!pl.endProRate,
+        lotNote:pl.lotNote||'',
+        photo:pl.photo||'',
+      };
+    })
+  };
+  window._pkgPhotos=[];
+  generateParkingMapExcel();
+}
 // ── 駐車場案内図 Excel出力 ──
 function waitXLSX(){return new Promise(function(r,j){var ms=0;(function c(){if(window.XLSX&&window.JSZip)r();else if(ms>15000)j(new Error('ライブラリ読込失敗。ネットワーク接続を確認してください'));else{ms+=200;setTimeout(c,200);}})();});}
 async function generateParkingMapExcel(){
@@ -2096,7 +2208,7 @@ async function generateParkingMapExcel(){
     var finalBytes=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');a.href=url;a.download='\u9a30\u8eca\u5834\u6848\u5185\u56f3_'+(ed.siteName||'').replace(/[\\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    var a=document.createElement('a');a.href=url;a.download='\u99d0\u8eca\u5834\u6848\u5185\u56f3_'+(ed.siteName||'').replace(/[\\\/:\*\?"<>\|]/g,'_')+'.xlsx';
     document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
   }catch(e){alert('Excel\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
 }
@@ -2434,6 +2546,26 @@ async function generateKukakuzu(caseId){
 
     // lot[0]: \u65e2\u5b58\u306esheet2\uff08\u533a\u753b\u56f3\u2160\uff09\u3092\u5c66\u3081\u5165\u308c\u66f8\u304d\u63db\u3048
     zip.file('xl/worksheets/sheet2.xml', fillSheet(s2orig, lots[0]));
+    // lot[0] photo embed into drawing2
+    var drw2xmlCur=drw2xml,drw2relsCur=drw2rels;
+    if(lots[0].photo&&drw2xml&&drw2rels){
+      var pm0=lots[0].photo.match(/^data:([^;]+);base64,(.+)$/);
+      if(pm0){
+        var pmime0=pm0[1],pb640=pm0[2];
+        var pext0=(pmime0==='image/jpeg'||pmime0==='image/jpg')?'jpg':'png';
+        var ppath0='xl/media/kukaku_photo0.'+pext0;
+        var pbstr0=atob(pb640),pbytes0=new Uint8Array(pbstr0.length);
+        for(var pbi0=0;pbi0<pbstr0.length;pbi0++)pbytes0[pbi0]=pbstr0.charCodeAt(pbi0);
+        zip.file(ppath0,pbytes0.buffer);
+        var ct0=ctypes.indexOf('Extension="'+pext0+'"');
+        if(ct0===-1)ctypes=ctypes.replace('<\/Types>','<Default Extension="'+pext0+'" ContentType="'+pmime0+'"\/><\/Types>');
+        drw2relsCur=drw2relsCur.replace('<\/Relationships>','<Relationship Id="rIdKPH" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/kukaku_photo0.'+pext0+'"\/><\/Relationships>');
+        drw2xmlCur=drw2xmlCur.replace('<\/xdr:wsDr>','<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>12<\/xdr:col><xdr:colOff>0<\/xdr:colOff><xdr:row>35<\/xdr:row><xdr:rowOff>0<\/xdr:rowOff><\/xdr:from><xdr:to><xdr:col>22<\/xdr:col><xdr:colOff>0<\/xdr:colOff><xdr:row>45<\/xdr:row><xdr:rowOff>0<\/xdr:rowOff><\/xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="100" name="Photo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/><\/xdr:cNvPicPr><\/xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdKPH"><\/a:blip><a:stretch><a:fillRect/><\/a:stretch><\/xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><\/a:xfrm><a:prstGeom prst="rect"><a:avLst/><\/a:prstGeom><\/xdr:spPr><\/xdr:pic><xdr:clientData/><\/xdr:twoCellAnchor><\/xdr:wsDr>');
+      }
+    }
+    if(drw2xmlCur)zip.file('xl/drawings/drawing2.xml',drw2xmlCur);
+    if(drw2relsCur)zip.file('xl/drawings/_rels/drawing2.xml.rels',drw2relsCur);
+
 
     // lot[1]\u4ee5\u964d: \u65b0\u898f\u30b7\u30fc\u30c8\u3092\u8ffd\u52a0\uff08\u753b\u50cf\u30fb\u7f6e\u5370\u8a2d\u5b9a\u30fb\u30b9\u30bf\u30a4\u30eb\u5168\u3066\u5c66\u3081\u8ffd\u52a0\uff09
     for(var li=1;li<lots.length;li++){
@@ -2450,9 +2582,25 @@ async function generateKukakuzu(caseId){
           sh2rels.replace(/drawing2\.xml/g,'drawing'+sn+'.xml'));
       }
 
-      // drawing XML\u30b3\u30d4\u30fc\uff08\u753b\u50cf\u30a8\u30f3\u30d9\u30c3\u30c9\u5c066\u5168\u4fdd\u6301\uff09
-      if(drw2xml) zip.file('xl/drawings/drawing'+sn+'.xml', drw2xml);
-      if(drw2rels) zip.file('xl/drawings/_rels/drawing'+sn+'.xml.rels', drw2rels);
+      // drawing XML copy with photo embed
+      var drwCur=drw2xml,drwRelsCur=drw2rels;
+      if(lots[li].photo&&drw2xml&&drw2rels){
+        var pmN=lots[li].photo.match(/^data:([^;]+);base64,(.+)$/);
+        if(pmN){
+          var pmimeN=pmN[1],pb64N=pmN[2];
+          var pextN=(pmimeN==='image/jpeg'||pmimeN==='image/jpg')?'jpg':'png';
+          var ppathN='xl/media/kukaku_photo'+li+'.'+pextN;
+          var pbstrN=atob(pb64N),pbytesN=new Uint8Array(pbstrN.length);
+          for(var pbiN=0;pbiN<pbstrN.length;pbiN++)pbytesN[pbiN]=pbstrN.charCodeAt(pbiN);
+          zip.file(ppathN,pbytesN.buffer);
+          var ctN=ctypes.indexOf('Extension="'+pextN+'"');
+          if(ctN===-1)ctypes=ctypes.replace('<\/Types>','<Default Extension="'+pextN+'" ContentType="'+pmimeN+'"\/><\/Types>');
+          drwRelsCur=drwRelsCur.replace('<\/Relationships>','<Relationship Id="rIdKPH" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/kukaku_photo'+li+'.'+pextN+'"\/><\/Relationships>');
+          drwCur=drwCur.replace('<\/xdr:wsDr>','<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>12<\/xdr:col><xdr:colOff>0<\/xdr:colOff><xdr:row>35<\/xdr:row><xdr:rowOff>0<\/xdr:rowOff><\/xdr:from><xdr:to><xdr:col>22<\/xdr:col><xdr:colOff>0<\/xdr:colOff><xdr:row>45<\/xdr:row><xdr:rowOff>0<\/xdr:rowOff><\/xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="100" name="Photo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/><\/xdr:cNvPicPr><\/xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdKPH"><\/a:blip><a:stretch><a:fillRect/><\/a:stretch><\/xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><\/a:xfrm><a:prstGeom prst="rect"><a:avLst/><\/a:prstGeom><\/xdr:spPr><\/xdr:pic><xdr:clientData/><\/xdr:twoCellAnchor><\/xdr:wsDr>');
+        }
+      }
+      if(drwCur)zip.file('xl/drawings/drawing'+sn+'.xml',drwCur);
+      if(drwRelsCur)zip.file('xl/drawings/_rels/drawing'+sn+'.xml.rels',drwRelsCur);
 
       // workbook.xml \u306b\u30b7\u30fc\u30c8\u30a8\u30f3\u30c8\u30ea\u8ffd\u52a0
       var ids=[];var ir=/sheetId="(\d+)"/g;var im;
@@ -2594,14 +2742,28 @@ function openProposalMail(data){
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var su=encodeURIComponent('\u300c'+data.siteName+'\u300d\u9a3a\u8eca\u5834\u306e\u3054\u63d0\u6848');
+  var su=encodeURIComponent('【ご提案内容のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||''));
+  var staffName=staff&&staff.name?staff.name:'担当者';
+  var custName=data.customerName||'';
+  var siteName=data.siteName||'';
   var body=encodeURIComponent(
-    (staff&&staff.name?staff.name+' \u69d8':'\u62c5\u5f53\u8005 \u69d8')+'\n\n'+
-    '\u304a\u5168\u6f0f\u69d8\u306b\u306f\u5e73\u7d20\u3088\u308a\u5927\u5909\u304a\u4e16\u8a71\u306b\u306a\u3063\u3066\u304a\u308a\u307e\u3059\u3002\n\n'+
-    '\u300c'+data.siteName+'\u300d\u306e\u9a3a\u8eca\u5834\u306b\u3064\u304d\u307e\u3057\u3066\u3001\u6848\u5185\u56f3\u3092\u9001\u4ed8\u3044\u305f\u3057\u307e\u3059\u3002\n'+
-    '\u3054\u691c\u8a0e\u306e\u307b\u3069\u3001\u3069\u3046\u305e\u3088\u308d\u3057\u304f\u304a\u9858\u3044\u3044\u305f\u3057\u307e\u3059\u3002\n\n'+
-    '\u4f55\u304b\u3054\u4e0d\u660e\u306a\u70b9\u304c\u3054\u3056\u3044\u307e\u3057\u305f\u3089\u304a\u6c17\u8efd\u306b\u304a\u7533\u3057\u4ed8\u3051\u304f\u3060\u3055\u3044\u3002\n\n'+
-    '\u3069\u3046\u305e\u3088\u308d\u3057\u304f\u304a\u9858\u3044\u3044\u305f\u3057\u307e\u3059\u3002'
+    custName+'\n'+
+    staffName+' 様\n\n'+
+    'いつも大変お世話になっております。\n'+
+    '株式会社 TomeSapoの古田でございます。\n\n'+
+    '【'+siteName+'】につきまして、下記の通りご提案資料をお送りいたします。\n'+
+    '・駐車場案内図\n'+
+    '・見積書兼発注書\n\n'+
+    '内容をご確認のうえ、ご発注の際は本メールへご返信をお願いいたします。\n'+
+    '何かご不明点等ございましたら、お気軽にお知らせください。\n\n'+
+    '引き続き、何卒よろしくお願いいたします。\n\n'+
+    '━━━━━━━━━━━━━━━━━━━━\n'+
+    '株式会社 TomeSapo\n'+
+    '古田 知也（TOMOYA FURUTA）\n'+
+    '－－－－－－－－－－－－－－－－－－－－\n'+
+    '090-6335-5765\n'+
+    'info@tomesapo.co.jp\n'+
+    '━━━━━━━━━━━━━━━━━━━━'
   );
   window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
 }
@@ -2626,20 +2788,210 @@ function openKakuteiMail(data){
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var su=encodeURIComponent('\u300c'+data.siteName+'\u300d\u9a3a\u8eca\u5834 \u5951\u7d04\u78ba\u5b9a\u306e\u3054\u9023\u7d61');
+  var su=encodeURIComponent('【契約内容確定のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||''));
+  var staffName=staff&&staff.name?staff.name:'担当者';
+  var custName=data.customerName||'';
+  var siteName=data.siteName||'';
   var body=encodeURIComponent(
-    (staff&&staff.name?staff.name+' \u69d8':'\u62c5\u5f53\u8005 \u69d8')+'\n\n'+
-    '\u5e73\u7d20\u3088\u308a\u5927\u5909\u304a\u4e16\u8a71\u306b\u306a\u3063\u3066\u304a\u308a\u307e\u3059\u3002\n\n'+
-    '\u300c'+data.siteName+'\u300d\u306e\u9a3a\u8eca\u5834\u306b\u3064\u304d\u307e\u3057\u3066\u3001\u5951\u7d04\u304c\u78ba\u5b9a\u3044\u305f\u3057\u307e\u3057\u305f\u306e\u3067\u3054\u9023\u7d61\u3044\u305f\u3057\u307e\u3059\u3002\n\n'+
-    '\u4e0b\u8a18\u306e\u901a\u308a\u3001\u5951\u7d04\u78ba\u5b9a\u8cc7\u6599\u3092\u3054\u9001\u4ed8\u3044\u305f\u3057\u307e\u3059\u3002\n\n'+
-    '\u30fb\u533a\u753b\u56f3\n'+
-    '\u30fb\u78ba\u5b9a\u91d1\u984d\u660e\u7d30\u66f8\n\n'+
-    '\u5185\u5bb9\u3054\u78ba\u8a8d\u306e\u4e0a\u3001\u8fd4\u4fe1\u3044\u305f\u3060\u3051\u307e\u3059\u3068\u5e78\u3044\u3067\u3059\u3002\n\n'+
-    '\u4f55\u304b\u3054\u4e0d\u660e\u306a\u70b9\u304c\u3054\u3056\u3044\u307e\u3057\u305f\u3089\u304a\u6c17\u8efd\u306b\u304a\u7533\u3057\u4ed8\u3051\u304f\u3060\u3055\u3044\u3002\n\n'+
-    '\u3069\u3046\u305e\u3088\u308d\u3057\u304f\u304a\u9858\u3044\u3044\u305f\u3057\u307e\u3059\u3002'
+    custName+'\n'+
+    staffName+' 様\n\n'+
+    'いつも大変お世話になっております。\n'+
+    '株式会社 TomeSapoの古田でございます。\n\n'+
+    '【'+siteName+'】につきまして、契約内容が確定いたしましたので、下記資料をお送りいたします。\n'+
+    '・駐車場区画図\n'+
+    '・確定明細書\n\n'+
+    '内容をご確認のうえ、相違等がございましたらお手数ですがご連絡ください。\n'+
+    '問題ございませんでしたら、本資料内容にてご利用開始をお願いいたします。\n\n'+
+    '引き続き、何卒よろしくお願いいたします。\n\n'+
+    '━━━━━━━━━━━━━━━━━━━━\n'+
+    '株式会社 TomeSapo\n'+
+    '古田 知也（TOMOYA FURUTA）\n'+
+    '－－－－－－－－－－－－－－－－－－－－\n'+
+    '090-6335-5765\n'+
+    'info@tomesapo.co.jp\n'+
+    '━━━━━━━━━━━━━━━━━━━━'
   );
   window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
 }
+
+
+// ── 月次レポート ──
+var monthlyYear = new Date().getFullYear();
+
+function openMonthlyReport() {
+  monthlyYear = new Date().getFullYear();
+  document.getElementById('monthlyOverlay').classList.add('open');
+  renderMonthlyReport();
+}
+function closeMonthlyReport() {
+  document.getElementById('monthlyOverlay').classList.remove('open');
+}
+function changeMonthlyYear(delta) {
+  monthlyYear += delta;
+  renderMonthlyReport();
+}
+
+function buildMonthlyData(year) {
+  var result = [];
+  for (var i = 0; i < 12; i++) {
+    result.push({sales:0, purchase:0, profit:0, units:0, byCustomer:{}});
+  }
+  var confirmed = cases.filter(function(c){ return ORDERED_STATUSES.indexOf(c.status) >= 0; });
+  confirmed.forEach(function(c) {
+    var custName = c.customerName || '不明';
+    (c.parkingLots || []).forEach(function(pl) {
+      var startStr = pl.contractStart || c.contractStart || '';
+      var endStr   = pl.contractEnd   || c.contractEnd   || '';
+      if (!startStr || !endStr) return;
+      var units = pl.units || 1;
+      var quoteRate = pl.rateType === 'daily'
+        ? (pl.quoteDailyRent  != null ? pl.quoteDailyRent  : (pl.dailyRent  || 0))
+        : (pl.quoteMonthlyRent != null ? pl.quoteMonthlyRent : (pl.monthlyRent || 0));
+      var costRateInc = pl.rateType === 'daily' ? (pl.dailyRent || 0) : (pl.monthlyRent || 0);
+      if (!quoteRate && !costRateInc) return;
+
+      var start = new Date(startStr + 'T00:00:00');
+      var end   = new Date(endStr   + 'T00:00:00');
+      var y = start.getFullYear(), m = start.getMonth();
+      var ey = end.getFullYear(), em = end.getMonth();
+
+      while (y < ey || (y === ey && m <= em)) {
+        if (y === year) {
+          var dim = new Date(y, m + 1, 0).getDate();
+          var isF = (y === start.getFullYear() && m === start.getMonth());
+          var isL = (y === ey && m === em);
+          var salesAmt = 0, costAmt = 0;
+
+          if (pl.rateType === 'daily') {
+            var ds = (isF && isL) ? (end.getDate() - start.getDate() + 1)
+                   : isF ? (dim - start.getDate() + 1)
+                   : isL ? end.getDate()
+                   : dim;
+            salesAmt = units * ds * quoteRate;
+            costAmt  = units * ds * costRateInc;
+          } else {
+            if (isF && start.getDate() > 1 && pl.startProRate) {
+              var days = dim - start.getDate() + 1;
+              salesAmt = units * days * Math.floor(quoteRate / 30);
+              costAmt  = units * days * Math.floor(costRateInc / 30);
+            } else if (isL && end.getDate() < dim && pl.endProRate) {
+              var days = end.getDate();
+              salesAmt = units * days * Math.floor(quoteRate / 30);
+              costAmt  = units * days * Math.floor(costRateInc / 30);
+            } else {
+              salesAmt = units * quoteRate;
+              costAmt  = units * costRateInc;
+            }
+          }
+
+          var costExcl = Math.round(costAmt / 1.1);
+          result[m].sales    += salesAmt;
+          result[m].purchase += costExcl;
+          result[m].profit   += (salesAmt - costExcl);
+          result[m].units    += units;
+          result[m].byCustomer[custName] = (result[m].byCustomer[custName] || 0) + salesAmt;
+        }
+        m++;
+        if (m > 11) { m = 0; y++; }
+      }
+    });
+  });
+  return result;
+}
+
+function renderMonthlyReport() {
+  document.getElementById('monthlyYearLabel').textContent = monthlyYear + '年';
+  var data = buildMonthlyData(monthlyYear);
+  var total = {sales:0, purchase:0, profit:0, units:0};
+  data.forEach(function(mo) {
+    total.sales    += mo.sales;
+    total.purchase += mo.purchase;
+    total.profit   += mo.profit;
+    total.units    += mo.units;
+  });
+
+  var hasData = total.sales > 0 || total.purchase > 0;
+  if (!hasData) {
+    document.getElementById('monthlyBody').innerHTML =
+      '<div class="monthly-empty">&#128202; ' + monthlyYear + '年の確定データがありません</div>';
+    return;
+  }
+
+  // Gather all customer names that have any sales
+  var custSet = {};
+  data.forEach(function(mo) {
+    Object.keys(mo.byCustomer).forEach(function(k) { if(mo.byCustomer[k]) custSet[k] = true; });
+  });
+  var custs = Object.keys(custSet).sort();
+
+  var mths = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+  function fmtY(v) {
+    if (!v) return '—';
+    return (v < 0 ? '-' : '') + '&#165;' + fmt(Math.abs(Math.round(v)));
+  }
+  function fmtU(v) { return v ? v + '台' : '—'; }
+
+  var ths = '<th class="row-hd">' + monthlyYear + '年</th>';
+  mths.forEach(function(m) { ths += '<th>' + m + '</th>'; });
+  ths += '<th class="col-total">合計</th>';
+
+  function makeRow(label, vals, total, cls, isSub) {
+    var td = '<td class="row-hd' + (isSub ? ' sub' : '') + '">' + label + '</td>';
+    vals.forEach(function(v) { td += '<td>' + v + '</td>'; });
+    td += '<td class="col-total">' + total + '</td>';
+    return '<tr class="' + (cls||'') + '">' + td + '</tr>';
+  }
+
+  var salesRow  = data.map(function(mo){ return fmtY(mo.sales); });
+  var purchRow  = data.map(function(mo){ return fmtY(mo.purchase); });
+  var profitRow = data.map(function(mo){
+    var v = mo.profit;
+    return '<span class="' + (v < 0 ? 'neg' : '') + '">' + fmtY(v) + '</span>';
+  });
+  var unitsRow  = data.map(function(mo){ return fmtU(mo.units); });
+
+  var rows = '';
+  rows += makeRow('売上（税別）', salesRow,  fmtY(total.sales),    'sales-row');
+  rows += makeRow('仕入（税別）', purchRow,  fmtY(total.purchase), 'purch-row');
+
+  // Profit row — cells need individual coloring
+  var profitCells = [];
+  data.forEach(function(mo) {
+    var v = mo.profit;
+    profitCells.push('<span style="color:' + (v < 0 ? 'var(--danger)' : 'var(--success)') + ';font-weight:600">' + fmtY(v) + '</span>');
+  });
+  var profTotalColor = total.profit < 0 ? 'var(--danger)' : 'var(--success)';
+  var profTotalSpan = '<span style="color:' + profTotalColor + ';font-weight:700">' + fmtY(total.profit) + '</span>';
+  rows += makeRow('粗利（税別）', profitCells, profTotalSpan, 'profit-row');
+  rows += makeRow('台数',        unitsRow,  fmtU(total.units),   'units-row');
+
+  // Customer breakdown
+  if (custs.length > 1) {
+    rows += '<tr class="section-sep"><td colspan="' + (14) + '">顧客別売上内訳</td></tr>';
+    custs.forEach(function(cust) {
+      var custTotal = 0;
+      var custCells = data.map(function(mo) {
+        var v = mo.byCustomer[cust] || 0;
+        custTotal += v;
+        return v ? fmtY(v) : '—';
+      });
+      rows += makeRow(cust, custCells, fmtY(custTotal), 'cust-row', true);
+    });
+  }
+
+  var html = '<table class="monthly-table">' +
+    '<thead><tr>' + ths + '</tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table>';
+  document.getElementById('monthlyBody').innerHTML = html;
+}
+
+// Close on overlay background click
+document.addEventListener('click', function(e) {
+  var ov = document.getElementById('monthlyOverlay');
+  if (ov && ov.classList.contains('open') && e.target === ov) closeMonthlyReport();
+});
 
 window.addEventListener('DOMContentLoaded', initApp);
 </script>
