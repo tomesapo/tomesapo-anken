@@ -6,6 +6,7 @@
 <title>案件管理</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <style>
   :root {
     --primary:#2563eb;--primary-dark:#1d4ed8;--primary-light:#eff6ff;
@@ -244,6 +245,22 @@
   .monthly-table tr.profit-row .col-total{background:var(--gray-100)}
   .monthly-table tr.total-row .col-total{background:var(--primary-dark,#1a5fa8)}
   .monthly-empty{text-align:center;padding:60px 20px;color:var(--gray-500);font-size:15px}
+  /* ─── ファイル添付 ─── */
+  .file-drop-zone{border:2px dashed #d1d5db;border-radius:8px;padding:24px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;color:#6b7280;font-size:13px;user-select:none}
+  .file-drop-zone:hover,.file-drop-zone.drag-over{border-color:#6366f1;background:#f0f0ff;color:#4338ca}
+  .file-list{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+  .file-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:12px}
+  .file-item-icon{font-size:18px;flex-shrink:0}
+  .file-item-name{flex:1;font-weight:500;color:#1f2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-item-meta{color:#9ca3af;font-size:11px;white-space:nowrap}
+  .file-item-actions{display:flex;gap:4px;flex-shrink:0}
+  .file-item-btn{padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600}
+  .file-btn-dl{background:#e0e7ff;color:#4338ca;text-decoration:none;display:inline-block}
+  .file-btn-dl:hover{background:#c7d2fe}
+  .file-btn-del{background:#fee2e2;color:#dc2626}
+  .file-btn-del:hover{background:#fca5a5}
+  .file-upload-progress{font-size:12px;color:#6366f1;margin-top:6px}
+  .file-new-case-note{color:#9ca3af;font-size:12px;text-align:center;padding:12px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -464,6 +481,10 @@
         <div id="parkingLotCards"></div>
         <button type="button" class="btn-add-parking" onclick="addParkingLotCard()">&#43; 駐車場を追加</button>
       </div>
+      <div class="form-section">
+        <div class="form-section-title">&#128206; 添付ファイル</div>
+        <div id="fileSectionContent"></div>
+      </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
       <button class="btn btn-primary" onclick="saveCase()">
@@ -539,9 +560,9 @@ const firebaseConfig = {
 // ══════════════════════════════════════════════════════════════
 
 const FIREBASE_OK = !!(firebaseConfig.projectId && firebaseConfig.apiKey);
-let db = null;
+let db = null, storage = null;
 if (FIREBASE_OK) {
-  try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+  try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); storage = firebase.storage(); }
   catch(e) { console.error('Firebase init error:', e); }
 }
 
@@ -913,6 +934,7 @@ function openModal(id=null) {
   if(id){const c=cases.find(x=>x.id===id);if(c)populateForm(c);}
   else{populateCustomerSelectOnly();}
   document.getElementById('modalOverlay').classList.add('open');
+  renderFileSection(id);
 }
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); editingId=null; }
 function closeOnOutside(e,id) {
@@ -983,6 +1005,7 @@ function populateForm(c) {
   document.getElementById('f_caseNote').value=c.caseNote||'';
   renderParkingLotCards(c.parkingLots||[]);
   calcEstProfit(); updateCaseFixedPurchase();
+  renderFileSection(c.id);
 }
 
 // ── 保存（Firebase対応）──
@@ -2994,6 +3017,114 @@ document.addEventListener('click', function(e) {
   var ov = document.getElementById('monthlyOverlay');
   if (ov && ov.classList.contains('open') && e.target === ov) closeMonthlyReport();
 });
+
+
+// ── Firebase Storage ファイル添付 ──
+function getFileIcon(name){
+  var ext=(name.split('.').pop()||'').toLowerCase();
+  if(['jpg','jpeg','png','gif','webp'].indexOf(ext)>=0)return '\u{1F5BC}';
+  if(ext==='pdf')return '\u{1F4C4}';
+  if(['xlsx','xls'].indexOf(ext)>=0)return '\u{1F4CA}';
+  if(['docx','doc'].indexOf(ext)>=0)return '\u{1F4DD}';
+  if(['zip','rar'].indexOf(ext)>=0)return '\u{1F5DC}';
+  return '\u{1F4CE}';
+}
+function fmtFileSize(bytes){
+  if(bytes<1024)return bytes+'B';
+  if(bytes<1024*1024)return (bytes/1024).toFixed(1)+'KB';
+  return (bytes/(1024*1024)).toFixed(1)+'MB';
+}
+function fmtFileDate(iso){
+  if(!iso)return '';
+  var d=new Date(iso);
+  return d.getFullYear()+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0');
+}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function renderFileSection(caseId){
+  var el=document.getElementById('fileSectionContent');
+  if(!el)return;
+  if(!caseId){
+    el.innerHTML='<div class="file-new-case-note">&#128221; 先に案件を保存するとファイルをアップロードできます</div>';
+    return;
+  }
+  if(!storage){
+    el.innerHTML='<div class="file-new-case-note">Firebase Storage が利用できません</div>';
+    return;
+  }
+  el.innerHTML=
+    '<div class="file-drop-zone" id="fileDropZone">&#128206; クリックまたはドラッグ＆ドロップでファイルをアップロード</div>'+
+    '<input type="file" id="fileInput" multiple style="display:none">'+
+    '<div class="file-upload-progress" id="fileUploadProgress" style="display:none">アップロード中...</div>'+
+    '<div class="file-list" id="fileList"><div style="color:#9ca3af;font-size:12px;text-align:center;padding:8px">読み込み中...</div></div>';
+  var zone=document.getElementById('fileDropZone');
+  var inp=document.getElementById('fileInput');
+  zone.addEventListener('click',function(){inp.click();});
+  inp.addEventListener('change',function(e){uploadFiles(Array.from(e.target.files),caseId);e.target.value='';});
+  zone.addEventListener('dragenter',function(e){e.preventDefault();e.stopPropagation();zone.classList.add('drag-over');});
+  zone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();zone.classList.add('drag-over');});
+  zone.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over');});
+  zone.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over');uploadFiles(Array.from(e.dataTransfer.files),caseId);});
+  loadFileList(caseId);
+}
+async function loadFileList(caseId){
+  var listEl=document.getElementById('fileList');
+  if(!listEl||!storage)return;
+  try{
+    var ref=storage.ref('cases/'+caseId);
+    var result=await ref.listAll();
+    if(result.items.length===0){
+      listEl.innerHTML='<div style="color:#9ca3af;font-size:12px;text-align:center;padding:8px">添付ファイルはありません</div>';
+      return;
+    }
+    var metas=await Promise.all(result.items.map(async function(item){
+      var meta=await item.getMetadata();
+      var url=await item.getDownloadURL();
+      return{name:item.name,size:meta.size,updated:meta.updated,url:url};
+    }));
+    listEl.innerHTML=metas.map(function(m){
+      return '<div class="file-item">'+
+        '<span class="file-item-icon">'+getFileIcon(m.name)+'</span>'+
+        '<span class="file-item-name" title="'+escHtml(m.name)+'">'+escHtml(m.name)+'</span>'+
+        '<span class="file-item-meta">'+fmtFileSize(m.size)+'&nbsp;&nbsp;'+fmtFileDate(m.updated)+'</span>'+
+        '<div class="file-item-actions">'+
+        '<a class="file-item-btn file-btn-dl" href="'+escHtml(m.url)+'" target="_blank">&#11015; DL</a>'+
+        '<button class="file-item-btn file-btn-del" onclick="deleteFile(\''+caseId+'\',\''+escHtml(m.name)+'\')">&#128465; 削除</button>'+
+        '</div></div>';
+    }).join('');
+  }catch(e){
+    listEl.innerHTML='<div style="color:#dc2626;font-size:12px;padding:8px">読み込みエラー: '+escHtml(e.message)+'</div>';
+  }
+}
+function fileDragOver(e){e.preventDefault();var z=document.getElementById('fileDropZone');if(z)z.classList.add('drag-over');}
+function fileDragLeave(e){var z=document.getElementById('fileDropZone');if(z)z.classList.remove('drag-over');}
+function fileDrop(e,caseId){e.preventDefault();var z=document.getElementById('fileDropZone');if(z)z.classList.remove('drag-over');uploadFiles(Array.from(e.dataTransfer.files),caseId);}
+function fileInputChange(e,caseId){uploadFiles(Array.from(e.target.files),caseId);e.target.value='';}
+async function uploadFiles(files,caseId){
+  if(!files.length||!storage)return;
+  var prog=document.getElementById('fileUploadProgress');
+  if(prog){prog.style.display='block';prog.textContent='アップロード中... (0/'+files.length+')';}
+  var done=0;
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    try{
+      var ref=storage.ref('cases/'+caseId+'/'+file.name);
+      await ref.put(file);
+      done++;
+      if(prog)prog.textContent='アップロード中... ('+done+'/'+files.length+')';
+    }catch(e){showToast('アップロード失敗: '+file.name+' - '+e.message);}
+  }
+  if(prog)prog.style.display='none';
+  showToast(done+'件のファイルをアップロードしました');
+  loadFileList(caseId);
+}
+async function deleteFile(caseId,fileName){
+  if(!confirm(fileName+'\nを削除しますか?'))return;
+  try{
+    await storage.ref('cases/'+caseId+'/'+fileName).delete();
+    showToast('削除しました');
+    loadFileList(caseId);
+  }catch(e){showToast('削除エラー: '+e.message);}
+}
 
 window.addEventListener('DOMContentLoaded', initApp);
 </script>
