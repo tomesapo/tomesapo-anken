@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>案件管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <!-- Storage SDK は動的ロード（uploadFiles実行時） -->
@@ -18,7 +21,7 @@
     --shadow-lg:0 10px 25px rgba(0,0,0,.15);
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;background:var(--gray-50);color:var(--gray-800);font-size:14px}
+  body{font-family:'Noto Sans JP',-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;background:var(--gray-50);color:var(--gray-800);font-size:14px}
   header{background:var(--primary);color:white;padding:0 16px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);position:sticky;top:0;z-index:100}
   header h1{font-size:17px;font-weight:700}
   .header-btns{display:flex;gap:8px}
@@ -328,6 +331,7 @@
         <span class="monthly-year-label" id="monthlyYearLabel"></span>
         <button onclick="changeMonthlyYear(1)">&#8594;</button>
       </div>
+      <button class="monthly-close-btn" onclick="exportMonthlyReportExcel()" style="background:rgba(255,255,255,.25);margin-right:6px">&#128202; Excel出力</button>
       <button class="monthly-close-btn" onclick="closeMonthlyReport()">&#10005; 閉じる</button>
     </div>
     <div class="monthly-body" id="monthlyBody"></div>
@@ -362,6 +366,9 @@
         </select>
         <select class="filter-select" id="yearFilter" onchange="renderAll()">
           <option value="">すべての年</option>
+        </select>
+        <select class="filter-select" id="periodFilter" onchange="renderAll()">
+          <option value="">すべての期</option>
         </select>
       </div>
     </div>
@@ -1141,15 +1148,23 @@ function confirmDelete(){const cb=deleteCallback;closeConfirm();if(cb)cb();}
 
 // ── ソート / フィルタ ──
 function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}renderAll();}
+function getCasePeriod(c){
+  var dateStr=c.receptionDate||c.requestStart||'';
+  if(dateStr){var d=new Date(dateStr+'T00:00:00');return Math.max(1,calcPeriod(d.getFullYear(),d.getMonth()));}
+  var yr=parseInt((c.caseNo||'').split('-')[0])||FISCAL_BASE_YEAR;
+  return Math.max(1,yr-FISCAL_BASE_YEAR+1);
+}
 function getFiltered(){
   const q=document.getElementById('searchInput').value.toLowerCase();
   const st=document.getElementById('statusFilter').value;
   const yr=document.getElementById('yearFilter').value;
   const cu=document.getElementById('customerFilter').value;
+  const pd=document.getElementById('periodFilter').value;
   let data=cases.filter(c=>{
     if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
     if(cu&&c.customerName!==cu)return false;
+    if(pd&&String(getCasePeriod(c))!==pd)return false;
     if(q&&!c.caseNo.toLowerCase().includes(q)&&!c.siteName.toLowerCase().includes(q)
         &&!(c.customerName||'').toLowerCase().includes(q)&&!(c.staffName||'').toLowerCase().includes(q))return false;
     return true;
@@ -1247,6 +1262,9 @@ function updateYearFilter(){
   const years=[...new Set(cases.map(c=>c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
   const sel=document.getElementById('yearFilter'),cur=sel.value;
   sel.innerHTML='<option value="">すべての年</option>'+years.map(y=>'<option'+(y===cur?' selected':'')+'>'+y+'</option>').join('');
+  const periods=[...new Set(cases.map(c=>getCasePeriod(c)))].sort((a,b)=>b-a);
+  const psel=document.getElementById('periodFilter'),pcur=psel.value;
+  psel.innerHTML='<option value="">すべての期</option>'+periods.map(p=>'<option value="'+p+'"'+(String(p)===pcur?' selected':'')+'>'+'第'+p+'期</option>').join('');
 }
 function syncCustomerFilter(){
   const names=[...new Set(masterData.customers.map(c=>c.name))].sort();
@@ -1468,14 +1486,12 @@ function getParkingLotsFromForm(){
   }).filter(p=>p.name||p.supplierName||p.monthlyRent||p.dailyRent);
 }
 function renderParkingLotsDetail(c){
-  let h='<div class="detail-section"><div class="detail-section-title">駐車場情報 ('+c.parkingLots.length+'件)</div>';
+  let h='<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center"><div class="detail-section-title" style="margin-bottom:0">駐車場情報 ('+c.parkingLots.length+'件)</div><button style="background:#16a34a;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer" onclick="generateProposalDocument(\''+c.id+'\')">📥 提案資料</button></div>';
   c.parkingLots.forEach((pl,i)=>{
     h+='<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
     h+='<span style="font-weight:700;font-size:13px;color:var(--primary)">🅿 '+(pl.name?esc(pl.name):'駐車場'+(i+1))+'</span>';
     h+='<div style="display:flex;gap:4px">';
-    h+='<button class="btn" style="background:#0891b2;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer" onclick="generateParkingMapExcelDirect(\''+c.id+'\')">📋 案内図</button>';
-    h+='<button style="background:#16a34a;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer" onclick="generateEstimateExcel(\''+c.id+'\',\''+pl.id+'\')">📥 見積書</button>';
     if(c.status==='\u5951\u7d04\u4e2d'){
       if(i===0)h+='<button style="background:#7c3aed;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;" onclick="generateKukakuzu(\''+c.id+'\')">🗺 区画図</button>';
       if(pl.contractStart&&pl.contractEnd&&pl.units)h+='<button style="background:#ea580c;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer" onclick="generateKakuteiMeisai(\''+c.id+'\',\''+pl.id+'\')">📋 確定明細</button>';
@@ -1648,7 +1664,7 @@ function generateEstimate(caseId,plId){
   '<div class="rr"><span class="ll">発行日</span><span>'+todayStr+'</span></div>'+
   '<div class="rr"><span class="ll">見積番号</span><span>'+estimateNo+'</span></div>'+
   '<div style="margin-top:6px;font-weight:bold">株式会社 TomeSapo</div>'+
-  '<div>〒487-0024</div><div>愛知県春日井市大留町6丁目5番地9号</div><div>✉：info@tomesapo.co.jp</div>'+
+  '<div>〒487-0024</div><div>愛知県春日井市大留町6-5-9</div><div>✉：info@tomesapo.co.jp</div>'+
   '</div></div>'+
   '<p style="font-size:11px;margin-bottom:6px">下記の通りお見積り申し上げます。</p>'+
   '<div class="ab"><span class="at">お見積金額(税込)</span><span class="an">'+fmtN(total)+'円</span></div>'+
@@ -1775,7 +1791,7 @@ function generateProposal(caseId){
       inf+='<tr><th>備考</th><td>&nbsp;</td></tr>';
       inf+='</table>';
     });
-    inf+='<div class="cf">株式会社 TomeSapo｜愛知県春日井市大留町6丁目5番地9号<br>✉：info@tomesapo.co.jp</div>';
+    inf+='<div class="cf">株式会社 TomeSapo｜愛知県春日井市大留町6-5-9<br>✉：info@tomesapo.co.jp</div>';
     inf+='<div class="ds">※本資料記載の空き状況は提案時点の情報であり、申込時には変動している場合があります。<br>※本資料は提案時点での内容であり、契約確定時に条件が変更となる場合があります。</div>';
 
     // 地図プレースホルダー（クリック→画像アップロード）
@@ -1961,8 +1977,10 @@ async function generateParkingMapExcel(){
 
     // データ書き込み
     sc('M1',(ed.caseNo?ed.caseNo+'\uff5c':'')+ed.siteName);
-    dc('C3',ed.requestStart);dc('G3',ed.requestEnd);dc('W3',new Date().toISOString().slice(0,10));
-    if(ed.requestUnits!==''&&ed.requestUnits!=null)nc('C4',Number(ed.requestUnits));
+    function fmtJP(s){if(!s||s.length<10)return'';var p=s.slice(0,10).split('-');return parseInt(p[0])+'\u5e74'+parseInt(p[1])+'\u6708'+parseInt(p[2])+'\u65e5';}
+    var nowD=new Date();sc('W3',nowD.getFullYear()+'\u5e74'+(nowD.getMonth()+1)+'\u6708'+nowD.getDate()+'\u65e5');
+    sc('C3',fmtJP(ed.requestStart));sc('G3',fmtJP(ed.requestEnd));
+    if(ed.requestUnits!==''&&ed.requestUnits!=null)sc('C4',Number(ed.requestUnits)+'\u53f0');
     var maps=[
       {n:'S5',w:'X5',a:'S6',sp:'T7',ep:'V7',k:'X7',v:'S8',vt:'V8',r:'S9'},
       {n:'S19',w:'X19',a:'S20',sp:'T21',ep:'V21',k:'X21',v:'S22',vt:'V22',r:'S23'},
@@ -2099,6 +2117,8 @@ async function generateParkingMapExcel(){
       wb.SheetNames.push(sName);wb.Sheets[sName]=wsN;
     }
     // xlsx バイナリ生成
+    // フッター住所修正
+    wb.SheetNames.forEach(function(snn){var wss=wb.Sheets[snn];if(!wss)return;Object.keys(wss).forEach(function(ka){if(ka[0]==='!')return;if(wss[ka]&&typeof wss[ka].v==='string'&&wss[ka].v.indexOf('6丁目5番地9号')>=0){wss[ka].v=wss[ka].v.replace('6丁目5番地9号','6-5-9');}});});
     var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
 
     // ── JSZip で写真・罫線・印刷設定を適用 ──
@@ -2336,6 +2356,50 @@ async function generateParkingMapExcel(){
       zip.file('[Content_Types].xml',ctS);
     })();
 
+    // —— G3右揃え ——
+    await (async function(){
+      var sxl3=await zip.file('xl/styles.xml').async('string');
+      var xfArr3=[],xfM3=sxl3.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/);
+      if(xfM3){var xs3=xfM3[1],xi3=0;while(xi3<xs3.length){var sa=xs3.indexOf('<xf',xi3);if(sa<0)break;var ta=xs3.indexOf('>',sa);if(ta<0)break;var ea;if(xs3[ta-1]=='/')ea=ta+1;else{var ca=xs3.indexOf('<\/xf>',sa);if(ca<0)break;ea=ca+5;}xfArr3.push(xs3.substring(sa,ea));xi3=ea;}}
+      for(var gi3=1;gi3<=numGroups;gi3++){
+        var sp3='xl/worksheets/sheet'+gi3+'.xml';
+        var sx3=await zip.file(sp3).async('string');
+        var g3m=sx3.match(/<c r="G3"([^>]*)>/);
+        if(!g3m)continue;
+        var g3sm=g3m[1].match(/s="(\d+)"/);
+        var g3si=g3sm?parseInt(g3sm[1]):0;
+        var bx3=xfArr3[g3si]||'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>';
+        var al3='<alignment horizontal="right"/>';
+        var nx3;
+        if(bx3.indexOf('<alignment')>=0){nx3=bx3.replace(/<alignment[^>]*\/>/,al3);}
+        else if(bx3.slice(-2)==='/>'){nx3=bx3.slice(0,-2)+'>'+al3+'<\/xf>';}
+        else{nx3=bx3.replace('<\/xf>',al3+'<\/xf>');}
+        if(nx3.indexOf('applyAlignment')<0)nx3=nx3.replace('<xf ','<xf applyAlignment="1" ');
+        else nx3=nx3.replace(/applyAlignment="[01]"/,'applyAlignment="1"');
+        var ni3=xfArr3.indexOf(nx3);if(ni3<0){ni3=xfArr3.length;xfArr3.push(nx3);}
+        var nc3=g3m[1].replace(/\bs="[^"]*"/,'').trim();
+        sx3=sx3.replace(g3m[0],'<c r="G3" s="'+ni3+'"'+(nc3?' '+nc3:'')+'>') ;
+        zip.file(sp3,sx3);
+      }
+      sxl3=sxl3.replace(/<cellXfs[^>]*>[\s\S]*?<\/cellXfs>/,'<cellXfs count="'+xfArr3.length+'">'+xfArr3.join('')+'<\/cellXfs>');
+      zip.file('xl/styles.xml',sxl3);
+    })();
+
+    // —— 印刷範囲 $Y$48 に固定 ——
+    await (async function(){
+      var wbXmlM=await zip.file('xl/workbook.xml').async('string');
+      // シート名を取得
+      var snArr=[],snRe2=/<sheet name="([^"]+)"/g,snM2;
+      while((snM2=snRe2.exec(wbXmlM))!==null)snArr.push(snM2[1]);
+      var dnNew2='<definedNames>';
+      for(var si2=0;si2<snArr.length;si2++){dnNew2+='<definedName name="_xlnm.Print_Area" localSheetId="'+si2+'">&apos;'+snArr[si2]+'&apos;!$A$1:$Y$48</definedName>';}
+      dnNew2+='</definedNames>';
+      if(wbXmlM.indexOf('<definedNames>')>=0)wbXmlM=wbXmlM.replace(/<definedNames>[\s\S]*?<\/definedNames>/,dnNew2);
+      else wbXmlM=wbXmlM.replace('<\/workbook>',dnNew2+'<\/workbook>');
+      zip.file('xl/workbook.xml',wbXmlM);
+    })();
+
+    if(generateParkingMapExcel._returnZip){generateParkingMapExcel._returnZip=false;return zip;}
     var finalBytes=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
@@ -2345,276 +2409,209 @@ async function generateParkingMapExcel(){
 }
 
 // ── 見積書兼発注書 Excel出力 ──
-async function generateEstimateExcel(caseId,plId){
+async function generateEstimateExcel(caseId){
   var c=cases.find(x=>x.id===caseId);if(!c)return;
-  var plIdx=(c.parkingLots||[]).findIndex(p=>p.id===plId);
-  var pl=(c.parkingLots||[])[plIdx];if(!pl)return;
+  var lots=(c.parkingLots||[]);
+  if(!lots.length){alert("\u99d0\u8eca\u5834\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093");return;}
   try{
     await waitXLSX();
-    var TMPL2="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";
-    var wb=XLSX.read(TMPL2,{type:'base64',cellStyles:true});
-    var ws=wb.Sheets['見積①'];
-    if(!ws){alert('\u30c6\u30f3\u30d7\u30ec\u30fc\u30c8\u30b7\u30fc\u30c8\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093');return;}
-    function sc(addr,val){if(!ws[addr])ws[addr]={};ws[addr].v=(val==null?'':val);ws[addr].t='s';delete ws[addr].f;delete ws[addr].r;}
-    function nc(addr,val){if(!ws[addr])ws[addr]={};ws[addr].v=val;ws[addr].t='n';delete ws[addr].f;delete ws[addr].r;}
-    var units=pl.estimateUnits||pl.units||1;
-    var quoteRent=pl.rateType==='daily'?(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent):(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent);
-    var quoteAdminFee=pl.quoteAdminFee!=null?pl.quoteAdminFee:pl.adminFee;
-    var quoteKeyMoney=pl.quoteKeyMoney!=null?pl.quoteKeyMoney:pl.keyMoney;
-    var estStart=pl.estimateStart||c.contractStart||'';
-    var estEnd=pl.estimateEnd||c.contractEnd||'';
-    var estimateNo=c.caseNo+'-P'+(plIdx+1);
+    var TMPL2="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";
+    function fmtDateJP2(s){if(!s)return"";var p=s.split("-");return p[0]+"\u5e74"+parseInt(p[1])+"\u6708"+parseInt(p[2])+"\u65e5";}
     var today=new Date();
-    var todayStr=today.getFullYear()+'\u5e74'+(today.getMonth()+1)+'\u6708'+today.getDate()+'\u65e5';
-    function fmtDateJP2(s){if(!s)return'';var p=s.split('-');return p[0]+'年'+parseInt(p[1])+'月'+parseInt(p[2])+'日';}
-    var startFmt=fmtDateJP2(estStart);
-    var endFmt=fmtDateJP2(estEnd);
-    sc('Y5',todayStr);
-    sc('Y6',estimateNo);
-    sc('E7',c.siteName||'');
-    sc('E8',pl.name||'');
-    sc('E9',pl.address||'');
-    sc('E10',startFmt);
-    sc('L10',endFmt);
-    sc('A5',(c.customerName||'')+' \u5fa1\u4e2d');
-    var rentRows=calcMonthlyRentRows(pl.rateType,quoteRent,estStart,estEnd,units,pl.startProRate,pl.endProRate);
-    var extras=[];
-    if(quoteKeyMoney)extras.push({label:'\u793c\u91d1',period:'-',unitPrice:quoteKeyMoney,amount:units*quoteKeyMoney});
-    if(quoteAdminFee)extras.push({label:'\u4e8b\u52d9\u624b\u6570\u6599',period:'-',unitPrice:quoteAdminFee,amount:units*quoteAdminFee});
-    var allRows=[...rentRows,...extras];
-    allRows.forEach(function(row,i){
-      if(i>=15)return;
-      var r=17+i;
-      sc('A'+r,row.label);
-      nc('M'+r,units);
-      sc('P'+r,row.period);
-      nc('S'+r,row.unitPrice);
-      nc('Y'+r,row.amount);
-    });
-    var subtotal=allRows.reduce(function(s,r){return s+r.amount;},0);
-    var tax=Math.floor(subtotal*0.1);
-    var total=subtotal+tax;
-    nc('Y32',subtotal);nc('Y33',tax);nc('Y34',total);nc('H13',total);
-    var CELL_BORDERS2={"A14":{"bottom":{"style":"thin"}},"B14":{"bottom":{"style":"thin"}},"C14":{"bottom":{"style":"thin"}},"D14":{"bottom":{"style":"thin"}},"E14":{"bottom":{"style":"thin"}},"F14":{"bottom":{"style":"thin"}},"G14":{"bottom":{"style":"thin"}},"H14":{"bottom":{"style":"thin"}},"I14":{"bottom":{"style":"thin"}},"J14":{"bottom":{"style":"thin"}},"K14":{"bottom":{"style":"thin"}},"L14":{"bottom":{"style":"thin"}},"M14":{"bottom":{"style":"thin"}},"N14":{"bottom":{"style":"thin"}},"O14":{"bottom":{"style":"thin"}},"P14":{"bottom":{"style":"thin"}},"L15":{"bottom":{"style":"thin"}},"N15":{"bottom":{"style":"thin"}},"O15":{"bottom":{"style":"thin"}},"P15":{"bottom":{"style":"thin"}},"A16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD16":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD17":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD18":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD19":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD20":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD21":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD22":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD23":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD24":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD25":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD26":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD27":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD28":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD29":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD30":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"C31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"D31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"E31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"F31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"G31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"H31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"I31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"J31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"K31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"L31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"M31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"N31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"O31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"P31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Q31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"R31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD31":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"A32":{"top":{"style":"thin"}},"B32":{"top":{"style":"thin"}},"C32":{"top":{"style":"thin"}},"D32":{"top":{"style":"thin"}},"E32":{"top":{"style":"thin"}},"F32":{"top":{"style":"thin"}},"G32":{"top":{"style":"thin"}},"H32":{"top":{"style":"thin"}},"I32":{"top":{"style":"thin"}},"J32":{"top":{"style":"thin"}},"K32":{"top":{"style":"thin"}},"L32":{"top":{"style":"thin"}},"M32":{"top":{"style":"thin"}},"N32":{"top":{"style":"thin"}},"O32":{"top":{"style":"thin"}},"P32":{"top":{"style":"thin"}},"Q32":{"top":{"style":"thin"}},"R32":{"top":{"style":"thin"}},"S32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD32":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD33":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"S34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"T34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"U34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"V34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"W34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"X34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD34":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"Z36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"AA36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"AB36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"AC36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"AD36":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"double"}},"Y37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"Z37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"AA37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"AB37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"AC37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"AD37":{"left":{"style":"thin"},"right":{"style":"thin"},"bottom":{"style":"thin"}},"Y38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD38":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Y39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"Z39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AA39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AB39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AC39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"AD39":{"left":{"style":"thin"},"right":{"style":"thin"},"top":{"style":"thin"},"bottom":{"style":"thin"}},"B41":{"left":{"style":"thin"},"top":{"style":"thin"}},"C41":{"top":{"style":"thin"}},"D41":{"top":{"style":"thin"}},"E41":{"top":{"style":"thin"}},"F41":{"right":{"style":"thin"},"top":{"style":"thin"}},"K41":{"left":{"style":"thin"},"top":{"style":"thin"}},"L41":{"top":{"style":"thin"}},"M41":{"top":{"style":"thin"}},"N41":{"top":{"style":"thin"}},"O41":{"top":{"style":"thin"}},"P41":{"top":{"style":"thin"}},"Q41":{"top":{"style":"thin"}},"R41":{"top":{"style":"thin"}},"S41":{"top":{"style":"thin"}},"T41":{"top":{"style":"thin"}},"U41":{"top":{"style":"thin"}},"V41":{"top":{"style":"thin"}},"W41":{"top":{"style":"thin"}},"X41":{"top":{"style":"thin"}},"Y41":{"top":{"style":"thin"}},"Z41":{"top":{"style":"thin"}},"AA41":{"top":{"style":"thin"}},"AB41":{"top":{"style":"thin"}},"AC41":{"top":{"style":"thin"}},"AD41":{"right":{"style":"thin"},"top":{"style":"thin"}},"B42":{"left":{"style":"thin"},"bottom":{"style":"thin"}},"C42":{"bottom":{"style":"thin"}},"D42":{"bottom":{"style":"thin"}},"E42":{"bottom":{"style":"thin"}},"F42":{"right":{"style":"thin"},"bottom":{"style":"thin"}},"K42":{"left":{"style":"thin"},"bottom":{"style":"thin"}},"L42":{"bottom":{"style":"thin"}},"M42":{"bottom":{"style":"thin"}},"N42":{"bottom":{"style":"thin"}},"O42":{"bottom":{"style":"thin"}},"P42":{"bottom":{"style":"thin"}},"Q42":{"bottom":{"style":"thin"}},"R42":{"bottom":{"style":"thin"}},"S42":{"bottom":{"style":"thin"}},"T42":{"bottom":{"style":"thin"}},"U42":{"bottom":{"style":"thin"}},"V42":{"bottom":{"style":"thin"}},"W42":{"bottom":{"style":"thin"}},"X42":{"bottom":{"style":"thin"}},"Y42":{"bottom":{"style":"thin"}},"Z42":{"bottom":{"style":"thin"}},"AA42":{"bottom":{"style":"thin"}},"AB42":{"bottom":{"style":"thin"}},"AC42":{"bottom":{"style":"thin"}},"AD42":{"right":{"style":"thin"},"bottom":{"style":"thin"}}};
-    Object.keys(CELL_BORDERS2).forEach(function(addr){
-      if(!ws[addr])ws[addr]={};
-      if(!ws[addr].t||ws[addr].t==='z'){ws[addr].t='s';ws[addr].v='';}
-      if(!ws[addr].s||typeof ws[addr].s!=='object')ws[addr].s={};
-      ws[addr].s.border=CELL_BORDERS2[addr];
-      ws[addr].s.font=Object.assign({},ws[addr].s.font||{},{name:'Noto Sans JP'});
-      ws[addr].s.alignment=Object.assign({},ws[addr].s.alignment||{},{vertical:'center'});
-    });
-    Object.keys(ws).filter(function(k){return k[0]!=='!';}).forEach(function(addr){
-      if(CELL_BORDERS2[addr])return;
-      if(!ws[addr].s||typeof ws[addr].s!=='object')ws[addr].s={};
-      ws[addr].s.font=Object.assign({},ws[addr].s.font||{},{name:'Noto Sans JP'});
-      ws[addr].s.alignment=Object.assign({},ws[addr].s.alignment||{},{vertical:'center'});
-    });
-    if(ws['A1']){if(!ws['A1'].s)ws['A1'].s={};ws['A1'].s.alignment=Object.assign({},ws['A1'].s.alignment||{},{vertical:'center',horizontal:'center'});}
-    // ── 個別スタイル調整 ──
-    // A1: フォントサイズ22・中央揃え
-    if(ws['A1']){if(!ws['A1'].s)ws['A1'].s={};ws['A1'].s.font=Object.assign({},ws['A1'].s.font||{},{name:'Noto Sans JP',sz:22});ws['A1'].s.alignment={vertical:'center',horizontal:'center'};}
-    // 左揃えセル
-    ['A5','A12','U8','U9','U10','U11','B38','B40','K40','B45','B46','B47','B48','B49'].forEach(function(a2){
-      if(!ws[a2])ws[a2]={};if(!ws[a2].s||typeof ws[a2].s!=='object')ws[a2].s={};
-      ws[a2].s.alignment=Object.assign({},ws[a2].s.alignment||{},{vertical:'center',horizontal:'left'});});
-    // 右揃えセル
-    ['Y5','Y6'].forEach(function(a2){
-      if(!ws[a2])ws[a2]={};if(!ws[a2].s||typeof ws[a2].s!=='object')ws[a2].s={};
-      ws[a2].s.alignment=Object.assign({},ws[a2].s.alignment||{},{vertical:'center',horizontal:'right'});});
-    // U10: 住所を変更
-    sc('U10','\u611b\u77e5\u770c\u6625\u65e5\u4e95\u5e02\u5927\u7559\u753a6-5-9');
-    // H13: 右揃え・フォントサイズ20
-    if(!ws['H13'])ws['H13']={};if(!ws['H13'].s||typeof ws['H13'].s!=='object')ws['H13'].s={};
-    ws['H13'].s.alignment={vertical:'center',horizontal:'right'};
-    ws['H13'].s.font=Object.assign({},ws['H13'].s.font||{},{name:'Noto Sans JP',sz:16});
-    // A5: 14pt
-    if(!ws['A5'])ws['A5']={t:'s',v:''};if(!ws['A5'].s)ws['A5'].s={};ws['A5'].s.font=Object.assign({},ws['A5'].s.font||{},{name:'Noto Sans JP',sz:14});
-    // B45-B49: 10pt
-    ['B45','B46','B47','B48','B49'].forEach(function(bx){if(!ws[bx])ws[bx]={t:'s',v:''};if(!ws[bx].s)ws[bx].s={};ws[bx].s.font=Object.assign({},ws[bx].s.font||{},{name:'Noto Sans JP',sz:10});});
-    // 16行目: 中央揃え
-    ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD'].forEach(function(col){
-      var a2=col+'16';if(!ws[a2])ws[a2]={};if(!ws[a2].s||typeof ws[a2].s!=='object')ws[a2].s={};
-      ws[a2].s.alignment=Object.assign({},ws[a2].s.alignment||{},{vertical:'center',horizontal:'center'});});
-    // S32,S33,S34: 中央揃え
-    ['S32','S33','S34'].forEach(function(a2){
-      if(!ws[a2])ws[a2]={};if(!ws[a2].s||typeof ws[a2].s!=='object')ws[a2].s={};
-      ws[a2].s.alignment=Object.assign({},ws[a2].s.alignment||{},{vertical:'center',horizontal:'center'});});
-    var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-    var zip=await JSZip.loadAsync(out);
-    await (async function(){
-      var sxml=await zip.file('xl/styles.xml').async('string');
-      var shxml=await zip.file('xl/worksheets/sheet1.xml').async('string');
-
-      // Parse borders
-      var brdArr=[];
-      var bSM=sxml.match(/<borders[^>]*>([\s\S]*?)<\/borders>/);
-      if(bSM){var bRx=/<border[\s\S]*?<\/border>/g;var bm;while((bm=bRx.exec(bSM[1]))!==null)brdArr.push(bm[0]);}
-
-      // Parse fonts
-      var fntArr=[];
-      var fSM=sxml.match(/<fonts[^>]*>([\s\S]*?)<\/fonts>/);
-      if(fSM){var fRx=/<font>[\s\S]*?<\/font>/g;var fm;while((fm=fRx.exec(fSM[1]))!==null)fntArr.push(fm[0]);}
-
-      // Parse fills
-      var fillArr=[];
-      var fiSM=sxml.match(/<fills[^>]*>([\s\S]*?)<\/fills>/);
-      if(fiSM){var fiRx=/<fill>[\s\S]*?<\/fill>/g;var fim;while((fim=fiRx.exec(fiSM[1]))!==null)fillArr.push(fim[0]);}
-
-      // Parse xfs
-      var xfArr=[];
-      var xSM=sxml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/);
-      if(xSM){var xstr=xSM[1],xi2=0;while(xi2<xstr.length){var s0=xstr.indexOf('<xf',xi2);if(s0<0)break;var t0=xstr.indexOf('>',s0);if(t0<0)break;var e0;if(xstr[t0-1]=='/')e0=t0+1;else{var c0=xstr.indexOf('</xf>',s0);if(c0<0)break;e0=c0+5;}xfArr.push(xstr.substring(s0,e0));xi2=e0;}}
-
-      // Border helpers
-      function bKey(o){var p=[];['left','right','top','bottom'].forEach(function(k){if(o[k])p.push(k+':'+o[k].style);});return p.join(',');}
-      function xKey(xml){var p=[];['left','right','top','bottom'].forEach(function(k){var m=xml.match(new RegExp('<'+k+'[^/]*style="([^"]+)"'));if(m)p.push(k+':'+m[1]);});return p.join(',');}
-      function b2x(o){var x='<border>';['left','right','top','bottom','diagonal'].forEach(function(k){if(o[k])x+='<'+k+' style="'+o[k].style+'"><color rgb="FF000000"/></'+k+'>';else x+='<'+k+'/>';});return x+'</border>';}
-      function getBrd(o){var k=bKey(o);for(var i=0;i<brdArr.length;i++){if(xKey(brdArr[i])===k)return i;}brdArr.push(b2x(o));return brdArr.length-1;}
-
-      // Font helper: clone font with new sz
-      function getFont(baseId,sz){
-        var base=fntArr[baseId]||fntArr[0];
-        var modified=base.replace(/<sz val="[^"]*"/,'<sz val="'+sz+'"');
-        if(modified===base)modified=base.replace('<font>','<font><sz val="'+sz+'"/>');
-        for(var i=0;i<fntArr.length;i++){if(fntArr[i]===modified)return i;}
-        fntArr.push(modified);return fntArr.length-1;
-      }
-
-      // Fill helper: get or create solid fill with given RGB (6 hex chars)
-      function getFill(rgb){
-        var fillXml='<fill><patternFill patternType="solid"><fgColor rgb="FF'+rgb+'"/><bgColor indexed="64"/></patternFill></fill>';
-        for(var i=0;i<fillArr.length;i++){if(fillArr[i]===fillXml)return i;}
-        fillArr.push(fillXml);return fillArr.length-1;
-      }
-
-      // Alignment helper: set horizontal align while preserving wrapText+vertical
-      function setXfAlign(xf,halign){
-        var wm=xf.match(/<alignment[^>]*wrapText="([^"]+)"/);
-        var wrap=wm?wm[1]:'0';
-        var vm=xf.match(/<alignment[^>]*vertical="([^"]+)"/);
-        var vert=vm?vm[1]:'center';
-        var r=xf.replace(/<alignment[^\/]*\/>/g,'').replace(/<alignment[^>]*>[\s\S]*?<\/alignment>/g,'');
-        r=r.replace('></xf>','/>');
-        r=r.indexOf('applyAlignment=')>=0?r.replace(/applyAlignment="[01]"/,'applyAlignment="1"'):r.replace('<xf ','<xf applyAlignment="1" ');
-        var alignXml='<alignment horizontal="'+halign+'" vertical="'+vert+'"'+(wrap==='1'?' wrapText="1"':'')+'/>';
-        if(r.slice(-2)==='/>'){r=r.slice(0,-2)+'>'+alignXml+'</xf>';}
-        else{r=r.replace('</xf>',alignXml+'</xf>');}
-        return r;
-      }
-
-      function cloneXf(xf,bid,fid,halign,fillid){
-        var r=xf;
-        // border
-        if(r.indexOf('borderId=')>=0)r=r.replace(/borderId="\d+"/,'borderId="'+bid+'"');
-        else r='<xf borderId="'+bid+'" '+r.slice(3);
-        if(bid>0){r=r.indexOf('applyBorder=')>=0?r.replace(/applyBorder="[01]"/,'applyBorder="1"'):r.replace('<xf ','<xf applyBorder="1" ');}
-        else{r=r.replace(/\s*applyBorder="[01]"/g,'');}
-        // fill
-        if(fillid!==null&&fillid!==undefined){
-          if(r.indexOf('fillId=')>=0)r=r.replace(/fillId="\d+"/,'fillId="'+fillid+'"');
-          else r='<xf fillId="'+fillid+'" '+r.slice(3);
-          r=r.indexOf('applyFill=')>=0?r.replace(/applyFill="[01]"/,'applyFill="1"'):r.replace('<xf ','<xf applyFill="1" ');
-        }
-        // font size
-        if(fid!==null){
-          if(r.indexOf('fontId=')>=0)r=r.replace(/fontId="\d+"/,'fontId="'+fid+'"');
-          else r='<xf fontId="'+fid+'" '+r.slice(3);
-          r=r.indexOf('applyFont=')>=0?r.replace(/applyFont="[01]"/,'applyFont="1"'):r.replace('<xf ','<xf applyFont="1" ');
-        }
-        // alignment
-        if(halign!==null){r=setXfAlign(r,halign);}
-        return r;
-      }
-
-      function getXf(xf,bid,fid,halign,fillid){var nx=cloneXf(xf,bid,fid,halign,fillid);for(var i=0;i<xfArr.length;i++){if(xfArr[i]===nx)return i;}xfArr.push(nx);return xfArr.length-1;}
-
-      // Per-cell alignment/font-size overrides
-      var CELL_ALIGN={
-        'A1':{h:'center',sz:22},'H13':{h:'right',sz:16},
-        'A5':{h:'left',sz:14},'A12':{h:'left'},
-        'A7':{h:'left'},'A8':{h:'left'},'A9':{h:'left'},'A10':{h:'left'},
-        'E7':{h:'left'},'E8':{h:'left'},'E9':{h:'left'},'E10':{h:'left'},
-        'L10':{h:'right'},'A13':{h:'left'},'A36':{h:'left'},'B44':{h:'left'},
-        'U5':{h:'left'},'U6':{h:'left'},
-        'U8':{h:'left'},'U9':{h:'left'},'U10':{h:'left'},'U11':{h:'left'},
-        'B38':{h:'left'},'B40':{h:'left'},'K40':{h:'left'},
-        'B45':{h:'left',sz:10},'B46':{h:'left',sz:10},'B47':{h:'left',sz:10},'B48':{h:'left',sz:10},'B49':{h:'left',sz:10},
-        'Y5':{h:'right'},'Y6':{h:'right'},
-        'A16':{h:'center'},'B16':{h:'center'},'C16':{h:'center'},'D16':{h:'center'},
-        'E16':{h:'center'},'F16':{h:'center'},'G16':{h:'center'},'H16':{h:'center'},
-        'I16':{h:'center'},'J16':{h:'center'},'K16':{h:'center'},'L16':{h:'center'},
-        'M16':{h:'center'},'N16':{h:'center'},'O16':{h:'center'},'P16':{h:'center'},
-        'Q16':{h:'center'},'R16':{h:'center'},'S16':{h:'center'},'T16':{h:'center'},
-        'U16':{h:'center'},'V16':{h:'center'},'W16':{h:'center'},'X16':{h:'center'},
-        'Y16':{h:'center'},'Z16':{h:'center'},'AA16':{h:'center'},'AB16':{h:'center'},
-        'AC16':{h:'center'},'AD16':{h:'center'},
-        'S17':{h:'right'},'S18':{h:'right'},'S19':{h:'right'},'S20':{h:'right'},'S21':{h:'right'},'S22':{h:'right'},'S23':{h:'right'},'S24':{h:'right'},'S25':{h:'right'},'S26':{h:'right'},'S27':{h:'right'},'S28':{h:'right'},'S29':{h:'right'},'S30':{h:'right'},'S31':{h:'right'},'Y17':{h:'right'},'Y18':{h:'right'},'Y19':{h:'right'},'Y20':{h:'right'},'Y21':{h:'right'},'Y22':{h:'right'},'Y23':{h:'right'},'Y24':{h:'right'},'Y25':{h:'right'},'Y26':{h:'right'},'Y27':{h:'right'},'Y28':{h:'right'},'Y29':{h:'right'},'Y30':{h:'right'},'Y31':{h:'right'},'Y32':{h:'right'},'Y33':{h:'right'},'Y34':{h:'right'},
-        'S32':{h:'center'},'S33':{h:'center'},'S34':{h:'center'}
-      };
-
-      var CELL_FILL={
-        'A16':'E7E6E6','M16':'E7E6E6','P16':'E7E6E6','S16':'E7E6E6','Y16':'E7E6E6',
-        'S32':'E7E6E6','S33':'E7E6E6','S34':'E7E6E6'
-      };
-
-      var tags=shxml.match(/<c\b[^>]*(?:\/>|>)/g)||[];
-      tags.forEach(function(tag){
-        var rm=tag.match(/\br="([^"]+)"/);if(!rm)return;
-        var addr=rm[1];
-        var sm=tag.match(/\bs="(\d+)"/);
-        var cs=sm?parseInt(sm[1]):0;
-        if(cs>=xfArr.length)cs=0;
-
-        var bObj=CELL_BORDERS2[addr];
-        var newBid=bObj?getBrd(bObj):0;
-        var cbm=xfArr[cs].match(/borderId="(\d+)"/);
-        var curBid=cbm?parseInt(cbm[1]):0;
-
-        var aObj=CELL_ALIGN[addr];
-        var newHalign=aObj?aObj.h:null;
-        var targetSz=(aObj&&aObj.sz)?aObj.sz:11;
-        var cfm=xfArr[cs].match(/fontId="(\d+)"/);
-        var curFid=cfm?parseInt(cfm[1]):0;
-        var newFid=getFont(curFid,targetSz);
-        var fObj=CELL_FILL[addr];
-        var newFillId=fObj?getFill(fObj):null;
-
-        if(curBid===newBid&&newHalign===null&&newFid===curFid&&newFillId===null)return;
-
-        var ns2=getXf(xfArr[cs],newBid,newFid,newHalign,newFillId);
-        if(ns2!==cs){
-          var nt=tag.indexOf(' s=')>=0?tag.replace(/\bs="\d+"/,'s="'+ns2+'"'):tag.replace(/^(<c\b[^>]*?)(\s*\/?>)$/,'$1 s="'+ns2+'"$2');
-          shxml=shxml.split(tag).join(nt);
-        }
+    var todayStr=today.getFullYear()+"\u5e74"+(today.getMonth()+1)+"\u6708"+today.getDate()+"\u65e5";
+    // 各駐車場のZIPを個別生成
+    function b64Bytes(b){var r=atob(b),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}
+    var tmplBytes=b64Bytes(TMPL2);
+    var lotZips=[];
+    for(var plIdx=0;plIdx<lots.length;plIdx++){
+      var pl=lots[plIdx];
+      var zip2=await JSZip.loadAsync(tmplBytes);
+      var shxml=await zip2.file("xl/worksheets/sheet1.xml").async("string");
+      // ページブレークプレビュー(85%ズーム)→標準ビュー(100%)に変換
+      shxml=shxml.replace(/<sheetView\s[^>]*>/,function(m){
+        var wbv=m.match(/workbookViewId="(\d+)"/);var wid=wbv?wbv[1]:"0";
+        return '<sheetView tabSelected="1" workbookViewId="'+wid+'">';
       });
-
-      sxml=sxml.replace(/<borders[^>]*>[\s\S]*?<\/borders>/,'<borders count="'+brdArr.length+'">'+brdArr.join('')+'</borders>');
-      sxml=sxml.replace(/<fills[^>]*>[\s\S]*?<\/fills>/,'<fills count="'+fillArr.length+'">'+fillArr.join('')+'</fills>');
-      sxml=sxml.replace(/<fonts[^>]*>[\s\S]*?<\/fonts>/,'<fonts count="'+fntArr.length+'">'+fntArr.join('')+'</fonts>');
-      sxml=sxml.replace(/<cellXfs[^>]*>[\s\S]*?<\/cellXfs>/,'<cellXfs count="'+xfArr.length+'">'+xfArr.join('')+'</cellXfs>');
-      zip.file('xl/styles.xml',sxml);
-      zip.file('xl/worksheets/sheet1.xml',shxml);
-    })();
-    // ── 印刺設定: A4縦・1ページ・水平垂直中央 ──
-    var s2xml=await zip.file('xl/worksheets/sheet1.xml').async('string');
-    if(!s2xml.includes('<sheetPr'))s2xml=s2xml.replace(/(<worksheet[^>]*>)/,'$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
-    var ps2Tag='<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="1"/>';
-    if(s2xml.includes('<pageSetup '))s2xml=s2xml.replace(/<pageSetup[^>]*\/>/g,ps2Tag);
-    else{s2xml=s2xml.replace(/(<pageMargins[^/]*\/>)/,'$1'+ps2Tag);if(!s2xml.includes('<pageSetup '))s2xml=s2xml.replace('</worksheet>',ps2Tag+'</worksheet>');}
-    var po2Tag='<printOptions horizontalCentered="1" verticalCentered="1"/>';
-    if(!s2xml.includes('<printOptions')){if(s2xml.includes('<pageMargins'))s2xml=s2xml.replace(/(<pageMargins)/,po2Tag+'$1');else s2xml=s2xml.replace('</worksheet>',po2Tag+'</worksheet>');}
-    else s2xml=s2xml.replace(/<printOptions[^>]*\/>/g,po2Tag);
-    zip.file('xl/worksheets/sheet1.xml',s2xml);
-    var finalBytesE=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
-    var blobE=new Blob([finalBytesE],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      shxml=shxml.replace(/<selection[^/]*\/>/,'<selection activeCell="A1" sqref="A1"/>');
+      function ex(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+      function ss(sx,addr,val){var i=sx.indexOf('<c r="'+addr+'"');if(i<0)return sx;var e=sx.indexOf('</c>',i);if(e<0)return sx;var cell=sx.substring(i,e+4);var sm=cell.match(/s="(\d+)"/);var s=sm?sm[1]:"0";return sx.substring(0,i)+'<c r="'+addr+'" s="'+s+'" t="inlineStr"><is><t>'+ex(val)+"</t></is></c>"+sx.substring(e+4);}
+      function sn(sx,addr,val){var i=sx.indexOf('<c r="'+addr+'"');if(i<0)return sx;var e=sx.indexOf('</c>',i);if(e<0)return sx;var cell=sx.substring(i,e+4);var sm=cell.match(/s="(\d+)"/);var s=sm?sm[1]:"0";return sx.substring(0,i)+'<c r="'+addr+'" s="'+s+'"><v>'+(Number(val)||0)+"</v></c>"+sx.substring(e+4);}
+      var units=pl.estimateUnits||pl.units||1;
+      var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent):(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent);
+      var quoteAdminFee=pl.quoteAdminFee!=null?pl.quoteAdminFee:pl.adminFee;
+      var quoteKeyMoney=pl.quoteKeyMoney!=null?pl.quoteKeyMoney:pl.keyMoney;
+      var estStart=pl.estimateStart||c.contractStart||"";
+      var estEnd=pl.estimateEnd||c.contractEnd||"";
+      var estimateNo=c.caseNo+"-P"+(plIdx+1);
+      shxml=ss(shxml,"Y5",todayStr);
+      shxml=ss(shxml,"Y6",estimateNo);
+      shxml=ss(shxml,"E7",c.siteName||"");
+      shxml=ss(shxml,"E8",pl.name||"");
+      shxml=ss(shxml,"E9",pl.address||"");
+      shxml=ss(shxml,"E10",fmtDateJP2(estStart));
+      shxml=ss(shxml,"L10",fmtDateJP2(estEnd));
+      shxml=ss(shxml,"A5",(c.customerName||"")+" \u5fa1\u4e2d");
+      var rentRows=calcMonthlyRentRows(pl.rateType,quoteRent,estStart,estEnd,units,pl.startProRate,pl.endProRate);
+      var extras=[];
+      if(quoteKeyMoney)extras.push({label:"礼金",period:"-",unitPrice:quoteKeyMoney,amount:units*quoteKeyMoney});
+      if(quoteAdminFee)extras.push({label:"事務手数料",period:"-",unitPrice:quoteAdminFee,amount:units*quoteAdminFee});
+      var allRows=[...rentRows,...extras];
+      allRows.forEach(function(row,i){
+        if(i>=15)return;
+        var r=17+i;
+        shxml=ss(shxml,"A"+r,row.label);
+        shxml=sn(shxml,"M"+r,units);
+        shxml=ss(shxml,"P"+r,row.period);
+        shxml=sn(shxml,"S"+r,row.unitPrice);
+        shxml=sn(shxml,"Y"+r,row.amount);
+      });
+      var subtotal=allRows.reduce(function(s,r){return s+r.amount;},0);
+      var tax=Math.floor(subtotal*0.1);
+      var total=subtotal+tax;
+      shxml=sn(shxml,"Y32",subtotal);shxml=sn(shxml,"Y33",tax);shxml=sn(shxml,"Y34",total);shxml=sn(shxml,"H13",total);
+      zip2.file("xl/worksheets/sheet1.xml",shxml);
+      lotZips.push(zip2);
+    }
+    // ZIPレベルでシートを結合
+    var baseZip=lotZips[0];
+    var wbXml=await baseZip.file("xl/workbook.xml").async("string");
+    var wbRels=await baseZip.file("xl/_rels/workbook.xml.rels").async("string");
+    var ctXml=await baseZip.file("[Content_Types].xml").async("string");
+    // xmlns:rをworkbook要素レベルに移動し、全sheet要素で使えるようにする
+    var rNs='xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    wbXml=wbXml.replace(/<workbook([^>]*)>/,function(m,a){
+      if(a.indexOf('xmlns:r')<0)return '<workbook '+rNs+a+'>';
+      return m;
+    });
+    wbXml=wbXml.replace(/<sheet ([^>]*?)xmlns:r="[^"]*" /g,'<sheet $1');
+    // 1枚目のシート名をP1に変更し、定義名(Print_Area)も更新
+    wbXml=wbXml.replace(/name="[^"]+"( sheetId="1")/,'name="P1"$1');
+    var dnStr='<definedNames>';
+    for(var di=0;di<lots.length;di++){dnStr+='<definedName name="_xlnm.Print_Area" localSheetId="'+di+'">&apos;P'+(di+1)+'&apos;!$A$1:$AD$50</definedName>';}
+    dnStr+='</definedNames>';
+    wbXml=wbXml.replace(/<definedNames>[\s\S]*?<\/definedNames>/g,dnStr);
+    for(var i=1;i<lotZips.length;i++){
+      var extraZip=lotZips[i];
+      var shXml=await extraZip.file("xl/worksheets/sheet1.xml").async("string");
+      var shN=i+1;
+      var rId="rId_sh"+shN;
+      baseZip.file("xl/worksheets/sheet"+shN+".xml",shXml);
+      var shRelsF=extraZip.file("xl/worksheets/_rels/sheet1.xml.rels");
+      if(shRelsF)baseZip.file("xl/worksheets/_rels/sheet"+shN+".xml.rels",await shRelsF.async("string"));
+      wbXml=wbXml.replace("</sheets>","<sheet name=\"P"+shN+"\" sheetId=\""+shN+"\" r:id=\""+rId+"\"/></sheets>");
+      wbRels=wbRels.replace("</Relationships>","<Relationship Id=\""+rId+"\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"/xl/worksheets/sheet"+shN+".xml\"/></Relationships>");
+      ctXml=ctXml.replace("</Types>","<Override PartName=\"/xl/worksheets/sheet"+shN+".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
+    }
+    baseZip.file("xl/workbook.xml",wbXml);
+    baseZip.file("xl/_rels/workbook.xml.rels",wbRels);
+    baseZip.file("[Content_Types].xml",ctXml);
+    if(generateEstimateExcel._returnZip){generateEstimateExcel._returnZip=false;return baseZip;}
+    var finalBytesE=await baseZip.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:6}});
+    var blobE=new Blob([finalBytesE],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     var urlE=URL.createObjectURL(blobE);
-    var aE=document.createElement('a');aE.href=urlE;aE.download='\u898b\u7a4d\u66f8\u517c\u767a\u6ce8\u66f8_'+(pl.name||'').replace(/[\\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    var aE=document.createElement("a");aE.href=urlE;
+    aE.download="\u898b\u7a4d\u66f8\u517c\u767a\u6ce8\u66f8_"+(c.siteName||c.caseNo||"").replace(/[\\/:\*\?"<>\|]/g,"_")+".xlsx";
     document.body.appendChild(aE);aE.click();setTimeout(function(){URL.revokeObjectURL(urlE);aE.remove();},1000);
-  }catch(e){alert('Excel\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
+  }catch(e){alert("Excel\u51fa\u529b\u30a8\u30e9\u30fc: "+e.message);console.error(e);}
 }
 
-// \u2500\u2500 \u533a\u753b\u56f3 Excel\u51fa\u529b \u2500\u2500
+async function generateProposalDocument(caseId){
+  var c=cases.find(x=>x.id===caseId);if(!c)return;
+  var lots=(c.parkingLots||[]);
+  if(!lots.length){alert('\u99d0\u8eca\u5834\u60c5\u5831\u304c\u3042\u308a\u307e\u305b\u3093');return;}
+  try{
+    await waitXLSX();
+    var today=new Date();
+    var todayStr=today.getFullYear()+'\u5e74'+(today.getMonth()+1)+'\u6708'+today.getDate()+'\u65e5';
+    window._pkgExcelData={
+      caseNo:c.caseNo||'',siteName:c.siteName||'',siteAddress:c.siteAddress||'',
+      customerName:c.customerName||'',requestStart:c.requestStart||'',requestEnd:c.requestEnd||'',
+      requestUnits:c.requestUnits!=null?c.requestUnits:'',createdAt:todayStr,
+      lots:lots.map(function(pl,idx){
+        var rm=pl.rateType!=='daily';
+        var rent=rm?(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent):(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent);
+        return{num:idx+1,name:pl.name||'',address:pl.address||'',walkMinutes:pl.walkMinutes!=null?pl.walkMinutes:'',
+          rateType:rm?'\u6708\u6255':'\u65e5\u6255',rent:rent!=null?rent:'',rentUnit:rm?'/\u6708':'/\u65e5',
+          adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee!=null?pl.adminFee:''),
+          keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
+          units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
+          estStart:pl.estimateStart||c.contractStart||'',vehicleType:pl.vehicleType||'',
+          vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
+          estEnd:pl.estimateEnd||c.contractEnd||'',startProRate:!!pl.startProRate,endProRate:!!pl.endProRate,
+          lotNote:pl.lotNote||'',photo:pl.photo||''};
+      })
+    };
+    window._pkgPhotos=[];
+    generateParkingMapExcel._returnZip=true;
+    var mapZip=await generateParkingMapExcel();
+    generateEstimateExcel._returnZip=true;
+    var estZip=await generateEstimateExcel(caseId);
+    // Merge styles
+    var t2s=await estZip.file('xl/styles.xml').async('string');
+    var ms=await mapZip.file('xl/styles.xml').async('string');
+    function getSec(xml,tag){var re=new RegExp('<'+tag+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+tag+'>');var m=xml.match(re);return m?{full:m[0],inner:m[1]}:null;}
+    function cntTag(xml,tag){return(xml.match(new RegExp('<'+tag+'[\\s>]','g'))||[]).length;}
+    var t2f=getSec(t2s,'fonts'),t2fi=getSec(t2s,'fills'),t2b=getSec(t2s,'borders'),t2x=getSec(t2s,'cellXfs');
+    var mf=getSec(ms,'fonts'),mfi=getSec(ms,'fills'),mb=getSec(ms,'borders'),mx=getSec(ms,'cellXfs');
+    var t2fc=cntTag(t2f.inner,'font'),t2fic=cntTag(t2fi.inner,'fill'),t2bc=cntTag(t2b.inner,'border'),t2xc=cntTag(t2x.inner,'xf');
+    var mfc=cntTag(mf.inner,'font'),mfic=cntTag(mfi.inner,'fill'),mbc=cntTag(mb.inner,'border'),mxc=cntTag(mx.inner,'xf');
+    var remappedMx=mx.inner
+      .replace(/fontId="(\d+)"/g,function(m,n){return 'fontId="'+(parseInt(n)+t2fc)+'"';})
+      .replace(/fillId="(\d+)"/g,function(m,n){return 'fillId="'+(parseInt(n)+t2fic)+'"';})
+      .replace(/borderId="(\d+)"/g,function(m,n){return 'borderId="'+(parseInt(n)+t2bc)+'"';});
+    var combinedStyles=t2s
+      .replace(t2f.full,'<fonts count="'+(t2fc+mfc)+'">'+t2f.inner+mf.inner+'</fonts>')
+      .replace(t2fi.full,'<fills count="'+(t2fic+mfic)+'">'+t2fi.inner+mfi.inner+'</fills>')
+      .replace(t2b.full,'<borders count="'+(t2bc+mbc)+'">'+t2b.inner+mb.inner+'</borders>')
+      .replace(t2x.full,'<cellXfs count="'+(t2xc+mxc)+'">'+t2x.inner+remappedMx+'</cellXfs>');
+    var mapXfOff=t2xc;
+    // Remap map sheet style indices
+    var mapWbXml=await mapZip.file('xl/workbook.xml').async('string');
+    var mapSheetCount=(mapWbXml.match(/<sheet /g)||[]).length;
+    for(var i=1;i<=mapSheetCount;i++){
+      var mshXml=await mapZip.file('xl/worksheets/sheet'+i+'.xml').async('string');
+      mshXml=mshXml.replace(/\bs="(\d+)"/g,function(m,n){return 's="'+(parseInt(n)+mapXfOff)+'"';});
+      mapZip.file('xl/worksheets/sheet'+i+'.xml',mshXml);
+    }
+    mapZip.file('xl/styles.xml',combinedStyles);
+    // Add P-sheets from estZip to mapZip
+    var mapRels=await mapZip.file('xl/_rels/workbook.xml.rels').async('string');
+    var mapCt=await mapZip.file('[Content_Types].xml').async('string');
+    var rNs='xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    mapWbXml=mapWbXml.replace(/<workbook([^>]*)>/,function(m,a){if(a.indexOf('xmlns:r')<0)return '<workbook '+rNs+a+'>';return m;});
+    for(var i=0;i<lots.length;i++){
+      var pShXml=await estZip.file('xl/worksheets/sheet'+(i+1)+'.xml').async('string');
+      var newShNum=mapSheetCount+i+1;
+      var pRId='rId_p'+(i+1);
+      mapZip.file('xl/worksheets/sheet'+newShNum+'.xml',pShXml);
+      mapWbXml=mapWbXml.replace('</sheets>','<sheet name="P'+(i+1)+'" sheetId="'+(200+i)+'" r:id="'+pRId+'"/></sheets>');
+      mapRels=mapRels.replace('</Relationships>','<Relationship Id="'+pRId+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+newShNum+'.xml"/></Relationships>');
+      mapCt=mapCt.replace('</Types>','<Override PartName="/xl/worksheets/sheet'+newShNum+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+    }
+    // Print area definedNames for map sheets + P sheets
+    var dnStr='<definedNames>';
+    // 案内図シートの印刷範囲
+    var mapSnArr=[],mapSnRe=/<sheet name="([^"]+)"/g,mapSnM;
+    while((mapSnM=mapSnRe.exec(mapWbXml))!==null)mapSnArr.push(mapSnM[1]);
+    for(var msi=0;msi<mapSheetCount;msi++){dnStr+='<definedName name="_xlnm.Print_Area" localSheetId="'+msi+'">&apos;'+(mapSnArr[msi]||('\u6848\u5185\u56f3'+(msi+1)))+'&apos;!$A$1:$Y$48</definedName>';}
+    // Pシートの印刷範囲
+    for(var di=0;di<lots.length;di++){dnStr+='<definedName name="_xlnm.Print_Area" localSheetId="'+(mapSheetCount+di)+'">&apos;P'+(di+1)+'&apos;!$A$1:$AD$50</definedName>';}
+    dnStr+='</definedNames>';
+    if(mapWbXml.indexOf('<definedNames>')>=0)mapWbXml=mapWbXml.replace(/<definedNames>[\s\S]*?<\/definedNames>/,dnStr);
+    else mapWbXml=mapWbXml.replace('</workbook>',dnStr+'</workbook>');
+    mapZip.file('xl/workbook.xml',mapWbXml);
+    mapZip.file('xl/_rels/workbook.xml.rels',mapRels);
+    mapZip.file('[Content_Types].xml',mapCt);
+    // Download
+    var finalBytes=await mapZip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
+    var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;
+    a.download='\u63d0\u6848\u8cc7\u6599_'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
+  }catch(e){alert('\u63d0\u6848\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
+}
+
 async function generateKukakuzu(caseId){
   var c=cases.find(x=>x.id===caseId);if(!c)return;
   var lots=(c.parkingLots||[]).filter(function(p){return p.contractStart&&p.contractEnd&&p.units;});
@@ -2946,11 +2943,21 @@ function openKakuteiMail(data){
 }
 
 
-// ── 月次レポート ──
-var monthlyYear = new Date().getFullYear();
+// ── 月次レポート（期別） ──
+// 第1期: 2026年8月〜2027年7月、以降1年ずつ
+var FISCAL_START_MONTH = 7;  // 0-indexed: 7 = 8月
+var FISCAL_BASE_YEAR   = 2026; // 第1期開始年
+
+function calcPeriod(y, m) {
+  // m: 0-indexed。8月以降はその年の期、1〜7月は前年の期
+  return m >= FISCAL_START_MONTH ? (y - FISCAL_BASE_YEAR + 1) : (y - FISCAL_BASE_YEAR);
+}
+function periodStartYear(p) { return FISCAL_BASE_YEAR + (p - 1); }
+
+var monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
 
 function openMonthlyReport() {
-  monthlyYear = new Date().getFullYear();
+  monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
   document.getElementById('monthlyOverlay').classList.add('open');
   renderMonthlyReport();
 }
@@ -2958,15 +2965,21 @@ function closeMonthlyReport() {
   document.getElementById('monthlyOverlay').classList.remove('open');
 }
 function changeMonthlyYear(delta) {
-  monthlyYear += delta;
+  monthlyPeriod = Math.max(1, monthlyPeriod + delta);
   renderMonthlyReport();
 }
 
-function buildMonthlyData(year) {
-  var result = [];
-  for (var i = 0; i < 12; i++) {
-    result.push({sales:0, purchase:0, profit:0, units:0, byCustomer:{}});
-  }
+function buildMonthlyData(period) {
+  // 当期の12ヶ月リスト: 開始年8月〜翌年7月
+  var sy = periodStartYear(period);
+  var periodMonths = [];
+  for (var i = FISCAL_START_MONTH; i <= 11; i++) periodMonths.push({y: sy,     m: i});
+  for (var i = 0; i < FISCAL_START_MONTH; i++)  periodMonths.push({y: sy + 1, m: i});
+
+  var result = periodMonths.map(function() {
+    return {sales:0, purchase:0, profit:0, units:0, byCustomer:{}};
+  });
+
   var confirmed = cases.filter(function(c){ return ORDERED_STATUSES.indexOf(c.status) >= 0; });
   confirmed.forEach(function(c) {
     var custName = c.customerName || '不明';
@@ -2987,7 +3000,12 @@ function buildMonthlyData(year) {
       var ey = end.getFullYear(), em = end.getMonth();
 
       while (y < ey || (y === ey && m <= em)) {
-        if (y === year) {
+        // この年月が当期の何番目か探す
+        var idx = -1;
+        for (var i = 0; i < periodMonths.length; i++) {
+          if (periodMonths[i].y === y && periodMonths[i].m === m) { idx = i; break; }
+        }
+        if (idx >= 0) {
           var dim = new Date(y, m + 1, 0).getDate();
           var isF = (y === start.getFullYear() && m === start.getMonth());
           var isL = (y === ey && m === em);
@@ -3016,11 +3034,11 @@ function buildMonthlyData(year) {
           }
 
           var costExcl = Math.round(costAmt / 1.1);
-          result[m].sales    += salesAmt;
-          result[m].purchase += costExcl;
-          result[m].profit   += (salesAmt - costExcl);
-          result[m].units    += units;
-          result[m].byCustomer[custName] = (result[m].byCustomer[custName] || 0) + salesAmt;
+          result[idx].sales    += salesAmt;
+          result[idx].purchase += costExcl;
+          result[idx].profit   += (salesAmt - costExcl);
+          result[idx].units    += units;
+          result[idx].byCustomer[custName] = (result[idx].byCustomer[custName] || 0) + salesAmt;
         }
         m++;
         if (m > 11) { m = 0; y++; }
@@ -3031,8 +3049,12 @@ function buildMonthlyData(year) {
 }
 
 function renderMonthlyReport() {
-  document.getElementById('monthlyYearLabel').textContent = monthlyYear + '年';
-  var data = buildMonthlyData(monthlyYear);
+  var sy = periodStartYear(monthlyPeriod);
+  var ey = sy + 1;
+  document.getElementById('monthlyYearLabel').textContent =
+    '第' + monthlyPeriod + '期　(' + sy + '年8月〜' + ey + '年7月)';
+
+  var data = buildMonthlyData(monthlyPeriod);
   var total = {sales:0, purchase:0, profit:0, units:0};
   data.forEach(function(mo) {
     total.sales    += mo.sales;
@@ -3044,7 +3066,7 @@ function renderMonthlyReport() {
   var hasData = total.sales > 0 || total.purchase > 0;
   if (!hasData) {
     document.getElementById('monthlyBody').innerHTML =
-      '<div class="monthly-empty">&#128202; ' + monthlyYear + '年の確定データがありません</div>';
+      '<div class="monthly-empty">&#128202; 第' + monthlyPeriod + '期の確定データがありません</div>';
     return;
   }
 
@@ -3055,7 +3077,8 @@ function renderMonthlyReport() {
   });
   var custs = Object.keys(custSet).sort();
 
-  var mths = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  // 8月〜翌7月の順
+  var mths = ['8月','9月','10月','11月','12月','1月','2月','3月','4月','5月','6月','7月'];
 
   function fmtY(v) {
     if (!v) return '—';
@@ -3063,28 +3086,24 @@ function renderMonthlyReport() {
   }
   function fmtU(v) { return v ? v + '台' : '—'; }
 
-  var ths = '<th class="row-hd">' + monthlyYear + '年</th>';
+  var ths = '<th class="row-hd">第' + monthlyPeriod + '期</th>';
   mths.forEach(function(m) { ths += '<th>' + m + '</th>'; });
   ths += '<th class="col-total">合計</th>';
 
-  function makeRow(label, vals, total, cls, isSub) {
+  function makeRow(label, vals, tot, cls, isSub) {
     var td = '<td class="row-hd' + (isSub ? ' sub' : '') + '">' + label + '</td>';
     vals.forEach(function(v) { td += '<td>' + v + '</td>'; });
-    td += '<td class="col-total">' + total + '</td>';
+    td += '<td class="col-total">' + tot + '</td>';
     return '<tr class="' + (cls||'') + '">' + td + '</tr>';
   }
 
-  var salesRow  = data.map(function(mo){ return fmtY(mo.sales); });
-  var purchRow  = data.map(function(mo){ return fmtY(mo.purchase); });
-  var profitRow = data.map(function(mo){
-    var v = mo.profit;
-    return '<span class="' + (v < 0 ? 'neg' : '') + '">' + fmtY(v) + '</span>';
-  });
-  var unitsRow  = data.map(function(mo){ return fmtU(mo.units); });
+  var salesRow = data.map(function(mo){ return fmtY(mo.sales); });
+  var purchRow = data.map(function(mo){ return fmtY(mo.purchase); });
+  var unitsRow = data.map(function(mo){ return fmtU(mo.units); });
 
   var rows = '';
-  rows += makeRow('売上（税別）', salesRow,  fmtY(total.sales),    'sales-row');
-  rows += makeRow('仕入（税別）', purchRow,  fmtY(total.purchase), 'purch-row');
+  rows += makeRow('売上（税別）', salesRow, fmtY(total.sales),    'sales-row');
+  rows += makeRow('仕入（税別）', purchRow, fmtY(total.purchase), 'purch-row');
 
   // Profit row — cells need individual coloring
   var profitCells = [];
@@ -3095,11 +3114,11 @@ function renderMonthlyReport() {
   var profTotalColor = total.profit < 0 ? 'var(--danger)' : 'var(--success)';
   var profTotalSpan = '<span style="color:' + profTotalColor + ';font-weight:700">' + fmtY(total.profit) + '</span>';
   rows += makeRow('粗利（税別）', profitCells, profTotalSpan, 'profit-row');
-  rows += makeRow('台数',        unitsRow,  fmtU(total.units),   'units-row');
+  rows += makeRow('台数',        unitsRow,  fmtU(total.units), 'units-row');
 
   // Customer breakdown
   if (custs.length > 1) {
-    rows += '<tr class="section-sep"><td colspan="' + (14) + '">顧客別売上内訳</td></tr>';
+    rows += '<tr class="section-sep"><td colspan="14">顧客別売上内訳</td></tr>';
     custs.forEach(function(cust) {
       var custTotal = 0;
       var custCells = data.map(function(mo) {
@@ -3116,6 +3135,118 @@ function renderMonthlyReport() {
     '<tbody>' + rows + '</tbody>' +
     '</table>';
   document.getElementById('monthlyBody').innerHTML = html;
+}
+
+function exportMonthlyReportExcel() {
+  var sy = periodStartYear(monthlyPeriod);
+  var ey = sy + 1;
+  var periodLabel = '第' + monthlyPeriod + '期';
+  var rangeLabel  = sy + '年8月〜' + ey + '年7月';
+
+  var data  = buildMonthlyData(monthlyPeriod);
+  var total = {sales:0, purchase:0, profit:0, units:0};
+  data.forEach(function(mo){ total.sales+=mo.sales; total.purchase+=mo.purchase; total.profit+=mo.profit; total.units+=mo.units; });
+
+  var custSet = {};
+  data.forEach(function(mo){ Object.keys(mo.byCustomer).forEach(function(k){ if(mo.byCustomer[k]) custSet[k]=true; }); });
+  var custs = Object.keys(custSet).sort();
+
+  var mths = ['8月','9月','10月','11月','12月','1月','2月','3月','4月','5月','6月','7月'];
+
+  // ─── スタイル定義 ───
+  var F = 'Noto Sans JP';
+  var bdr = {top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}};
+  var sTitle  = {font:{name:F,bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'2563EB'}}, alignment:{horizontal:'center',vertical:'center'}};
+  var sHdr    = {font:{name:F,bold:true,sz:11,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'2563EB'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sLabel  = {font:{name:F,bold:true,sz:11}, fill:{fgColor:{rgb:'F3F4F6'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+  var sSubLbl = {font:{name:F,sz:10,color:{rgb:'6B7280'}}, fill:{fgColor:{rgb:'F9FAFB'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+  var sNum    = {font:{name:F,sz:11}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTotal  = {font:{name:F,bold:true,sz:11}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sEmpty  = {font:{name:F,sz:11,color:{rgb:'AAAAAA'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sProfP  = {font:{name:F,bold:true,sz:11,color:{rgb:'16A34A'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sProfN  = {font:{name:F,bold:true,sz:11,color:{rgb:'DC2626'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sProfTP = {font:{name:F,bold:true,sz:11,color:{rgb:'16A34A'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sProfTN = {font:{name:F,bold:true,sz:11,color:{rgb:'DC2626'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sUnit   = {font:{name:F,sz:11,color:{rgb:'6B7280'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sUnitT  = {font:{name:F,bold:true,sz:11,color:{rgb:'6B7280'}}, fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sSec    = {font:{name:F,bold:true,sz:11,color:{rgb:'374151'}}, fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+
+  // ─── ワークシート構築 ───
+  var ws = {}, R = 0;
+  var COLS = 14; // label(1) + 12months + total(1)
+
+  function colLetter(c){ return String.fromCharCode(65+c); }
+  function addr(r,c){ return colLetter(c)+(r+1); }
+  function put(r,c,v,s){ ws[addr(r,c)]={v:v, t:(typeof v==='number'?'n':'s'), s:s}; }
+  function putNum(r,c,v,sPos,sTot,isTot){
+    if(!v){ ws[addr(r,c)]={v:'—',t:'s',s:sEmpty}; return; }
+    ws[addr(r,c)]={v:Math.round(v),t:'n',s:isTot?sTot:sPos};
+  }
+
+  // タイトル行
+  put(R,0,'月次レポート　'+periodLabel+'　（'+rangeLabel+'）',sTitle);
+  for(var ci=1;ci<COLS;ci++) put(R,ci,'',sTitle);
+  R++;
+
+  // ヘッダー行
+  put(R,0,periodLabel,sHdr);
+  mths.forEach(function(m,i){ put(R,i+1,m,sHdr); });
+  put(R,13,'合計',sHdr);
+  R++;
+
+  // 売上
+  put(R,0,'売上（税別）',sLabel);
+  data.forEach(function(mo,i){ putNum(R,i+1,mo.sales,sNum,sTotal,false); });
+  putNum(R,13,total.sales,sNum,sTotal,true);
+  R++;
+
+  // 仕入
+  put(R,0,'仕入（税別）',sLabel);
+  data.forEach(function(mo,i){ putNum(R,i+1,mo.purchase,sNum,sTotal,false); });
+  putNum(R,13,total.purchase,sNum,sTotal,true);
+  R++;
+
+  // 粗利
+  put(R,0,'粗利（税別）',sLabel);
+  data.forEach(function(mo,i){
+    var v=Math.round(mo.profit);
+    if(!v){ ws[addr(R,i+1)]={v:'—',t:'s',s:sEmpty}; }
+    else   ws[addr(R,i+1)]={v:v,t:'n',s:v<0?sProfN:sProfP};
+  });
+  var tp=Math.round(total.profit);
+  ws[addr(R,13)]={v:tp||'—',t:tp?'n':'s',s:tp<0?sProfTN:sProfTP};
+  R++;
+
+  // 台数
+  put(R,0,'台数',sLabel);
+  data.forEach(function(mo,i){
+    ws[addr(R,i+1)] = mo.units ? {v:mo.units,t:'n',s:sUnit} : {v:'—',t:'s',s:sEmpty};
+  });
+  ws[addr(R,13)] = total.units ? {v:total.units,t:'n',s:sUnitT} : {v:'—',t:'s',s:sEmpty};
+  R++;
+
+  // 顧客別内訳
+  if(custs.length>1){
+    put(R,0,'顧客別売上内訳',sSec);
+    for(var ci=1;ci<COLS;ci++) put(R,ci,'',sSec);
+    R++;
+    custs.forEach(function(cust){
+      put(R,0,cust,sSubLbl);
+      var custTotal=0;
+      data.forEach(function(mo,i){ var v=mo.byCustomer[cust]||0; custTotal+=v; putNum(R,i+1,v,sNum,sTotal,false); });
+      putNum(R,13,custTotal,sNum,sTotal,true);
+      R++;
+    });
+  }
+
+  ws['!ref']    = 'A1:'+colLetter(COLS-1)+(R+1);
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:COLS-1}}];
+  ws['!cols']   = [{wch:18},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12}];
+  ws['!rows']   = [{hpt:28},{hpt:20}];
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, periodLabel);
+  XLSX.writeFile(wb, '月次レポート_'+periodLabel+'.xlsx');
 }
 
 // Close on overlay background click
