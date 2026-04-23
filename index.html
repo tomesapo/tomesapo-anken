@@ -1374,7 +1374,11 @@ function renderStats(){
   const addCount=cases.filter(c=>c.caseType==='追加').length;
   const extCount=cases.filter(c=>c.caseType==='延長').length;
   const total=baseCases.length;
-  const active=cases.filter(c=>['調査中','再調査','提案済','未申込','契約中'].includes(c.status)).length;
+  const cntMiChosa=cases.filter(c=>['未調査','調査中','再調査'].includes(c.status)).length;
+  const cntTeian=cases.filter(c=>c.status==='提案済').length;
+  const cntMiMoshikomi=cases.filter(c=>c.status==='未申込').length;
+  const cntKeiyaku=cases.filter(c=>c.status==='契約中').length;
+  const cntMiSeikyu=cases.filter(c=>c.status==='未請求').length;
   const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
   const totalFS=ordered.reduce((s,c)=>s+(c.fixedSales||0),0);
   const totalFP=ordered.reduce((s,c)=>s+(c.fixedProfit||0),0);
@@ -1382,7 +1386,11 @@ function renderStats(){
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
-    '<div class="stat-card"><div class="stat-label">進行中</div><div class="stat-value" style="color:var(--primary)">'+active+'</div><div class="stat-sub">調査・提案・未申込・契約</div></div>'+
+    '<div class="stat-card"><div class="stat-label">未調査・調査中・再調査</div><div class="stat-value" style="color:var(--gray-600)">'+cntMiChosa+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card"><div class="stat-label">提案済</div><div class="stat-value" style="color:var(--primary)">'+cntTeian+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card"><div class="stat-label">未申込</div><div class="stat-value" style="color:var(--warning)">'+cntMiMoshikomi+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card"><div class="stat-label">契約中</div><div class="stat-value" style="color:var(--success)">'+cntKeiyaku+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card"><div class="stat-label">未請求</div><div class="stat-value" style="color:var(--danger)">'+cntMiSeikyu+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+(totalFP>=0?'var(--success)':'var(--danger)')+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
