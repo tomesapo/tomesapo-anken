@@ -279,7 +279,7 @@
   <h1>📋 案件管理</h1>
   <div class="header-btns">
     <button class="btn btn-ghost" onclick="exportCSV()">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV出力
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
     <button class="btn btn-ghost" onclick="triggerImport()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV読込
@@ -310,7 +310,7 @@
     </button>
     <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="exportCSV();closeDrawer()">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV出力
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
     <button class="drawer-btn" onclick="triggerImport();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV読込
@@ -853,6 +853,27 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   const margin=quoteSales>0?Math.round(profit/quoteSales*1000)/10:0;
   return{quoteSales,costTotal,profit,margin};
 }
+function calcParkingLotFixed(pl) {
+  // 確定期間・台数ベースの売上・粗利計算
+  const start=pl.contractStart||'';
+  const end=pl.contractEnd||'';
+  if(!start||!end||!pl.units)return null;
+  const units=pl.units;
+  const quoteRate=pl.rateType==='daily'?(pl.quoteDailyRent??pl.dailyRent):(pl.quoteMonthlyRent??pl.monthlyRent);
+  const costRate=pl.rateType==='daily'?pl.dailyRent:pl.monthlyRent;
+  const quoteAdminFee=pl.quoteAdminFee??pl.adminFee??0;
+  const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney??0;
+  const costAdminFee=pl.adminFee??0;
+  const costKeyMoney=pl.keyMoney??0;
+  const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,start,end,units,pl.startProRate,pl.endProRate);
+  const cRows=calcMonthlyRentRows(pl.rateType,costRate,start,end,units,pl.startProRate,pl.endProRate);
+  const fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney;
+  const costTotalTaxInc=cRows.reduce((s,r)=>s+r.amount,0)+units*costAdminFee+units*costKeyMoney;
+  const costTotal=Math.round(costTotalTaxInc/1.1);
+  const profit=fixedSales-costTotal;
+  const margin=fixedSales>0?Math.round(profit/fixedSales*1000)/10:0;
+  return{fixedSales,costTotal,profit,margin};
+}
 function autoCalcCaseEstimate() {
   const cs=document.getElementById('f_contractStart').value;
   const ce=document.getElementById('f_contractEnd').value;
@@ -1295,18 +1316,58 @@ function syncCustomerFilter(){
 function toggleDrawer(){document.getElementById('drawerOverlay').classList.toggle('open');}
 function closeDrawer(){document.getElementById('drawerOverlay').classList.remove('open');}
 
-// ── CSV ──
+// ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
 function csvCell(v){const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
-function exportCSV(){
+async function exportCSV(){
   if(!cases.length){showToast('エクスポートする案件がありません');return;}
-  const rows=cases.map(c=>[c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName,c.siteAddress??'',c.receptionDate??'',c.requestStart??'',c.requestEnd??'',c.requestUnits??'',c.requestNote??'',c.proposalDate??'',c.estSales??'',c.estPurchase??'',c.estProfit??'',c.orderDate??'',c.contractStart??'',c.contractEnd??'',c.fixedSales??'',c.fixedPurchase??'',c.fixedProfit??'',c.taxIncludedSales??'',c.fixedUnits??'',c.invoiceDate??'',c.paymentDue??'',c.paymentDate??'',c.paymentAmount??'',c.caseNote??''].map(csvCell).join(','));
-  const csvText=[CSV_HEADERS.join(','),...rows].join('\r\n');
-  const blob=new Blob(['\uFEFF'+csvText],{type:'text/csv;charset=utf-8;'});
+  await waitXLSX();
+  const HEADERS=CSV_HEADERS;
+  function fmtDateJP(s){if(!s)return'';const p=s.split('-');if(p.length<3)return s;return p[0]+'年'+parseInt(p[1])+'月'+parseInt(p[2])+'日';}
+  const dataRows=cases.map(c=>[c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName??'',c.siteAddress??'',fmtDateJP(c.receptionDate),fmtDateJP(c.requestStart),fmtDateJP(c.requestEnd),c.requestUnits??'',c.requestNote??'',fmtDateJP(c.proposalDate),c.estSales??'',c.estPurchase??'',c.estProfit??'',fmtDateJP(c.orderDate),fmtDateJP(c.contractStart),fmtDateJP(c.contractEnd),c.fixedSales??'',c.fixedPurchase??'',c.fixedProfit??'',c.taxIncludedSales??'',c.fixedUnits??'',fmtDateJP(c.invoiceDate),fmtDateJP(c.paymentDue),fmtDateJP(c.paymentDate),c.paymentAmount??'',c.caseNote??'']);
+  function ex(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function colLetter(n){let s='';n++;while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-(n%26?0:1)-1)/26);}return s;}
+  function cellRef(r,c){return colLetter(c)+(r+1);}
+  // sheet data
+  let sd='<sheetData>';
+  sd+='<row r="1">';
+  HEADERS.forEach((h,ci)=>{sd+=`<c r="${cellRef(0,ci)}" s="1" t="inlineStr"><is><t>${ex(h)}</t></is></c>`;});
+  sd+='</row>';
+  dataRows.forEach((row,ri)=>{
+    sd+=`<row r="${ri+2}">`;
+    row.forEach((val,ci)=>{
+      if(typeof val==='number'||(val!==''&&val!=null&&!isNaN(Number(val))&&String(val).trim()!==''&&!/^\d{4}-\d{2}/.test(String(val)))){
+        sd+=`<c r="${cellRef(ri+1,ci)}" s="2"><v>${ex(String(val))}</v></c>`;
+      } else {
+        sd+=`<c r="${cellRef(ri+1,ci)}" s="2" t="inlineStr"><is><t>${ex(String(val??''))}</t></is></c>`;
+      }
+    });
+    sd+='</row>';
+  });
+  sd+='</sheetData>';
+  // cols
+  let colsXml='<cols>';
+  const colWidths=[12,8,16,12,10,20,20,12,12,12,8,20,12,14,14,14,12,12,12,14,14,14,14,8,12,12,12,14,20];
+  HEADERS.forEach((_,i)=>{colsXml+=`<col min="${i+1}" max="${i+1}" width="${colWidths[i]||12}" customWidth="1"/>`;});
+  colsXml+='</cols>';
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView>${colsXml}${sd}</worksheet>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Noto Sans JP"/></font><font><b/><sz val="10"/><name val="Noto Sans JP"/><color rgb="FFFFFFFF"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1E3A5F"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFCCCCCC"/></left><right style="thin"><color rgb="FFCCCCCC"/></right><top style="thin"><color rgb="FFCCCCCC"/></top><bottom style="thin"><color rgb="FFCCCCCC"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/></cellXfs></styleSheet>`;
+  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="案件データ" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const zip=new JSZip();
+  zip.file('[Content_Types].xml',contentTypes);
+  zip.file('_rels/.rels',rels);
+  zip.file('xl/workbook.xml',workbook);
+  zip.file('xl/_rels/workbook.xml.rels',wbRels);
+  zip.file('xl/worksheets/sheet1.xml',sheet1);
+  zip.file('xl/styles.xml',styles);
+  const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='案件データ_'+new Date().toISOString().slice(0,10)+'.csv';
+  const a=document.createElement('a');a.href=url;a.download='案件データ_'+new Date().toISOString().slice(0,10)+'.xlsx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-  showToast(cases.length+' 件をCSVに出力しました');
+  showToast(cases.length+' 件をExcelに出力しました');
 }
 function triggerImport(){document.getElementById('csvImportInput').click();}
 function handleImport(e){
@@ -1510,12 +1571,6 @@ function renderParkingLotsDetail(c){
     h+='<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
     h+='<span style="font-weight:700;font-size:13px;color:var(--primary)">🅿 '+(pl.name?esc(pl.name):'駐車場'+(i+1))+'</span>';
-    h+='<div style="display:flex;gap:4px">';
-    if(c.status==='\u5951\u7d04\u4e2d'){
-      if(i===0)h+='<button style="background:#7c3aed;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;" onclick="generateKukakuzu(\''+c.id+'\')">🗺 区画図</button>';
-      if(pl.contractStart&&pl.contractEnd&&pl.units)h+='<button style="background:#ea580c;color:white;font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer" onclick="generateKakuteiMeisai(\''+c.id+'\',\''+pl.id+'\')">📋 確定明細</button>';
-    }
-    h+='</div>';
     h+='</div>';
     if(pl.photo)h+='<img src="'+pl.photo+'" style="width:100%;max-height:160px;object-fit:cover;border-radius:6px;margin-bottom:8px">';
     const estPeriodStr=(pl.estimateStart&&pl.estimateEnd)?(pl.estimateStart+' ～ '+pl.estimateEnd):'';
@@ -1564,6 +1619,26 @@ function renderParkingLotsDetail(c){
         h+='</div></div>';
       }
     }
+    // 確定売上サマリー（契約期間・台数がある場合）
+    {
+      const fx=calcParkingLotFixed(pl);
+      if(fx){
+        const pc=fx.profit>=0?'#0369a1':'#dc2626';
+        const fxPeriod=pl.contractStart&&pl.contractEnd?(pl.contractStart+' ～ '+pl.contractEnd):'';
+        const fxUnits=pl.units?pl.units+'台':'';
+        h+='<div style="margin-top:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+        h+='<div style="font-size:10px;font-weight:700;color:#0369a1">💰 確定売上</div>';
+        h+='<div style="font-size:9px;color:var(--gray-500)">'+(fxPeriod?fxPeriod:'期間未設定')+' / '+fxUnits+'</div>';
+        h+='</div>';
+        h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center">';
+        h+='<div><div style="font-size:9px;color:var(--gray-500)">確定売上</div><div style="font-weight:700;font-size:12px">¥'+fmt(fx.fixedSales)+'</div></div>';
+        h+='<div><div style="font-size:9px;color:var(--gray-500)">仕入合計</div><div style="font-weight:700;font-size:12px">¥'+fmt(fx.costTotal)+'</div></div>';
+        h+='<div><div style="font-size:9px;color:var(--gray-500)">確定粗利</div><div style="font-weight:700;font-size:12px;color:'+pc+'">¥'+fmt(fx.profit)+'</div></div>';
+        h+='<div><div style="font-size:9px;color:var(--gray-500)">粗利率</div><div style="font-weight:700;font-size:12px;color:'+pc+'">'+fx.margin.toFixed(1)+'%</div></div>';
+        h+='</div></div>';
+      }
+    }
     h+='</div>';
   });
   // 複数駐車場の合計粗利
@@ -1580,6 +1655,21 @@ function renderParkingLotsDetail(c){
     h+='<div><div style="font-size:9px;opacity:.7">粗利</div><div style="font-weight:700;font-size:14px;color:'+pc+'">¥'+fmt(tP)+'</div></div>';
     h+='<div><div style="font-size:9px;opacity:.7">粗利率</div><div style="font-weight:700;font-size:14px;color:'+pc+'">'+tM.toFixed(1)+'%</div></div>';
     h+='</div></div>';
+    // 全駐車場 確定売上合計
+    let tfS=0,tfC=0,tfCount=0;
+    c.parkingLots.forEach(pl=>{const r=calcParkingLotFixed(pl);if(r){tfS+=r.fixedSales;tfC+=r.costTotal;tfCount++;}});
+    if(tfCount>0){
+      const tfP=tfS-tfC,tfM=tfS>0?Math.round(tfP/tfS*1000)/10:0;
+      const fpc=tfP>=0?'#93c5fd':'#fca5a5';
+      h+='<div style="background:#1e3a5f;color:white;border-radius:8px;padding:12px;margin-top:4px">';
+      h+='<div style="font-size:11px;font-weight:700;margin-bottom:8px">💰 全駐車場 確定売上合計</div>';
+      h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center">';
+      h+='<div><div style="font-size:9px;opacity:.7">確定売上</div><div style="font-weight:700;font-size:13px">¥'+fmt(tfS)+'</div></div>';
+      h+='<div><div style="font-size:9px;opacity:.7">仕入合計</div><div style="font-weight:700;font-size:13px">¥'+fmt(tfC)+'</div></div>';
+      h+='<div><div style="font-size:9px;opacity:.7">確定粗利</div><div style="font-weight:700;font-size:14px;color:'+fpc+'">¥'+fmt(tfP)+'</div></div>';
+      h+='<div><div style="font-size:9px;opacity:.7">粗利率</div><div style="font-weight:700;font-size:14px;color:'+fpc+'">'+tfM.toFixed(1)+'%</div></div>';
+      h+='</div></div>';
+    }
   }
   h+='</div>';return h;
 }
