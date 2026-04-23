@@ -857,13 +857,23 @@ function autoCalcCaseEstimate() {
   const cs=document.getElementById('f_contractStart').value;
   const ce=document.getElementById('f_contractEnd').value;
   const lots=getParkingLotsFromForm();
-  if(!lots.length)return;
+  if(!lots.length){
+    const sEl=document.getElementById('f_estSales');
+    const pEl=document.getElementById('f_estPurchase');
+    if(sEl)sEl.value='';if(pEl)pEl.value='';
+    calcEstProfit();return;
+  }
   let totalQ=0,totalC=0,counted=0;
   lots.forEach(pl=>{
     const r=calcParkingLotProfit(pl,cs,ce);
     if(r){totalQ+=r.quoteSales;totalC+=r.costTotal;counted++;}
   });
-  if(!counted)return;
+  if(!counted){
+    const sEl=document.getElementById('f_estSales');
+    const pEl=document.getElementById('f_estPurchase');
+    if(sEl)sEl.value='';if(pEl)pEl.value='';
+    calcEstProfit();return;
+  }
   const sEl=document.getElementById('f_estSales');
   const pEl=document.getElementById('f_estPurchase');
   if(sEl)sEl.value=totalQ?totalQ.toLocaleString('ja-JP'):'';
@@ -884,6 +894,7 @@ function calcPlPurchase(el){
   const end=g('pl_contractEnd')?g('pl_contractEnd').value:'';
   const units=parseInt(g('pl_units')?g('pl_units').value:0)||0;
   const monthlyRent=parseFloat(g('pl_monthlyRent')?g('pl_monthlyRent').value:0)||0;
+  const adminFee=parseFloat(g('pl_adminFee')?g('pl_adminFee').value:0)||0;
   const keyMoney=parseFloat(g('pl_keyMoney')?g('pl_keyMoney').value:0)||0;
   const adjustment=parseFloat(g('pl_adjustmentAmount')?g('pl_adjustmentAmount').value:0)||0;
   const months=calcPlMonths(start,end);
@@ -892,7 +903,7 @@ function calcPlPurchase(el){
   const ia=g('pl_invoiceAmount');
   if(pa){
     if(months&&units){
-      const purchase=monthlyRent*units*months+keyMoney*units+adjustment;
+      const purchase=monthlyRent*units*months+adminFee*units+keyMoney*units+adjustment;
       pa.value=fmt(purchase);
       if(ia)ia.value=fmt(purchase+deposit*units);
     }else{pa.value='';if(ia)ia.value='';}
@@ -911,9 +922,17 @@ function updateCaseFixedPurchase(){
     if(months&&units){
       const pa=g('pl_purchaseAmount');
       if(pa&&pa.value){const v=parseFloat(pa.value.replace(/,/g,''));if(!isNaN(v))totalP+=v;}
-      const quoteMonthly=parseFloat(g('pl_quoteMonthlyRent')?g('pl_quoteMonthlyRent').value:0)||0;
-      const quoteKey=parseFloat(g('pl_quoteKeyMoney')?g('pl_quoteKeyMoney').value:0)||0;
-      totalS+=quoteMonthly*units*months+quoteKey*units;
+      const rt=g('pl_rateType')?g('pl_rateType').value:'monthly';
+      const quoteMonthly=(parseFloat(g('pl_quoteMonthlyRent')?.value)||0)||(parseFloat(g('pl_monthlyRent')?.value)||0);
+      const quoteDailyRent=(parseFloat(g('pl_quoteDailyRent')?.value)||0)||(parseFloat(g('pl_dailyRent')?.value)||0);
+      const quoteKey=(parseFloat(g('pl_quoteKeyMoney')?.value)||0)||(parseFloat(g('pl_keyMoney')?.value)||0);
+      const quoteAdmin=(parseFloat(g('pl_quoteAdminFee')?.value)||0)||(parseFloat(g('pl_adminFee')?.value)||0);
+      if(rt==='daily'){
+        const days=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
+        totalS+=quoteDailyRent*units*days+(quoteKey+quoteAdmin)*units;
+      }else{
+        totalS+=quoteMonthly*units*months+(quoteKey+quoteAdmin)*units;
+      }
       totalU+=units;
       hasAny=true;
     }
@@ -1020,7 +1039,7 @@ function populateForm(c) {
   document.getElementById('f_paymentAmount').value=c.paymentAmount!=null?c.paymentAmount:'';
   document.getElementById('f_caseNote').value=c.caseNote||'';
   renderParkingLotCards(c.parkingLots||[]);
-  calcEstProfit(); updateCaseFixedPurchase();
+  autoCalcCaseEstimate(); updateCaseFixedPurchase();
   renderFileSection(c.id);
 }
 
@@ -1364,7 +1383,7 @@ function addParkingLotCard(pl={}) {
     '<div class="parking-card-header" onclick="toggleParkingCard(this)">' +
       '<span class="parking-card-title">🅿 ' + (pl.name ? esc(pl.name) : '駐車場 ' + (container.children.length + 1)) + '</span>' +
       '<div style="display:flex;gap:8px;align-items:center">' +
-        '<button type="button" class="btn btn-danger btn-xs" onclick="event.stopPropagation();this.closest(\'.parking-card\').remove()">削除</button>' +
+        '<button type="button" class="btn btn-danger btn-xs" onclick="event.stopPropagation();this.closest(\'.parking-card\').remove();autoRecalcEst();updateCaseFixedPurchase();">削除</button>' +
         '<span style="color:var(--gray-500)">▼</span>' +
       '</div>' +
     '</div>' +
@@ -1398,10 +1417,10 @@ function addParkingLotCard(pl={}) {
         '</div>' +
         '<div class="form-group span-3" style="background:#eff6ff;border-radius:6px;padding:8px 10px 2px;margin-bottom:0"><div style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:6px">見積価格（見積書用）</div>' +
           '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">' +
-            '<div class="form-group rate-group-monthly"'+(!rm?' style="display:none"':'')+'><label>見積月額賃料</label><input type="number" name="pl_quoteMonthlyRent" min="0" placeholder="0" value="'+(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:'')+'"></div>' +
-            '<div class="form-group rate-group-daily"'+(rm?' style="display:none"':'')+'><label>見積日額賃料</label><input type="number" name="pl_quoteDailyRent" min="0" placeholder="0" value="'+(pl.quoteDailyRent!=null?pl.quoteDailyRent:'')+'"></div>' +
-            '<div class="form-group"><label>見積手数料</label><input type="number" name="pl_quoteAdminFee" min="0" placeholder="0" value="'+(pl.quoteAdminFee!=null?pl.quoteAdminFee:'')+'"></div>' +
-            '<div class="form-group"><label>見積礼金</label><input type="number" name="pl_quoteKeyMoney" min="0" placeholder="0" value="'+(pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'')+'"></div>' +
+            '<div class="form-group rate-group-monthly"'+(!rm?' style="display:none"':'')+'><label>見積月額賃料 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteMonthlyRent" min="0" placeholder="0" value="'+(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:'')+'"></div>' +
+            '<div class="form-group rate-group-daily"'+(rm?' style="display:none"':'')+'><label>見積日額賃料 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteDailyRent" min="0" placeholder="0" value="'+(pl.quoteDailyRent!=null?pl.quoteDailyRent:'')+'"></div>' +
+            '<div class="form-group"><label>見積手数料 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteAdminFee" min="0" placeholder="0" value="'+(pl.quoteAdminFee!=null?pl.quoteAdminFee:'')+'"></div>' +
+            '<div class="form-group"><label>見積礼金 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteKeyMoney" min="0" placeholder="0" value="'+(pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'')+'"></div>' +
           '</div>' +
         '</div>' +
         '<div class="form-group span-3" style="background:#f0fdf4;border-radius:6px;padding:8px 10px 6px;margin-bottom:0"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:6px">🤝 契約情報（受注後）</div><div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">' +
@@ -1486,7 +1505,7 @@ function getParkingLotsFromForm(){
   }).filter(p=>p.name||p.supplierName||p.monthlyRent||p.dailyRent);
 }
 function renderParkingLotsDetail(c){
-  let h='<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center"><div class="detail-section-title" style="margin-bottom:0">駐車場情報 ('+c.parkingLots.length+'件)</div><button style="background:#16a34a;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer" onclick="generateProposalDocument(\''+c.id+'\')">📥 提案資料</button></div>';
+  let h='<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center"><div class="detail-section-title" style="margin-bottom:0">駐車場情報 ('+c.parkingLots.length+'件)</div><button style="background:#16a34a;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer" onclick="generateProposalDocument(\''+c.id+'\')">📥 提案資料</button>'+(c.status==='\u5951\u7d04\u4e2d'?'<button style="background:#0369a1;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateKakuteiDocument(\''+c.id+'\')">📋 確定資料</button>':'')+'</div>';
   c.parkingLots.forEach((pl,i)=>{
     h+='<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
@@ -2625,6 +2644,41 @@ async function generateKukakuzu(caseId){
     var zip=await JSZip.loadAsync(buf.buffer);
 
     // XML\u30a8\u30b9\u30b1\u30fc\u30d7
+
+    // M1セルにshrinkToFit（縮小して全体を表示）を設定
+    try{
+      var s1xml=await zip.file('xl/worksheets/sheet2.xml').async('string');
+      var m1cell=s1xml.match(/<c[^>]*\br="M1"[^>]*/);
+      if(m1cell){
+        var sidxM=m1cell[0].match(/\bs="(\d+)"/);
+        if(sidxM){
+          var n=parseInt(sidxM[1]);
+          var stXml=await zip.file('xl/styles.xml').async('string');
+          var cxM=/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/.exec(stXml);
+          if(cxM){
+            var ci=cxM[1],cnt=0,res='',found=false;
+            while(ci.length){
+              var xi=ci.indexOf('<xf');if(xi<0){res+=ci;break;}
+              res+=ci.slice(0,xi);ci=ci.slice(xi);
+              var sc=ci.indexOf('/>'),cc=ci.indexOf('<\/xf>'),xend;
+              if(sc>=0&&(cc<0||sc<cc)){xend=sc+2;}else if(cc>=0){xend=cc+5;}else{res+=ci;break;}
+              var xfStr=ci.slice(0,xend);ci=ci.slice(xend);
+              if(cnt===n&&!found){
+                found=true;
+                if(xfStr.indexOf('shrinkToFit')<0){
+                  if(xfStr.indexOf('<alignment')>=0){xfStr=xfStr.replace('<alignment','<alignment shrinkToFit="1"');}
+                  else if(xfStr.endsWith('/>')){xfStr=xfStr.slice(0,-2);if(!xfStr.match(/applyAlignment/))xfStr=xfStr.replace('<xf','<xf applyAlignment="1"');xfStr+='><alignment shrinkToFit="1"/><\/xf>';}
+                  else{if(!xfStr.match(/applyAlignment/))xfStr=xfStr.replace('<xf','<xf applyAlignment="1"');xfStr=xfStr.replace('<\/xf>','<alignment shrinkToFit="1"/><\/xf>');}
+                }
+              }
+              res+=xfStr;cnt++;
+            }
+            zip.file('xl/styles.xml',stXml.replace(cxM[0],'<cellXfs count="'+cnt+'">'+res+'<\/cellXfs>'));
+          }
+        }
+      }
+    }catch(e){}
+
     function ex(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
     // \u6587\u5b57\u5217\u30bb\u30eb\u3092inlineStr\u5f62\u5f0f\u3067\u66f8\u304d\u8fbc\u307f\uff08\u30b9\u30bf\u30a4\u30eb\u7d22\u5f15s=\u306f\u7dad\u6301\uff09
@@ -2647,8 +2701,9 @@ async function generateKukakuzu(caseId){
     }
     // \u99d0\u8eca\u5834\u30c7\u30fc\u30bf\u3092\u30b7\u30fc\u30c8XML\u306b\u57cb\u3081\u8fbc\u3080
     function fillSheet(xml,lot){
-      var sf=lot.contractStart?lot.contractStart.replace(/-/g,'/'):'';
-      var ef=lot.contractEnd?lot.contractEnd.replace(/-/g,'/'):'';
+      function fmtJP(s){if(!s)return'';var p=s.split('-');return p[0]+'年'+parseInt(p[1])+'月'+parseInt(p[2])+'日';}
+      var sf=fmtJP(lot.contractStart);
+      var ef=fmtJP(lot.contractEnd);
       xml=setStr(xml,'M1',(c.siteName||'')+'\uff5c'+(lot.name||''));
       xml=setStr(xml,'C36',lot.name||'');
       xml=lot.walkMinutes!=null?setNum(xml,'K36',lot.walkMinutes):setStr(xml,'K36','');
@@ -2753,6 +2808,7 @@ async function generateKukakuzu(caseId){
     zip.file('[Content_Types].xml', ctypes);
 
     // \u51fa\u529b
+    if(generateKukakuzu._returnZip){generateKukakuzu._returnZip=false;return zip;}
     var outBlob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
     var url2=URL.createObjectURL(outBlob);
     var a2=document.createElement('a');a2.href=url2;
@@ -2830,12 +2886,125 @@ async function generateKakuteiMeisai(caseId,plId){
     ssXml=ssXml.replace(/(<sst[^>]*\bcount=")\d+(")/,'$1'+actualCount+'$2');
     zip.file("xl/sharedStrings.xml",ssXml);
     zip.file("xl/worksheets/sheet1.xml",s1);
+    if(generateKakuteiMeisai._returnZip){generateKakuteiMeisai._returnZip=false;return zip;}
     var outBlob=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",compression:"DEFLATE"});
     var urlK=URL.createObjectURL(outBlob);
     var aK=document.createElement("a");aK.href=urlK;
     aK.download="\u78ba\u5b9a\u91d1\u984d\u660e\u7d30\u66f8_"+(pl.name||"").replace(/[\\\/:\*\?"<>\|]/g,"_")+".xlsx";
     document.body.appendChild(aK);aK.click();setTimeout(function(){URL.revokeObjectURL(urlK);aK.remove();},1000);
   }catch(e){alert("\u78ba\u5b9a\u91d1\u984d\u660e\u7d30\u66f8\u51fa\u529b\u30a8\u30e9\u30fc: "+e.message);console.error(e);}
+}
+
+// ── 確定資料 Excel出力（区画図 + 確定金額明細書の合体） ──
+async function generateKakuteiDocument(caseId){
+  var c=cases.find(x=>x.id===caseId);if(!c)return;
+  var lots=(c.parkingLots||[]).filter(function(p){return p.contractStart&&p.contractEnd&&p.units;});
+  if(!lots.length){alert('\u5951\u7d04\u60c5\u5831\uff08\u958b\u59cb\u65e5\u30fb\u7d42\u4e86\u65e5\u30fb\u53f0\u6570\uff09\u304c\u672a\u5165\u529b\u306e\u99d0\u8eca\u5834\u304c\u3042\u308a\u307e\u3059');return;}
+  try{
+    await waitXLSX();
+    // 区画図zipをベースとして取得
+    generateKukakuzu._returnZip=true;
+    var kukakuZip=await generateKukakuzu(caseId);
+    // 各駐車場の確定金額明細書zipを取得
+    var meisaiZips=[];
+    for(var i=0;i<lots.length;i++){
+      generateKakuteiMeisai._returnZip=true;
+      var mz=await generateKakuteiMeisai(caseId,lots[i].id);
+      meisaiZips.push(mz);
+    }
+    // スタイルマージ（numFmtId含む完全マージ）
+    function getSec(xml,tag){var re=new RegExp('<'+tag+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+tag+'>');var m=xml.match(re);return m?{full:m[0],inner:m[1]}:null;}
+    function cntTag(xml,tag){return(xml.match(new RegExp('<'+tag+'[\\s>]','g'))||[]).length;}
+    var kukakuStylesXml=await kukakuZip.file('xl/styles.xml').async('string');
+    var meisaiStylesXml=await meisaiZips[0].file('xl/styles.xml').async('string');
+    var kf=getSec(kukakuStylesXml,'fonts'),kfi=getSec(kukakuStylesXml,'fills'),kb=getSec(kukakuStylesXml,'borders'),kx=getSec(kukakuStylesXml,'cellXfs');
+    var mf=getSec(meisaiStylesXml,'fonts'),mfi=getSec(meisaiStylesXml,'fills'),mb=getSec(meisaiStylesXml,'borders'),mx=getSec(meisaiStylesXml,'cellXfs');
+    var kfc=cntTag(kf.inner,'font'),kfic=cntTag(kfi.inner,'fill'),kbc=cntTag(kb.inner,'border'),kxc=cntTag(kx.inner,'xf');
+    var mfc=cntTag(mf.inner,'font'),mfic=cntTag(mfi.inner,'fill'),mbc=cntTag(mb.inner,'border'),mxc=cntTag(mx.inner,'xf');
+    // numFmt IDリマップ（区画図と確定明細書でカスタム書式IDが衝突するのを防ぐ）
+    var kNfSec=getSec(kukakuStylesXml,'numFmts'),mNfSec=getSec(meisaiStylesXml,'numFmts');
+    var maxKNfId=163;
+    if(kNfSec){(kNfSec.inner.match(/numFmtId="(\d+)"/g)||[]).forEach(function(mm){var id=parseInt(mm.match(/\d+/)[0]);if(id>maxKNfId)maxKNfId=id;});}
+    var numFmtIdMap={};
+    var mergedNfInner=kNfSec?kNfSec.inner:'';
+    if(mNfSec){
+      var remMNf=mNfSec.inner.replace(/<numFmt\s+numFmtId="(\d+)"([^>]*?)\/?>/g,function(mm,id,rest){
+        var numId=parseInt(id);var newId=numId>=164?maxKNfId+(numId-163):numId;
+        numFmtIdMap[numId]=newId;return '<numFmt numFmtId="'+newId+'"'+rest+'/>';
+      });
+      mergedNfInner+=remMNf;
+    }
+    var totalNfCount=(mergedNfInner.match(/<numFmt /g)||[]).length;
+    var remappedMx=mx.inner
+      .replace(/numFmtId="(\d+)"/g,function(mm,n){var id=parseInt(n);return 'numFmtId="'+(numFmtIdMap[id]!==undefined?numFmtIdMap[id]:id)+'"';})
+      .replace(/fontId="(\d+)"/g,function(mm,n){return 'fontId="'+(parseInt(n)+kfc)+'"';})
+      .replace(/fillId="(\d+)"/g,function(mm,n){return 'fillId="'+(parseInt(n)+kfic)+'"';})
+      .replace(/borderId="(\d+)"/g,function(mm,n){return 'borderId="'+(parseInt(n)+kbc)+'"';});
+    var combinedStyles=kukakuStylesXml
+      .replace(kf.full,'<fonts count="'+(kfc+mfc)+'">'+kf.inner+mf.inner+'</fonts>')
+      .replace(kfi.full,'<fills count="'+(kfic+mfic)+'">'+kfi.inner+mfi.inner+'</fills>')
+      .replace(kb.full,'<borders count="'+(kbc+mbc)+'">'+kb.inner+mb.inner+'</borders>')
+      .replace(kx.full,'<cellXfs count="'+(kxc+mxc)+'">'+kx.inner+remappedMx+'</cellXfs>');
+    // numFmtsセクションも更新
+    if(kNfSec&&mNfSec){
+      combinedStyles=combinedStyles.replace(kNfSec.full,'<numFmts count="'+totalNfCount+'">'+mergedNfInner+'</numFmts>');
+    }else if(mNfSec&&!kNfSec){
+      combinedStyles=combinedStyles.replace('</styleSheet>','<numFmts count="'+totalNfCount+'">'+mergedNfInner+'</numFmts></styleSheet>');
+    }
+    var meisaiXfOff=kxc;
+    kukakuZip.file('xl/styles.xml',combinedStyles);
+    // ワークブック情報取得
+    var kukakuWbXml=await kukakuZip.file('xl/workbook.xml').async('string');
+    var kukakuSheetCount=(kukakuWbXml.match(/<sheet /g)||[]).length;
+    var kukakuRels=await kukakuZip.file('xl/_rels/workbook.xml.rels').async('string');
+    var kukakuCt=await kukakuZip.file('[Content_Types].xml').async('string');
+    var rNs='xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    kukakuWbXml=kukakuWbXml.replace(/<workbook([^>]*)>/,function(m,a){if(a.indexOf('xmlns:r')<0)return '<workbook '+rNs+a+'>';return m;});
+    // 確定金額明細書シートを各駐車場分追加
+    for(var i=0;i<meisaiZips.length;i++){
+      var mShXml=await meisaiZips[i].file('xl/worksheets/sheet1.xml').async('string');
+      // sharedStrings参照をinlineStrに変換（区画図zipにsharedStringsが存在しないため）
+      var mSsFile=meisaiZips[i].file('xl/sharedStrings.xml');
+      if(mSsFile){
+        var mSsXml=await mSsFile.async('string');
+        var ssItems=[];var ssRe=/<si>([\s\S]*?)<\/si>/g;var ssM;
+        while((ssM=ssRe.exec(mSsXml))!==null){var tm=ssM[1].match(/<t[^>]*>([\s\S]*?)<\/t>/);ssItems.push(tm?tm[1]:'');}
+        mShXml=mShXml.replace(/<c([^>]*\bt="s"[^>]*)><v>(\d+)<\/v><\/c>/g,function(mm,attrs,idx){
+          var val=ssItems[parseInt(idx)]||'';
+          var sM2=attrs.match(/\bs="(\d+)"/);var sa=sM2?' s="'+sM2[1]+'"':'';
+          var rM2=attrs.match(/\br="([^"]+)"/);var ra=rM2?' r="'+rM2[1]+'"':'';
+          return '<c'+ra+sa+' t="inlineStr"><is><t>'+val+'</t></is></c>';
+        });
+      }
+      mShXml=mShXml.replace(/\bs="(\d+)"/g,function(mm,n){return 's="'+(parseInt(n)+meisaiXfOff)+'"';});
+      var newShNum=kukakuSheetCount+i+1;
+      var mRId='rId_m'+(i+1);
+      var sheetName='\u78ba\u5b9a\u660e\u7d30'+(lots.length>1?String(i+1):'');
+      kukakuZip.file('xl/worksheets/sheet'+newShNum+'.xml',mShXml);
+      kukakuWbXml=kukakuWbXml.replace('<\/sheets>','<sheet name="'+sheetName+'" sheetId="'+(300+i)+'" r:id="'+mRId+'"/><\/sheets>');
+      kukakuRels=kukakuRels.replace('<\/Relationships>','<Relationship Id="'+mRId+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+newShNum+'.xml"/><\/Relationships>');
+      kukakuCt=kukakuCt.replace('<\/Types>','<Override PartName="/xl/worksheets/sheet'+newShNum+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><\/Types>');
+    }
+    // 印刷範囲設定
+    var dnStr='<definedNames>';
+    var kukakuSnArr=[],kukakuSnRe=/<sheet name="([^"]+)"/g,kukakuSnM;
+    while((kukakuSnM=kukakuSnRe.exec(kukakuWbXml))!==null)kukakuSnArr.push(kukakuSnM[1]);
+    for(var ki=0;ki<kukakuSheetCount;ki++){dnStr+='<definedName name="_xlnm.Print_Area" localSheetId="'+ki+'">&apos;'+(kukakuSnArr[ki]||('\u533a\u753b\u56f3'+(ki+1)))+'&apos;!$A$1:$V$47</definedName>';}
+    for(var di=0;di<meisaiZips.length;di++){var mSn=kukakuSnArr[kukakuSheetCount+di]||('\u78ba\u5b9a\u660e\u7d30'+(di+1));dnStr+='<definedName name="_xlnm.Print_Area" localSheetId="'+(kukakuSheetCount+di)+'">&apos;'+mSn+'&apos;!$A$1:$AD$44</definedName>';}
+    dnStr+='</definedNames>';
+    if(kukakuWbXml.indexOf('<definedNames>')>=0)kukakuWbXml=kukakuWbXml.replace(/<definedNames>[\s\S]*?<\/definedNames>/,dnStr);
+    else kukakuWbXml=kukakuWbXml.replace('<\/workbook>',dnStr+'<\/workbook>');
+    kukakuZip.file('xl/workbook.xml',kukakuWbXml);
+    kukakuZip.file('xl/_rels/workbook.xml.rels',kukakuRels);
+    kukakuZip.file('[Content_Types].xml',kukakuCt);
+    // ダウンロード
+    var finalBytes=await kukakuZip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
+    var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;
+    a.download='\u78ba\u5b9a\u8cc7\u6599_'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
+  }catch(e){alert('\u78ba\u5b9a\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
 }
 
 // \u2500\u2500 \u30c8\u30fc\u30b9\u30c8 / \u30e1\u30fc\u30eb\u30d0\u30ca\u30fc \u2500\u2500
@@ -3284,7 +3453,7 @@ function renderFileSection(caseId){
     el.innerHTML='<div class="file-new-case-note">&#128221; 先に案件を保存するとファイルをアップロードできます</div>';
     return;
   }
-  if(!storage){
+  if(!FIREBASE_OK){
     el.innerHTML='<div class="file-new-case-note">Firebase Storage が利用できません</div>';
     return;
   }
