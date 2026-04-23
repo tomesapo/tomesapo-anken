@@ -143,6 +143,9 @@
   input.auto-gen{background:#f0f7ff;color:var(--primary);font-weight:600;cursor:default}
   textarea{resize:vertical;min-height:70px}
   .case-num-hint{font-size:11px;color:var(--gray-500);margin-top:2px}
+  .type-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;margin-left:6px;vertical-align:middle}
+  .type-badge.追加{background:#fef3c7;color:#92400e;border:1px solid #fbbf24}
+  .type-badge.延長{background:#ede9fe;color:#5b21b6;border:1px solid #a78bfa}
   .detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:flex-end;z-index:1000;opacity:0;transition:opacity .2s;pointer-events:none}
   .detail-overlay.open{opacity:1;pointer-events:all}
   .detail-panel{background:white;width:500px;max-width:100vw;height:100vh;overflow-y:auto;box-shadow:var(--shadow-lg);transform:translateX(30px);transition:transform .2s}
@@ -281,9 +284,7 @@
     <button class="btn btn-ghost" onclick="exportCSV()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
-    <button class="btn btn-ghost" onclick="triggerImport()">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV読込
-    </button>
+
     <button class="btn btn-ghost" onclick="openMasterModal()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM2 20a10 10 0 0 1 20 0"/></svg>マスタ管理
     </button>
@@ -295,7 +296,7 @@
     </button>
   </div>
   <button class="hamburger" onclick="toggleDrawer()">&#9776;</button>
-  <input type="file" id="csvImportInput" accept=".csv" style="display:none" onchange="handleImport(event)">
+
 </header>
 
 <div class="drawer-overlay" id="drawerOverlay">
@@ -312,9 +313,7 @@
     <button class="drawer-btn" onclick="exportCSV();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
-    <button class="drawer-btn" onclick="triggerImport();closeDrawer()">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV読込
-    </button>
+
     <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="openMonthlyReport();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>月次レポート
@@ -428,8 +427,10 @@
           <div class="form-group"><label>進捗状況<span class="required">*</span></label>
             <select id="f_status"><option>未調査</option><option>調査中</option><option>再調査</option><option>提案済</option><option>未申込</option><option>契約中</option><option>未請求</option><option>請求済</option><option>入金済</option><option>失注</option></select>
           </div>
-          <div class="form-group"><label>案件番号 <span class="auto-tag">自動採番</span></label><input type="text" id="f_caseNo" class="auto-gen" readonly placeholder="顧客選択後に自動生成"><div class="case-num-hint">YYYY-顧客番号-連番</div></div>
-          <div class="form-group"><label>現場名<span class="required">*</span></label><input type="text" id="f_siteName" placeholder="現場名を入力"></div>
+          <div class="form-group"><label>案件種別</label><select id="f_caseType" onchange="onCaseTypeChange()"><option value="通常">通常</option><option value="追加">追加</option><option value="延長">延長</option></select></div>
+          <div class="form-group"><label>案件番号 <span class="auto-tag">自動採番</span></label><input type="text" id="f_caseNo" class="auto-gen" readonly placeholder="顧客または元案件番号を入力後に自動生成"><div class="case-num-hint" id="caseNoHint">YYYY-顧客番号-連番</div></div>
+          <div class="form-group span-3" id="parentCaseNoGroup" style="display:none"><label>元案件番号 <span class="required">*</span></label><input type="text" id="f_parentCaseNo" placeholder="例：2026-001-001" oninput="onParentCaseNoChange()"><div class="case-num-hint">追加はT1・T2…、延長はE1・E2…が自動付与されます</div></div>
+          <div class="form-group span-2"><label>現場名<span class="required">*</span></label><input type="text" id="f_siteName" placeholder="現場名を入力"></div>
           <div class="form-group span-3"><label>現場住所</label><input type="text" id="f_siteAddress" placeholder="住所を入力"></div>
         </div>
       </div>
@@ -494,7 +495,7 @@
       </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
-      <button class="btn btn-primary" onclick="saveCase()">
+      <button class="btn btn-primary" id="saveCaseBtn" onclick="saveCase()">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存
       </button>
     </div>
@@ -770,11 +771,28 @@ function openMasterModal() { renderMaster(); document.getElementById('masterOver
 function closeMasterModal() { document.getElementById('masterOverlay').classList.remove('open'); }
 
 // ── 案件番号 自動採番 ──
+function toRomanJP(n) {
+  const r = ['', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ'];
+  return r[n] || String(n);
+}
+function generateSuffixCaseNo(parentNo, suffix) {
+  if (!parentNo) return '';
+  const esc = parentNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pat = new RegExp('^'+ esc +'-'+ suffix +'(\\d+)$');
+  const existing = cases.filter(c => pat.test(c.caseNo) && c.id !== editingId);
+  const maxN = existing.reduce((mx, c) => { const m=c.caseNo.match(pat); return m?Math.max(mx,parseInt(m[1])):mx; }, 0);
+  return parentNo + '-' + suffix + (maxN + 1);
+}
 function generateCaseNo(custCode) {
+  const caseType = document.getElementById('f_caseType')?.value || '通常';
+  if (caseType === '追加' || caseType === '延長') {
+    const parentNo = (document.getElementById('f_parentCaseNo')?.value || '').trim();
+    return generateSuffixCaseNo(parentNo, caseType === '追加' ? 'T' : 'E');
+  }
   if (!custCode) return '';
   const year = new Date().getFullYear();
   const prefix = year + '-' + custCode + '-';
-  const existing = cases.filter(c => c.caseNo.startsWith(prefix) && c.id !== editingId);
+  const existing = cases.filter(c => /^\d{4}-\d+-\d+$/.test(c.caseNo) && c.caseNo.startsWith(prefix) && c.id !== editingId);
   const maxSeq = existing.reduce((max, c) => Math.max(max, parseInt(c.caseNo.split('-')[2])||0), 0);
   return prefix + String(maxSeq + 1).padStart(3, '0');
 }
@@ -793,6 +811,60 @@ function onCustomerChange() {
   } else {
     if (!editingId) document.getElementById('f_caseNo').value = '';
   }
+}
+function onCaseTypeChange() {
+  const ct = document.getElementById('f_caseType').value;
+  const grp = document.getElementById('parentCaseNoGroup');
+  const hint = document.getElementById('caseNoHint');
+  const saveBtnCT=document.getElementById('saveCaseBtn');
+  if (ct === '追加' || ct === '延長') {
+    grp.style.display = '';
+    hint.textContent = ct==='追加' ? '元案件番号-T連番' : '元案件番号-E連番';
+    document.getElementById('f_caseNo').value = generateCaseNo('');
+    if(saveBtnCT){saveBtnCT.disabled=true;saveBtnCT.style.opacity='0.45';saveBtnCT.style.cursor='not-allowed';}
+  } else {
+    grp.style.display = 'none';
+    document.getElementById('f_parentCaseNo').value = '';
+    hint.textContent = 'YYYY-顧客番号-連番';
+    if(saveBtnCT){saveBtnCT.disabled=false;saveBtnCT.style.opacity='';saveBtnCT.style.cursor='';}
+    const custId = document.getElementById('f_customer').value;
+    const cust = getCustomer(custId);
+    if (cust && !editingId) document.getElementById('f_caseNo').value = generateCaseNo(cust.code);
+    else if (!editingId) document.getElementById('f_caseNo').value = '';
+  }
+}
+function onParentCaseNoChange() {
+  const parentNo = (document.getElementById('f_parentCaseNo')?.value || '').trim();
+  const ct = document.getElementById('f_caseType').value;
+  // 案件番号を先に生成（連番を確定させる）
+  const genNo = generateCaseNo('');
+  if (!editingId) document.getElementById('f_caseNo').value = genNo;
+  const pnInput = document.getElementById('f_parentCaseNo');
+  const sbtn=document.getElementById('saveCaseBtn');
+  if (!parentNo) {
+    if(pnInput){pnInput.style.borderColor='';pnInput.title='';}
+    if(sbtn){sbtn.disabled=true;sbtn.style.opacity='0.45';sbtn.style.cursor='not-allowed';}
+    return;
+  }
+  // 元案件を検索して自動入力
+  const parent = cases.find(c => c.caseNo === parentNo);
+  if (!parent) {
+    if(pnInput){pnInput.style.borderColor='#dc2626';pnInput.title='案件が見つかりません';}
+    const sb=document.getElementById('saveCaseBtn');if(sb){sb.disabled=true;sb.style.opacity='0.45';sb.style.cursor='not-allowed';}
+    return;
+  }
+  if(pnInput){pnInput.style.borderColor='#16a34a';pnInput.title='';}
+  const sb2=document.getElementById('saveCaseBtn');if(sb2){sb2.disabled=false;sb2.style.opacity='';sb2.style.cursor='';}
+  restoreCascade(parent.customerName, parent.baseName, parent.staffName);
+  document.getElementById('f_siteAddress').value = parent.siteAddress || '';
+  // 現場名にサフィックス付与
+  const suffixChar = ct === '追加' ? 'T' : 'E';
+  const escPN = parentNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pat = new RegExp('^' + escPN + '-' + suffixChar + '(\\d+)$');
+  const m = genNo.match(pat);
+  const suffixNum = m ? parseInt(m[1]) : 1;
+  const label = ct === '追加' ? '追加分' : '延長分';
+  document.getElementById('f_siteName').value = (parent.siteName || '') + '[' + label + toRomanJP(suffixNum) + ']';
 }
 function onBaseChange() {
   const custId = document.getElementById('f_customer').value;
@@ -1012,6 +1084,11 @@ const FORM_FIELDS=['f_caseNo','f_siteName','f_siteAddress','f_requestUnits','f_r
 function clearForm() {
   FORM_FIELDS.forEach(fid=>{const el=document.getElementById(fid);if(el){el.value='';el.style.color='';}});
   document.getElementById('f_status').value='未調査';
+  const ctEl=document.getElementById('f_caseType');if(ctEl)ctEl.value='通常';
+  const pnEl=document.getElementById('f_parentCaseNo');if(pnEl)pnEl.value='';
+  const pnGrp=document.getElementById('parentCaseNoGroup');if(pnGrp)pnGrp.style.display='none';
+  const hint=document.getElementById('caseNoHint');if(hint)hint.textContent='YYYY-顧客番号-連番';
+  const sbClr=document.getElementById('saveCaseBtn');if(sbClr){sbClr.disabled=false;sbClr.style.opacity='';sbClr.style.cursor='';}
   ['f_customer','f_base','f_staff'].forEach(id=>{
     const lbl=id==='f_customer'?'顧客':id==='f_base'?'拠点':'担当者';
     document.getElementById(id).innerHTML='<option value="">── '+lbl+'を選択 ──</option>';
@@ -1059,6 +1136,12 @@ function populateForm(c) {
   document.getElementById('f_paymentDate').value=c.paymentDate||'';
   document.getElementById('f_paymentAmount').value=c.paymentAmount!=null?c.paymentAmount:'';
   document.getElementById('f_caseNote').value=c.caseNote||'';
+  const ctEl2=document.getElementById('f_caseType');if(ctEl2)ctEl2.value=c.caseType||'通常';
+  const pnEl2=document.getElementById('f_parentCaseNo');if(pnEl2)pnEl2.value=c.parentCaseNo||'';
+  const pnGrp2=document.getElementById('parentCaseNoGroup');
+  if(pnGrp2)pnGrp2.style.display=(c.caseType==='追加'||c.caseType==='延長')?'':'none';
+  const hint2=document.getElementById('caseNoHint');
+  if(hint2)hint2.textContent=c.caseType==='追加'?'元案件番号-T連番':c.caseType==='延長'?'元案件番号-E連番':'YYYY-顧客番号-連番';
   renderParkingLotCards(c.parkingLots||[]);
   autoCalcCaseEstimate(); updateCaseFixedPurchase();
   renderFileSection(c.id);
@@ -1075,6 +1158,8 @@ async function saveCase() {
   const siteName=document.getElementById('f_siteName').value.trim();
   const caseNo=document.getElementById('f_caseNo').value.trim();
   if(!caseNo){showToast('案件番号が生成されていません');return;}
+  const _ct=document.getElementById('f_caseType')?.value||'通常';
+  if((_ct==='追加'||_ct==='延長')&&!document.getElementById('f_parentCaseNo')?.value.trim()){showToast('元案件番号を入力してください');return;}
   if(!siteName){showToast('現場名を入力してください');return;}
   autoCalcCaseEstimate();
   const estS=parseFloat((document.getElementById('f_estSales').value||'').replace(/,/g,''))||null;
@@ -1105,6 +1190,8 @@ async function saveCase() {
     paymentDate:document.getElementById('f_paymentDate').value,
     paymentAmount:parseFloat(document.getElementById('f_paymentAmount').value)||null,
     caseNote:document.getElementById('f_caseNote').value.trim(),
+    caseType:document.getElementById('f_caseType')?.value||'通常',
+    parentCaseNo:document.getElementById('f_parentCaseNo')?.value.trim()||null,
     parkingLots:getParkingLotsFromForm(),
     updatedAt:new Date().toISOString(),
   };
@@ -1131,7 +1218,7 @@ function openDetail(id) {
   detailId=id;
   const c=cases.find(x=>x.id===id);if(!c)return;
   document.getElementById('detail_caseNo').textContent=c.caseNo;
-  document.getElementById('detail_status').innerHTML='<span class="status-badge s-'+c.status+'">'+c.status+'</span>';
+  document.getElementById('detail_status').innerHTML='<span class="status-badge s-'+c.status+'">'+c.status+'</span>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+(c.parentCaseNo?'<span style="font-size:12px;color:var(--gray-500);margin-left:10px">元案件：'+esc(c.parentCaseNo)+'</span>':'');
   const cust=getCustomerByName(c.customerName);
   const base=cust&&cust.bases.find(b=>b.name===c.baseName);
   const staff=base&&base.staff.find(s=>s.name===c.staffName);
@@ -1231,7 +1318,7 @@ function renderTable(){
     const epC=ep!=null?(ep<0?'profit-neg':ep>0?'profit-pos':''):'';
     const fpC=fp!=null?(fp<0?'profit-neg':fp>0?'profit-pos':''):'';
     return '<tr onclick="openDetail(\''+c.id+'\')">'+
-      '<td><strong>'+c.caseNo+'</strong></td>'+
+      '<td><strong>'+c.caseNo+'</strong>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+'</td>'+
       '<td><span class="status-badge s-'+c.status+'">'+c.status+'</span></td>'+
       '<td title="'+esc(c.customerName||'')+'">'+esc(c.customerName||'')+'</td>'+
       '<td title="'+esc(c.staffName||'')+'">'+esc(c.staffName||'')+'</td>'+
@@ -1269,7 +1356,7 @@ function renderCards(){
       ?'<div class="case-card-amount" style="color:var(--gray-500)">&#165;'+fmt(c.estSales)+' <span style="font-size:11px;font-weight:normal">見積売上</span></div>'
       :'';
     return '<div class="case-card" onclick="openDetail(\''+c.id+'\')">'+
-      '<div class="case-card-top"><span class="case-card-no">'+esc(c.caseNo)+'</span>'+
+      '<div class="case-card-top"><span class="case-card-no">'+esc(c.caseNo)+'</span>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+
       '<span class="status-badge s-'+c.status+'">'+c.status+'</span></div>'+
       '<div class="case-card-grid">'+
       '<div><span class="lbl">顧客</span>'+esc(c.customerName||'—')+'</div>'+
@@ -1283,7 +1370,10 @@ function renderCards(){
 // ── 統計 ──
 const ORDERED_STATUSES=['未請求','請求済','入金済'];
 function renderStats(){
-  const total=cases.length;
+  const baseCases=cases.filter(c=>!c.caseType||c.caseType==='通常');
+  const addCount=cases.filter(c=>c.caseType==='追加').length;
+  const extCount=cases.filter(c=>c.caseType==='延長').length;
+  const total=baseCases.length;
   const active=cases.filter(c=>['調査中','再調査','提案済','未申込','契約中'].includes(c.status)).length;
   const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
   const totalFS=ordered.reduce((s,c)=>s+(c.fixedSales||0),0);
@@ -1291,7 +1381,7 @@ function renderStats(){
   const totalTI=ordered.reduce((s,c)=>s+(c.taxIncludedSales||0),0);
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   document.getElementById('statsBar').innerHTML=
-    '<div class="stat-card"><div class="stat-label">総案件数</div><div class="stat-value">'+total+'</div><div class="stat-sub">全案件</div></div>'+
+    '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
     '<div class="stat-card"><div class="stat-label">進行中</div><div class="stat-value" style="color:var(--primary)">'+active+'</div><div class="stat-sub">調査・提案・未申込・契約</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
@@ -1299,7 +1389,7 @@ function renderStats(){
     '<div class="stat-card"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>';
 }
 function updateYearFilter(){
-  const years=[...new Set(cases.map(c=>c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
+  const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
   const sel=document.getElementById('yearFilter'),cur=sel.value;
   sel.innerHTML='<option value="">すべての年</option>'+years.map(y=>'<option'+(y===cur?' selected':'')+'>'+y+'</option>').join('');
   const periods=[...new Set(cases.map(c=>getCasePeriod(c)))].sort((a,b)=>b-a);
@@ -1369,58 +1459,7 @@ async function exportCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   showToast(cases.length+' 件をExcelに出力しました');
 }
-function triggerImport(){document.getElementById('csvImportInput').click();}
-function handleImport(e){
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async ev=>{
-    let text=ev.target.result;
-    if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
-    const rows=parseCSV(text);
-    if(rows.length<2){showToast('データが見つかりません');e.target.value='';return;}
-    const headers=rows[0];
-    const get=(row,name)=>{const i=headers.indexOf(name);return i>=0?(row[i]??'').trim():'';};
-    const num=v=>{const n=parseFloat(v);return isNaN(n)?null:n;};
-    const imported=rows.slice(1).filter(r=>r.some(c=>c.trim())).map(row=>{
-      const fixS=num(get(row,'確定売上(税別)')),fixP=num(get(row,'確定仕入(税別)'));
-      const estS=num(get(row,'見積売上(税別)')),estP=num(get(row,'見積仕入(税別)'));
-      return{id:uid(),caseNo:get(row,'案件番号'),status:get(row,'進捗状況')||'未調査',customerName:get(row,'顧客名'),baseName:get(row,'拠点名'),staffName:get(row,'担当者名'),siteName:get(row,'現場名'),siteAddress:get(row,'現場住所'),requestStart:get(row,'依頼開始日'),requestEnd:get(row,'依頼終了日'),requestUnits:num(get(row,'依頼台数')),requestNote:get(row,'依頼備考'),proposalDate:get(row,'提案日'),estSales:estS,estPurchase:estP,estProfit:(estS!=null||estP!=null)?(estS||0)-(estP||0):null,orderDate:get(row,'受注日'),contractStart:get(row,'契約開始日'),contractEnd:get(row,'契約終了日'),fixedSales:fixS,fixedPurchase:fixP,fixedProfit:(fixS!=null||fixP!=null)?(fixS||0)-(fixP||0):null,taxIncludedSales:fixS!=null?Math.round(fixS*1.1):null,fixedUnits:num(get(row,'確定台数')),invoiceDate:get(row,'請求日'),paymentDate:get(row,'入金日'),paymentAmount:num(get(row,'入金額(税込)')),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-    }).filter(c=>c.caseNo);
-    if(!imported.length){showToast('有効なデータが見つかりません');e.target.value='';return;}
-    const doImport=async(replace)=>{
-      if(db){
-        const batch=db.batch();
-        if(replace){const snap=await db.collection('cases').get();snap.docs.forEach(d=>batch.delete(d.ref));}
-        imported.forEach(c=>batch.set(db.collection('cases').doc(c.id),c));
-        await batch.commit();
-      }else{
-        if(replace)cases=[...imported];else cases.push(...imported);
-        renderStats();renderAll();updateYearFilter();syncCustomerFilter();
-      }
-      showToast(imported.length+' 件をインポートしました');
-    };
-    document.getElementById('confirmMsg').innerHTML=imported.length+' 件を読み込みました。<br>既存データに追加しますか？';
-    const btns=document.getElementById('confirmBtns');
-    btns.innerHTML='<button class="btn btn-outline" onclick="closeConfirm()">キャンセル</button>'+
-      '<button class="btn btn-outline" id="impAddBtn">追加</button>'+
-      '<button class="btn btn-danger" id="impRepBtn">置き換え</button>';
-    document.getElementById('impAddBtn').onclick=()=>{closeConfirm();doImport(false);};
-    document.getElementById('impRepBtn').onclick=()=>{closeConfirm();doImport(true);};
-    document.getElementById('confirmOverlay').classList.add('open');
-    e.target.value='';
-  };
-  reader.readAsText(file,'UTF-8');
-}
-function parseCSV(text){
-  const rows=[];let row=[],cell='',inQ=false;
-  for(let i=0;i<text.length;i++){
-    const ch=text[i],nx=text[i+1];
-    if(inQ){if(ch==='"'&&nx==='"'){cell+='"';i++;}else if(ch==='"'){inQ=false;}else{cell+=ch;}}
-    else{if(ch==='"'){inQ=true;}else if(ch===','){row.push(cell);cell='';}else if(ch==='\r'&&nx==='\n'){row.push(cell);rows.push(row);row=[];cell='';i++;}else if(ch==='\n'||ch==='\r'){row.push(cell);rows.push(row);row=[];cell='';}else{cell+=ch;}}
-  }
-  if(cell||row.length){row.push(cell);rows.push(row);}
-  return rows.filter(r=>r.some(c=>c.trim()));
-}
+
 
 // ── Toast / Keyboard ──
 
