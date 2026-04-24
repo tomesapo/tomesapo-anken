@@ -61,7 +61,10 @@
   .btn-sm{padding:6px 10px;font-size:12px}
   .btn-xs{padding:3px 8px;font-size:11px;border-radius:6px}
   .stats-bar{display:flex;gap:10px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
-  .stat-card{background:white;border:1px solid var(--gray-200);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:130px;flex-shrink:0;box-shadow:var(--shadow)}
+  .stat-card{background:white;border:1px solid var(--gray-200);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:130px;flex-shrink:0;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+  .stat-card.clickable{cursor:pointer}
+  .stat-card.clickable:hover{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+  .stat-card.clickable.active{border-color:var(--primary);background:var(--primary-light);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
   .stat-card .stat-label{font-size:11px;color:var(--gray-500);font-weight:500}
   .stat-card .stat-value{font-size:20px;font-weight:700}
   .stat-card .stat-sub{font-size:11px;color:var(--gray-500)}
@@ -267,9 +270,59 @@
   .file-btn-del:hover{background:#fca5a5}
   .file-upload-progress{font-size:12px;color:#6366f1;margin-top:6px}
   .file-new-case-note{color:#9ca3af;font-size:12px;text-align:center;padding:12px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb}
+  /* ── 駐車場DB ── */
+  .pm-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;display:flex;align-items:center;justify-content:center}
+  .pm-modal-overlay.hidden{display:none}
+  .pm-modal{background:#fff;border-radius:12px;width:min(96vw,900px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .pm-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+  .pm-modal-header h2{font-size:18px;font-weight:700;margin:0}
+  .pm-modal-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .pm-tabs{display:flex;gap:4px;padding:12px 16px 0;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+  .pm-tab{padding:8px 18px;border-radius:8px 8px 0 0;border:1px solid transparent;background:none;cursor:pointer;font-size:14px;font-weight:500;color:#6b7280}
+  .pm-tab.active{background:#fff;border-color:#e5e7eb;border-bottom-color:#fff;color:#1e3a5f;margin-bottom:-1px}
+  .pm-tab-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .pm-tab-pane{display:none;flex:1;overflow:auto;padding:16px}
+  .pm-tab-pane.active{display:flex;flex-direction:column;gap:12px}
+  #pmMapPane{padding:0}
+  #pmMap{flex:1;min-height:400px;border-radius:0 0 12px 12px}
+  #pmMapSearch:focus{border-color:#6366f1;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+  .pm-list-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .pm-search{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:240px}
+  .pm-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+  .pm-card-title{font-weight:700;font-size:15px;color:#1e3a5f;display:flex;align-items:center;gap:8px}
+  .pm-card-meta{font-size:12px;color:#6b7280;display:flex;flex-wrap:wrap;gap:8px 16px}
+  .pm-card-meta span{display:flex;align-items:center;gap:4px}
+  .pm-card-actions{display:flex;gap:8px;justify-content:flex-end}
+  .pm-btn-edit{padding:5px 14px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;font-size:13px;cursor:pointer}
+  .pm-btn-edit:hover{background:#dbeafe}
+  .pm-btn-del{padding:5px 14px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-size:13px;cursor:pointer}
+  .pm-btn-del:hover{background:#fee2e2}
+  /* PM Form */
+  .pmf-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;display:flex;align-items:center;justify-content:center}
+  .pmf-modal-overlay.hidden{display:none}
+  .pmf-modal{background:#fff;border-radius:12px;width:min(96vw,640px);max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .pmf-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1}
+  .pmf-modal-header h2{font-size:16px;font-weight:700;margin:0}
+  .pmf-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+  .pmf-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pmf-group{display:flex;flex-direction:column;gap:4px}
+  .pmf-group label{font-size:12px;font-weight:600;color:#374151}
+  .pmf-group input,.pmf-group textarea,.pmf-group select{padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;font-family:inherit}
+  .pmf-group textarea{resize:vertical;min-height:72px}
+  .pmf-section-title{font-size:13px;font-weight:700;color:#1e3a5f;padding-top:4px;border-top:1px solid #e5e7eb}
+  .pmf-link-list{display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto}
+  .pmf-link-item{display:flex;align-items:center;gap:8px;font-size:13px}
+  .pmf-link-item input[type=checkbox]{accent-color:#1e3a5f}
+  .pmf-footer{display:flex;gap:10px;justify-content:flex-end;padding:12px 20px;border-top:1px solid #e5e7eb;position:sticky;bottom:0;background:#fff}
+  /* Map popup */
+  .pm-popup{min-width:180px}
+  .pm-popup b{font-size:14px;display:block;margin-bottom:4px}
+  .pm-popup-meta{font-size:12px;color:#4b5563;line-height:1.6}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -287,6 +340,9 @@
 
     <button class="btn btn-ghost" onclick="openMasterModal()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM2 20a10 10 0 0 1 20 0"/></svg>マスタ管理
+    </button>
+    <button class="btn btn-ghost" onclick="openPMModal()">
+      🅿 駐車場DB
     </button>
     <button class="btn btn-ghost" onclick="openMonthlyReport()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><rect x="12" y="13" width="3" height="5" fill="currentColor" stroke="none"/><rect x="16" y="11" width="3" height="7" fill="currentColor" stroke="none"/><rect x="8" y="15" width="3" height="3" fill="currentColor" stroke="none"/></svg>月次レポート
@@ -354,7 +410,7 @@
         <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名で検索…" oninput="renderAll()">
       </div>
       <div class="filter-row">
-        <select class="filter-select" id="statusFilter" onchange="renderAll()">
+        <select class="filter-select" id="statusFilter" onchange="activeStatuses=null;document.querySelectorAll('.stat-card.active').forEach(el=>el.classList.remove('active'));renderAll()">
           <option value="">すべての進捗</option>
           <option>未調査</option><option>調査中</option><option>再調査</option>
           <option>提案済</option><option>未申込</option><option>契約中</option>
@@ -578,6 +634,8 @@ if (FIREBASE_OK) {
 
 let masterData = { customers: [] };
 let cases = [];
+let parkingMasters = [];
+let activeStatuses = null;
 let editingId = null, detailId = null, deleteCallback = null;
 let sortKey = 'caseNo', sortDir = 1;
 
@@ -598,12 +656,34 @@ async function saveMasterToFS() {
   catch(e) { showToast('マスタ保存エラー: ' + e.message); }
 }
 
+async function savePMToFS(obj) {
+  if (!db) { savePMLocal(); return; }
+  try { await db.collection('parkingMasters').doc(obj.id).set(obj); }
+  catch(e) { showToast('駐車場保存エラー: ' + e.message); throw e; }
+}
+async function deletePMFromFS(id) {
+  if (!db) { deletePMLocal(id); return; }
+  try { await db.collection('parkingMasters').doc(id).delete(); }
+  catch(e) { showToast('駐車場削除エラー: ' + e.message); throw e; }
+}
+function savePMLocal() {
+  try { localStorage.setItem('parkingMasters', JSON.stringify(parkingMasters)); } catch(e) {}
+}
+function deletePMLocal(id) {
+  parkingMasters = parkingMasters.filter(p => p.id !== id);
+  savePMLocal(); renderPMList(); if(pmMap) refreshPMMarkers();
+}
+function loadPMLocal() {
+  try { const d = localStorage.getItem('parkingMasters'); if(d) parkingMasters = JSON.parse(d); } catch(e) {}
+}
+
 // ── 初期化 ──
 async function initApp() {
   // まず即座にアプリを起動（Firebaseはバックグラウンドで同期）
   if (!FIREBASE_OK) {
     document.getElementById('setupBanner').style.display = 'block';
   }
+  loadPMLocal();
   hideLoading(); renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
   if (!FIREBASE_OK) return;
 
@@ -611,6 +691,10 @@ async function initApp() {
   try {
     const mDoc = await db.doc('master/data').get();
     if (mDoc.exists) { masterData = mDoc.data(); syncCustomerFilter(); renderAll(); }
+    db.collection('parkingMasters').onSnapshot(snap => {
+      parkingMasters = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      renderPMList(); if(pmMap) refreshPMMarkers();
+    }, err => {});
     db.collection('cases').onSnapshot(snap => {
       cases = snap.docs.map(d => {
         const c = { ...d.data(), id: d.id };
@@ -1288,7 +1372,8 @@ function getFiltered(){
   const cu=document.getElementById('customerFilter').value;
   const pd=document.getElementById('periodFilter').value;
   let data=cases.filter(c=>{
-    if(st&&c.status!==st)return false;
+    if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
+    else if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
     if(cu&&c.customerName!==cu)return false;
     if(pd&&String(getCasePeriod(c))!==pd)return false;
@@ -1369,6 +1454,17 @@ function renderCards(){
 
 // ── 統計 ──
 const ORDERED_STATUSES=['未請求','請求済','入金済'];
+function filterByStatuses(arr, cardEl) {
+  if (activeStatuses && JSON.stringify(activeStatuses) === JSON.stringify(arr)) {
+    activeStatuses = null;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+  } else {
+    activeStatuses = arr;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+    if (cardEl) cardEl.classList.add('active');
+  }
+  renderAll();
+}
 function renderStats(){
   const baseCases=cases.filter(c=>!c.caseType||c.caseType==='通常');
   const addCount=cases.filter(c=>c.caseType==='追加').length;
@@ -1384,17 +1480,18 @@ function renderStats(){
   const totalFP=ordered.reduce((s,c)=>s+(c.fixedProfit||0),0);
   const totalTI=ordered.reduce((s,c)=>s+(c.taxIncludedSales||0),0);
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
+  function _isAct(a){return activeStatuses&&JSON.stringify(activeStatuses)===JSON.stringify(a);}
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
-    '<div class="stat-card"><div class="stat-label">未調査・調査中・再調査</div><div class="stat-value" style="color:var(--gray-600)">'+cntMiChosa+'</div><div class="stat-sub">件</div></div>'+
-    '<div class="stat-card"><div class="stat-label">提案済</div><div class="stat-value" style="color:var(--primary)">'+cntTeian+'</div><div class="stat-sub">件</div></div>'+
-    '<div class="stat-card"><div class="stat-label">未申込</div><div class="stat-value" style="color:var(--warning)">'+cntMiMoshikomi+'</div><div class="stat-sub">件</div></div>'+
-    '<div class="stat-card"><div class="stat-label">契約中</div><div class="stat-value" style="color:var(--success)">'+cntKeiyaku+'</div><div class="stat-sub">件</div></div>'+
-    '<div class="stat-card"><div class="stat-label">未請求</div><div class="stat-value" style="color:var(--danger)">'+cntMiSeikyu+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card clickable'+(_isAct(['未調査','調査中','再調査'])?' active':'')+'" onclick="filterByStatuses([&quot;未調査&quot;,&quot;調査中&quot;,&quot;再調査&quot;],this)"><div class="stat-label">未調査・調査中・再調査</div><div class="stat-value" style="color:var(--gray-600)">'+cntMiChosa+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card clickable'+(_isAct(['提案済'])?' active':'')+'" onclick="filterByStatuses([&quot;提案済&quot;],this)"><div class="stat-label">提案済</div><div class="stat-value" style="color:var(--primary)">'+cntTeian+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card clickable'+(_isAct(['未申込'])?' active':'')+'" onclick="filterByStatuses([&quot;未申込&quot;],this)"><div class="stat-label">未申込</div><div class="stat-value" style="color:var(--warning)">'+cntMiMoshikomi+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card clickable'+(_isAct(['契約中'])?' active':'')+'" onclick="filterByStatuses([&quot;契約中&quot;],this)"><div class="stat-label">契約中</div><div class="stat-value" style="color:var(--success)">'+cntKeiyaku+'</div><div class="stat-sub">件</div></div>'+
+    '<div class="stat-card clickable'+(_isAct(['未請求'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;],this)"><div class="stat-label">未請求</div><div class="stat-value" style="color:var(--danger)">'+cntMiSeikyu+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+(totalFP>=0?'var(--success)':'var(--danger)')+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
-    '<div class="stat-card"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>';
+    '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>';
 }
 function updateYearFilter(){
   const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
@@ -3687,7 +3784,534 @@ async function deleteFile(caseId,fileName){
     loadFileList(caseId);
   }catch(e){showToast('削除エラー: '+e.message);}
 }
+
+// ═══════════════════════════════════════════════
+// ── 駐車場データベース ──
+// ═══════════════════════════════════════════════
+let pmMap = null, pmEditingId = null, pmMarkers = [];
+
+function openPMModal() {
+  document.getElementById('pmModalOverlay').classList.remove('hidden');
+  renderPMList();
+  if (pmMap) { pmMap.invalidateSize(); }
+}
+function closePMModal() {
+  document.getElementById('pmModalOverlay').classList.add('hidden');
+}
+
+function switchPMTab(tab) {
+  document.getElementById('pmListPane').classList.toggle('active', tab === 'list');
+  document.getElementById('pmMapPane').classList.toggle('active', tab === 'map');
+  document.getElementById('pmTabList').classList.toggle('active', tab === 'list');
+  document.getElementById('pmTabMap').classList.toggle('active', tab === 'map');
+  if (tab === 'map') {
+    if (!pmMap) initPMMap();
+    else { setTimeout(() => pmMap.invalidateSize(), 100); refreshPMMarkers(); }
+  }
+}
+
+function initPMMap() {
+  setTimeout(() => {
+    const el = document.getElementById('pmMap');
+    if (!el || pmMap) return;
+    pmMap = L.map('pmMap').setView([35.1706, 136.8816], 12); // 愛知県一宮市付近
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(pmMap);
+    refreshPMMarkers();
+    pmMap.invalidateSize();
+  }, 150);
+}
+
+function refreshPMMarkers() {
+  if (!pmMap) return;
+  pmMarkers.forEach(m => pmMap.removeLayer(m));
+  pmMarkers = [];
+  const geo = parkingMasters.filter(p => p.lat && p.lng);
+  geo.forEach(p => {
+    const fmt = v => v ? v.toLocaleString() : '-';
+    const popup = '<div class="pm-popup">'
+      + '<b>🅿 ' + esc(p.name) + '</b>'
+      + '<div class="pm-popup-meta">'
+      + (p.address ? '📍 ' + esc(p.address) + '<br>' : '')
+      + (p.supplierName ? '🏢 ' + esc(p.supplierName) + '<br>' : '')
+      + (p.rentMonthly ? '月額賃料: ¥' + fmt(parseInt(p.rentMonthly)) + '<br>' : '')
+      + (p.rentDaily ? '日額賃料: ¥' + fmt(parseInt(p.rentDaily)) + '<br>' : '')
+      + (p.startProRate ? '開始月日割: ' + esc(p.startProRate) + '<br>' : '')
+      + (p.endProRate ? '終了月日割: ' + esc(p.endProRate) + '<br>' : '')
+      + '</div>'
+      + '<a href="#" onclick="closePMModal();setTimeout(function(){openPMForm(\'' + p.id + '\')},100);return false;" style="font-size:12px;color:#1d4ed8">詳細・編集</a>'
+      + '</div>';
+    const marker = L.marker([p.lat, p.lng]).addTo(pmMap).bindPopup(popup);
+    pmMarkers.push(marker);
+  });
+  if (geo.length > 0) {
+    const grp = L.featureGroup(pmMarkers);
+    pmMap.fitBounds(grp.getBounds().pad(0.2));
+  }
+}
+
+function renderPMList() {
+  const q = (document.getElementById('pmSearch')?.value || '').toLowerCase();
+  const body = document.getElementById('pmListBody');
+  if (!body) return;
+  const filtered = parkingMasters.filter(p =>
+    !q || (p.name||'').toLowerCase().includes(q) ||
+    (p.address||'').toLowerCase().includes(q) ||
+    (p.supplierName||'').toLowerCase().includes(q)
+  );
+  if (filtered.length === 0) {
+    body.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:24px">登録された駐車場がありません</div>';
+    return;
+  }
+  const fmt = v => v ? parseInt(v).toLocaleString() : null;
+  body.innerHTML = filtered.map(p => {
+    const linked = (p.linkedCaseIds || []).map(id => {
+      const c = cases.find(c => c.id === id);
+      return c ? '<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px">' + esc(c.caseNo) + '</span>' : '';
+    }).filter(Boolean).join(' ');
+    return '<div class="pm-card">'
+      + '<div class="pm-card-title">🅿 ' + esc(p.name)
+      + (p.startProRate || p.endProRate ? '<span style="font-size:11px;font-weight:400;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;border:1px solid #bbf7d0">開始:' + esc(p.startProRate||'未設定') + ' 終了:' + esc(p.endProRate||'未設定') + '</span>' : '')
+      + '</div>'
+      + '<div class="pm-card-meta">'
+      + (p.address ? '<span>📍 ' + esc(p.address) + '</span>' : '')
+      + (p.supplierName ? '<span>🏢 ' + esc(p.supplierName) + '</span>' : '')
+      + (p.tel ? '<span>📞 ' + esc(p.tel) + '</span>' : '')
+      + (fmt(p.rentMonthly) ? '<span>月額: ¥' + fmt(p.rentMonthly) + '</span>' : '')
+      + (fmt(p.rentDaily) ? '<span>日額: ¥' + fmt(p.rentDaily) + '</span>' : '')
+      + '</div>'
+      + (p.memo ? '<div style="font-size:12px;color:#4b5563;white-space:pre-wrap">' + esc(p.memo) + '</div>' : '')
+      + (linked ? '<div style="display:flex;gap:4px;flex-wrap:wrap">取引案件: ' + linked + '</div>' : '')
+      + '<div class="pm-card-actions">'
+      + '<button class="pm-btn-edit" onclick="openPMForm(\'' + p.id + '\')">✏ 編集</button>'
+      + '<button class="pm-btn-del" onclick="deletePM(\'' + p.id + '\')">🗑 削除</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function openPMForm(id) {
+  pmEditingId = id || null;
+  clearPMForm();
+  document.getElementById('pmfModalTitle').textContent = id ? '駐車場編集' : '駐車場登録';
+  if (id) {
+    const p = parkingMasters.find(p => p.id === id);
+    if (p) populatePMForm(p);
+  }
+  renderPMCaseLinks(id ? (parkingMasters.find(p=>p.id===id)?.linkedCaseIds||[]) : []);
+  document.getElementById('pmfModalOverlay').classList.remove('hidden');
+}
+
+function closePMForm() {
+  document.getElementById('pmfModalOverlay').classList.add('hidden');
+  pmEditingId = null;
+}
+
+function clearPMForm() {
+  ['pmf_name','pmf_address','pmf_rentMonthly','pmf_rentDaily',
+   'pmf_fee','pmf_keyMoney','pmf_deposit',
+   'pmf_supplierName','pmf_tel','pmf_fax','pmf_email','pmf_memo'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  ['pmf_startProRate','pmf_endProRate'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  const pl = document.getElementById('pmfPhotoList'); if(pl) pl.innerHTML = '';
+  const pp = document.getElementById('pmf_photoProgress'); if(pp) pp.textContent = '';
+  const pf = document.getElementById('pmf_photos'); if(pf) pf.value = '';
+}
+
+function populatePMForm(p) {
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val||''; };
+  set('pmf_name', p.name);
+  set('pmf_address', p.address);
+  set('pmf_rentMonthly', p.rentMonthly);
+  set('pmf_rentDaily', p.rentDaily);
+  set('pmf_fee', p.fee);
+  set('pmf_keyMoney', p.keyMoney);
+  set('pmf_deposit', p.deposit);
+  set('pmf_supplierName', p.supplierName);
+  set('pmf_tel', p.tel);
+  set('pmf_fax', p.fax);
+  set('pmf_email', p.email);
+  set('pmf_memo', p.memo);
+  set('pmf_startProRate', p.startProRate);
+  set('pmf_endProRate', p.endProRate);
+  // 写真サムネイル表示
+  renderPMPhotoList(p.photoUrls || []);
+}
+
+function renderPMCaseLinks(linkedIds) {
+  const container = document.getElementById('pmfLinkList');
+  if (!container) return;
+  const all = cases.filter(c => c.caseNo);
+  if (all.length === 0) {
+    container.innerHTML = '<span style="color:#9ca3af;font-size:13px">案件がありません</span>';
+    return;
+  }
+  container.innerHTML = all.map(c => {
+    const checked = linkedIds.includes(c.id) ? 'checked' : '';
+    return '<label class="pmf-link-item"><input type="checkbox" value="' + c.id + '" ' + checked + '>'
+      + '<span>' + esc(c.caseNo) + (c.siteName ? ' — ' + esc(c.siteName) : '') + '</span></label>';
+  }).join('');
+}
+
+
+// ── 駐車場写真 ──
+function renderPMPhotoList(urls) {
+  const container = document.getElementById('pmfPhotoList');
+  if (!container) return;
+  if (!urls || !urls.length) { container.innerHTML = ''; return; }
+  container.innerHTML = urls.map((url, i) =>
+    '<div style="position:relative;display:inline-block">'
+    + '<img src="' + url + '" style="width:72px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb" loading="lazy">'
+    + '<button onclick="removePMPhoto(' + i + ')" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>'
+    + '</div>'
+  ).join('');
+}
+
+function removePMPhoto(idx) {
+  if (!pmEditingId) return;
+  const pm = parkingMasters.find(p => p.id === pmEditingId);
+  if (!pm || !pm.photoUrls) return;
+  pm.photoUrls.splice(idx, 1);
+  renderPMPhotoList(pm.photoUrls);
+}
+
+async function uploadPMPhotos() {
+  const input = document.getElementById('pmf_photos');
+  const prog = document.getElementById('pmf_photoProgress');
+  if (!input || !input.files.length) return;
+  // Storage SDK を先にロード
+  if (prog) prog.textContent = '準備中…';
+  const sdkOk = await loadStorageSDK();
+  if (!sdkOk || !storage) {
+    showToast('写真保存にはFirebase Storageが必要です（Firebaseコンソールで Storage を有効化してください）');
+    input.value = '';
+    if (prog) prog.textContent = '';
+    return;
+  }
+  const pmId = pmEditingId || uid();
+  if (!pmEditingId) pmEditingId = pmId;
+  const files = Array.from(input.files);
+  let done = 0;
+  if (prog) prog.textContent = 'アップロード中... (0/' + files.length + ')';
+  const newUrls = [];
+  for (const file of files) {
+    try {
+      const ok = true; // already loaded above
+      const ref = storage.ref('parkingMasters/' + pmId + '/' + Date.now() + '_' + file.name);
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+      newUrls.push(url);
+      done++;
+      if (prog) prog.textContent = 'アップロード中... (' + done + '/' + files.length + ')';
+    } catch(e) { showToast('写真アップロード失敗: ' + file.name); }
+  }
+  if (prog) { prog.textContent = done + '枚アップロード完了'; setTimeout(()=>{if(prog)prog.textContent='';},3000); }
+  // 既存のphotoUrlsに追記
+  const pm = parkingMasters.find(p => p.id === pmEditingId);
+  const existing = pm ? (pm.photoUrls || []) : [];
+  const merged = [...existing, ...newUrls];
+  // UIに反映
+  renderPMPhotoList(merged);
+  // parkingMasters配列に仮反映（save時に正式保存）
+  if (pm) pm.photoUrls = merged;
+  else parkingMasters.push({ id: pmEditingId, photoUrls: merged });
+  input.value = '';
+}
+
+
+function filterPMMarkers() {
+  const q = (document.getElementById('pmMapSearch')?.value || '').toLowerCase().trim();
+  if (!pmMap) return;
+  // 全マーカー削除
+  pmMarkers.forEach(m => pmMap.removeLayer(m));
+  pmMarkers = [];
+  const source = q
+    ? parkingMasters.filter(p =>
+        (p.name||'').toLowerCase().includes(q) ||
+        (p.address||'').toLowerCase().includes(q) ||
+        (p.supplierName||'').toLowerCase().includes(q))
+    : parkingMasters;
+  const geo = source.filter(p => p.lat && p.lng);
+  if (!geo.length) { showToast('該当する駐車場がありません'); return; }
+  const fmt = v => v ? v.toLocaleString() : '-';
+  geo.forEach(p => {
+    const popup = '<div class="pm-popup">'
+      + '<b>🅿 ' + esc(p.name) + '</b>'
+      + '<div class="pm-popup-meta">'
+      + (p.address ? '📍 ' + esc(p.address) + '<br>' : '')
+      + (p.supplierName ? '🏢 ' + esc(p.supplierName) + '<br>' : '')
+      + (p.rentMonthly ? '月額賃料: ¥' + fmt(parseInt(p.rentMonthly)) + '<br>' : '')
+      + (p.rentDaily ? '日額賃料: ¥' + fmt(parseInt(p.rentDaily)) + '<br>' : '')
+      + (p.startProRate ? '開始月日割: ' + esc(p.startProRate) + '<br>' : '')
+      + (p.endProRate ? '終了月日割: ' + esc(p.endProRate) + '<br>' : '')
+      + '</div>'
+      + '<a href="#" onclick="closePMModal();setTimeout(function(){openPMForm(\'' + p.id + '\')},100);return false;" style="font-size:12px;color:#1d4ed8">詳細・編集</a>'
+      + '</div>';
+    const marker = L.marker([p.lat, p.lng]).addTo(pmMap).bindPopup(popup);
+    pmMarkers.push(marker);
+  });
+  if (geo.length === 1) {
+    pmMap.setView([geo[0].lat, geo[0].lng], 16);
+    pmMarkers[0].openPopup();
+  } else {
+    pmMap.fitBounds(L.featureGroup(pmMarkers).getBounds().pad(0.2));
+  }
+}
+
+function clearPMMapSearch() {
+  const el = document.getElementById('pmMapSearch');
+  if (el) el.value = '';
+  refreshPMMarkers();
+}
+
+async function geocodePM() {
+  const addr = document.getElementById('pmf_address').value.trim();
+  if (!addr) { showToast('住所を入力してください'); return; }
+  showToast('📍 座標を検索中…');
+  try {
+    // 国土地理院ジオコーディングAPI（日本住所専用・無料）
+    const url = 'https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(addr);
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data || !data.length) {
+      showToast('住所が見つかりませんでした。番地を省いて町名までで再試行してみてください。');
+      return;
+    }
+    // GeoJSON形式: coordinates は [経度, 緯度] の順
+    const lng = parseFloat(data[0].geometry.coordinates[0]);
+    const lat = parseFloat(data[0].geometry.coordinates[1]);
+    const title = data[0].properties.title || addr;
+    document.getElementById('pmf_address').dataset.lat = lat;
+    document.getElementById('pmf_address').dataset.lng = lng;
+    showToast('📍 座標取得成功：' + title);
+  } catch(e) { showToast('ジオコーディングエラー: ' + e.message); }
+}
+
+async function savePM() {
+  const name = document.getElementById('pmf_name').value.trim();
+  const address = document.getElementById('pmf_address').value.trim();
+  if (!name) { showToast('駐車場名を入力してください'); return; }
+  const addrEl = document.getElementById('pmf_address');
+  const lat = addrEl.dataset.lat ? parseFloat(addrEl.dataset.lat) : null;
+  const lng = addrEl.dataset.lng ? parseFloat(addrEl.dataset.lng) : null;
+
+  // If editing, keep existing lat/lng unless re-geocoded
+  let finalLat = lat, finalLng = lng;
+  if (pmEditingId) {
+    const existing = parkingMasters.find(p => p.id === pmEditingId);
+    if (existing && !lat) { finalLat = existing.lat || null; finalLng = existing.lng || null; }
+  }
+
+  const linkedCaseIds = Array.from(document.querySelectorAll('#pmfLinkList input[type=checkbox]:checked')).map(cb => cb.value);
+
+  const obj = {
+    id: pmEditingId || uid(),
+    name,
+    address: address || '',
+    lat: finalLat, lng: finalLng,
+    rentMonthly: document.getElementById('pmf_rentMonthly').value || '',
+    rentDaily: document.getElementById('pmf_rentDaily').value || '',
+    fee: document.getElementById('pmf_fee').value || '',
+    keyMoney: document.getElementById('pmf_keyMoney').value || '',
+    deposit: document.getElementById('pmf_deposit').value || '',
+    supplierName: document.getElementById('pmf_supplierName').value.trim(),
+    tel: document.getElementById('pmf_tel').value.trim(),
+    fax: document.getElementById('pmf_fax').value.trim(),
+    email: document.getElementById('pmf_email').value.trim(),
+    startProRate: document.getElementById('pmf_startProRate').value,
+    endProRate: document.getElementById('pmf_endProRate').value,
+    memo: document.getElementById('pmf_memo').value.trim(),
+    photoUrls: pmEditingId ? (parkingMasters.find(p=>p.id===pmEditingId)?.photoUrls || []) : [],
+    linkedCaseIds,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (pmEditingId) {
+    const idx = parkingMasters.findIndex(p => p.id === pmEditingId);
+    if (idx !== -1) parkingMasters[idx] = obj; else parkingMasters.push(obj);
+  } else {
+    parkingMasters.push(obj);
+  }
+
+  try {
+    await savePMToFS(obj);
+    showToast(pmEditingId ? '駐車場情報を更新しました' : '駐車場を登録しました');
+    closePMForm();
+    renderPMList();
+    if (pmMap) refreshPMMarkers();
+  } catch(e) { /* error already shown */ }
+}
+
+async function deletePM(id) {
+  const p = parkingMasters.find(p => p.id === id);
+  openConfirm('<strong>' + esc(p ? p.name : '') + '</strong> を削除しますか？', async () => {
+    parkingMasters = parkingMasters.filter(p => p.id !== id);
+    try {
+      await deletePMFromFS(id);
+      showToast('駐車場を削除しました');
+      renderPMList();
+      if (pmMap) refreshPMMarkers();
+    } catch(e) {}
+  });
+}
+
 window.addEventListener('DOMContentLoaded', initApp);
 </script>
+
+<!-- ── 駐車場DB モーダル ── -->
+<div class="pm-modal-overlay hidden" id="pmModalOverlay">
+  <div class="pm-modal">
+    <div class="pm-modal-header">
+      <h2>🅿 駐車場データベース</h2>
+      <button class="close-btn" onclick="closePMModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280">×</button>
+    </div>
+    <div class="pm-modal-body">
+      <div class="pm-tabs">
+        <button class="pm-tab active" id="pmTabList" onclick="switchPMTab('list')">📋 一覧</button>
+        <button class="pm-tab" id="pmTabMap" onclick="switchPMTab('map')">🗺 マップ</button>
+      </div>
+      <div class="pm-tab-content">
+        <!-- 一覧タブ -->
+        <div class="pm-tab-pane active" id="pmListPane">
+          <div class="pm-list-header">
+            <input class="pm-search" id="pmSearch" type="text" placeholder="駐車場名・住所・仕入先で検索…" oninput="renderPMList()">
+            <button class="btn btn-primary" onclick="openPMForm(null)" style="font-size:13px;padding:7px 16px">＋ 新規登録</button>
+          </div>
+          <div id="pmListBody" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+        <!-- マップタブ -->
+        <div class="pm-tab-pane" id="pmMapPane" style="position:relative">
+          <div id="pmMapSearchBar" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:6px;width:min(90%,420px)">
+            <input id="pmMapSearch" type="text" placeholder="駐車場名・住所で絞り込み…"
+              style="flex:1;padding:8px 14px;border-radius:8px;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);font-size:14px;outline:none"
+              oninput="filterPMMarkers()" >
+            <button onclick="clearPMMapSearch()" title="クリア"
+              style="padding:8px 12px;border-radius:8px;background:#fff;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:16px;color:#6b7280">✕</button>
+          </div>
+          <div id="pmMap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 駐車場登録/編集 フォームモーダル ── -->
+<div class="pmf-modal-overlay hidden" id="pmfModalOverlay">
+  <div class="pmf-modal">
+    <div class="pmf-modal-header">
+      <h2 id="pmfModalTitle">駐車場登録</h2>
+      <button class="close-btn" onclick="closePMForm()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280">×</button>
+    </div>
+    <div class="pmf-body">
+      <div class="pmf-group">
+        <label>駐車場名 *</label>
+        <input type="text" id="pmf_name" placeholder="例：〇〇パーキング一宮駅前">
+      </div>
+      <div class="pmf-group">
+        <label>住所 *</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="pmf_address" placeholder="例：愛知県一宮市本町3-7-1" style="flex:1">
+          <button class="btn btn-ghost" onclick="geocodePM()" style="font-size:12px;padding:6px 12px;white-space:nowrap">📍 地図取得</button>
+        </div>
+      </div>
+      <div class="pmf-section-title">賃料・費用</div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>月額賃料（税込）</label>
+          <input type="number" id="pmf_rentMonthly" placeholder="例：50000" min="0">
+        </div>
+        <div class="pmf-group">
+          <label>日額賃料（税込）</label>
+          <input type="number" id="pmf_rentDaily" placeholder="例：2000" min="0">
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>手数料（税込）</label>
+          <input type="number" id="pmf_fee" placeholder="例：10000" min="0">
+        </div>
+        <div class="pmf-group">
+          <label>礼金（税込）</label>
+          <input type="number" id="pmf_keyMoney" placeholder="例：50000" min="0">
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>保証金（税込）</label>
+          <input type="number" id="pmf_deposit" placeholder="例：100000" min="0">
+        </div>
+        <div></div>
+      </div>
+      <div class="pmf-section-title">仕入先情報</div>
+      <div class="pmf-group">
+        <label>仕入先名</label>
+        <input type="text" id="pmf_supplierName" placeholder="例：〇〇不動産">
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>電話番号</label>
+          <input type="tel" id="pmf_tel" placeholder="例：0586-12-3456">
+        </div>
+        <div class="pmf-group">
+          <label>FAX番号</label>
+          <input type="tel" id="pmf_fax" placeholder="例：0586-12-3457">
+        </div>
+      </div>
+      <div class="pmf-group">
+        <label>メールアドレス</label>
+        <input type="email" id="pmf_email" placeholder="例：contact@example.com">
+      </div>
+      <div class="pmf-section-title">日割条件</div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>開始月日割</label>
+          <select id="pmf_startProRate">
+            <option value="">未設定</option>
+            <option value="可">可</option>
+            <option value="不可">不可</option>
+            <option value="要相談">要相談</option>
+          </select>
+        </div>
+        <div class="pmf-group">
+          <label>終了月日割</label>
+          <select id="pmf_endProRate">
+            <option value="">未設定</option>
+            <option value="可">可</option>
+            <option value="不可">不可</option>
+            <option value="要相談">要相談</option>
+          </select>
+        </div>
+      </div>
+      <div class="pmf-section-title">駐車場写真</div>
+      <div id="pmfPhotoList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 16px;cursor:pointer;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-weight:500">
+          📷 写真を追加
+          <input type="file" id="pmf_photos" multiple accept="image/*" style="display:none" onchange="uploadPMPhotos()">
+        </label>
+        <span id="pmf_photoProgress" style="font-size:12px;color:#6366f1"></span>
+      </div>
+      <div class="pmf-group">
+        <label>条件メモ</label>
+        <textarea id="pmf_memo" placeholder="特記事項・条件など自由記入"></textarea>
+      </div>
+      <div class="pmf-section-title">過去の取引案件との紐付け</div>
+      <div id="pmfLinkList" class="pmf-link-list">
+        <span style="color:#9ca3af;font-size:13px">案件がありません</span>
+      </div>
+    </div>
+    <div class="pmf-footer">
+      <button class="btn btn-ghost" onclick="closePMForm()">キャンセル</button>
+      <button class="btn btn-primary" onclick="savePM()">保存</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
