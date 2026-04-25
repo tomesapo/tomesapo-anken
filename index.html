@@ -317,6 +317,27 @@
   /* Map popup */
   .pm-popup{min-width:180px}
   .pm-popup b{font-size:14px;display:block;margin-bottom:4px}
+  /* 駐車場DB選択モーダル */
+  .pldb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1300;display:flex;align-items:center;justify-content:center}
+  .pldb-overlay.hidden{display:none}
+  .pldb-modal{background:#fff;border-radius:12px;width:min(96vw,680px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .pldb-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+  .pldb-header h3{font-size:16px;font-weight:700;margin:0;color:#1e3a5f}
+  .pldb-controls{padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+  .pldb-addr{font-size:13px;color:#374151;display:flex;align-items:center;gap:6px}
+  .pldb-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pldb-filters select,.pldb-filters input{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px}
+  .pldb-filters input{flex:1;min-width:160px}
+  .pldb-body{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+  .pldb-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px}
+  .pldb-card:hover{border-color:#93c5fd;background:#f0f9ff}
+  .pldb-card-info{flex:1;display:flex;flex-direction:column;gap:4px}
+  .pldb-card-name{font-weight:700;font-size:14px;color:#1e3a5f}
+  .pldb-card-meta{font-size:12px;color:#6b7280;display:flex;flex-wrap:wrap;gap:4px 12px}
+  .pldb-card-dist{font-size:13px;font-weight:700;color:#2563eb;white-space:nowrap;min-width:52px;text-align:right}
+  .pldb-btn-add{padding:6px 16px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;align-self:center}
+  .pldb-btn-add:hover{background:#2563eb}
+  .pldb-empty{text-align:center;color:#9ca3af;padding:32px;font-size:14px}
   .pm-popup-meta{font-size:12px;color:#4b5563;line-height:1.6}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -544,6 +565,7 @@
         <div class="form-section-title">駐車場情報</div>
         <div id="parkingLotCards"></div>
         <button type="button" class="btn-add-parking" onclick="addParkingLotCard()">&#43; 駐車場を追加</button>
+        <button type="button" class="btn-add-parking" onclick="openPlDbModal()" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;margin-left:8px">🅿 駐車場DBから追加</button>
       </div>
       <div class="form-section">
         <div class="form-section-title">&#128206; 添付ファイル</div>
@@ -3868,23 +3890,23 @@ function renderPMList() {
   }
   const fmt = v => v ? parseInt(v).toLocaleString() : null;
   body.innerHTML = filtered.map(p => {
-    const linked = (p.linkedCaseIds || []).map(id => {
-      const c = cases.find(c => c.id === id);
-      return c ? '<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px">' + esc(c.caseNo) + '</span>' : '';
-    }).filter(Boolean).join(' ');
+    const photos = (p.photoUrls || []).slice(0,3).map(url =>
+      '<img src="' + url + '" style="width:56px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb" loading="lazy">'
+    ).join('');
     return '<div class="pm-card">'
+      + (photos ? '<div style="display:flex;gap:4px;margin-bottom:6px">' + photos + ((p.photoUrls||[]).length > 3 ? '<span style="font-size:11px;color:#6b7280;align-self:center">+' + (p.photoUrls.length-3) + '枚</span>' : '') + '</div>' : '')
       + '<div class="pm-card-title">🅿 ' + esc(p.name)
       + (p.startProRate || p.endProRate ? '<span style="font-size:11px;font-weight:400;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;border:1px solid #bbf7d0">開始:' + esc(p.startProRate||'未設定') + ' 終了:' + esc(p.endProRate||'未設定') + '</span>' : '')
       + '</div>'
       + '<div class="pm-card-meta">'
       + (p.address ? '<span>📍 ' + esc(p.address) + '</span>' : '')
+      + (p.vehicleType ? '<span>🚗 ' + esc(p.vehicleType) + '</span>' : '')
       + (p.supplierName ? '<span>🏢 ' + esc(p.supplierName) + '</span>' : '')
       + (p.tel ? '<span>📞 ' + esc(p.tel) + '</span>' : '')
       + (fmt(p.rentMonthly) ? '<span>月額: ¥' + fmt(p.rentMonthly) + '</span>' : '')
       + (fmt(p.rentDaily) ? '<span>日額: ¥' + fmt(p.rentDaily) + '</span>' : '')
       + '</div>'
       + (p.memo ? '<div style="font-size:12px;color:#4b5563;white-space:pre-wrap">' + esc(p.memo) + '</div>' : '')
-      + (linked ? '<div style="display:flex;gap:4px;flex-wrap:wrap">取引案件: ' + linked + '</div>' : '')
       + '<div class="pm-card-actions">'
       + '<button class="pm-btn-edit" onclick="openPMForm(\'' + p.id + '\')">✏ 編集</button>'
       + '<button class="pm-btn-del" onclick="deletePM(\'' + p.id + '\')">🗑 削除</button>'
@@ -3901,7 +3923,6 @@ function openPMForm(id) {
     const p = parkingMasters.find(p => p.id === id);
     if (p) populatePMForm(p);
   }
-  renderPMCaseLinks(id ? (parkingMasters.find(p=>p.id===id)?.linkedCaseIds||[]) : []);
   document.getElementById('pmfModalOverlay').classList.remove('hidden');
 }
 
@@ -3916,7 +3937,7 @@ function clearPMForm() {
    'pmf_supplierName','pmf_tel','pmf_fax','pmf_email','pmf_memo'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
-  ['pmf_startProRate','pmf_endProRate'].forEach(id => {
+  ['pmf_startProRate','pmf_endProRate','pmf_vehicleType'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
   const pl = document.getElementById('pmfPhotoList'); if(pl) pl.innerHTML = '';
@@ -3940,25 +3961,10 @@ function populatePMForm(p) {
   set('pmf_memo', p.memo);
   set('pmf_startProRate', p.startProRate);
   set('pmf_endProRate', p.endProRate);
+  set('pmf_vehicleType', p.vehicleType);
   // 写真サムネイル表示
   renderPMPhotoList(p.photoUrls || []);
 }
-
-function renderPMCaseLinks(linkedIds) {
-  const container = document.getElementById('pmfLinkList');
-  if (!container) return;
-  const all = cases.filter(c => c.caseNo);
-  if (all.length === 0) {
-    container.innerHTML = '<span style="color:#9ca3af;font-size:13px">案件がありません</span>';
-    return;
-  }
-  container.innerHTML = all.map(c => {
-    const checked = linkedIds.includes(c.id) ? 'checked' : '';
-    return '<label class="pmf-link-item"><input type="checkbox" value="' + c.id + '" ' + checked + '>'
-      + '<span>' + esc(c.caseNo) + (c.siteName ? ' — ' + esc(c.siteName) : '') + '</span></label>';
-  }).join('');
-}
-
 
 // ── 駐車場写真 ──
 function renderPMPhotoList(urls) {
@@ -4108,8 +4114,6 @@ async function savePM() {
     if (existing && !lat) { finalLat = existing.lat || null; finalLng = existing.lng || null; }
   }
 
-  const linkedCaseIds = Array.from(document.querySelectorAll('#pmfLinkList input[type=checkbox]:checked')).map(cb => cb.value);
-
   const obj = {
     id: pmEditingId || uid(),
     name,
@@ -4120,6 +4124,7 @@ async function savePM() {
     fee: document.getElementById('pmf_fee').value || '',
     keyMoney: document.getElementById('pmf_keyMoney').value || '',
     deposit: document.getElementById('pmf_deposit').value || '',
+    vehicleType: document.getElementById('pmf_vehicleType').value,
     supplierName: document.getElementById('pmf_supplierName').value.trim(),
     tel: document.getElementById('pmf_tel').value.trim(),
     fax: document.getElementById('pmf_fax').value.trim(),
@@ -4128,7 +4133,6 @@ async function savePM() {
     endProRate: document.getElementById('pmf_endProRate').value,
     memo: document.getElementById('pmf_memo').value.trim(),
     photoUrls: pmEditingId ? (parkingMasters.find(p=>p.id===pmEditingId)?.photoUrls || []) : [],
-    linkedCaseIds,
     updatedAt: new Date().toISOString()
   };
 
@@ -4161,8 +4165,189 @@ async function deletePM(id) {
   });
 }
 
+// ═══════════════════════════════════════════════
+// ── 駐車場DBから案件駐車場へ追加 ──
+// ═══════════════════════════════════════════════
+let _pldbLat = null, _pldbLng = null;
+
+// Haversine距離計算（km）
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function openPlDbModal() {
+  _pldbLat = null; _pldbLng = null;
+  document.getElementById('plDbOverlay').classList.remove('hidden');
+  document.getElementById('pldbSearch').value = '';
+  document.getElementById('pldbRadius').value = '3';
+
+  // 現場住所を取得
+  const addr = (document.getElementById('f_siteAddress')?.value || '').trim();
+  const addrEl = document.getElementById('pldbSiteAddr');
+  const statusEl = document.getElementById('pldbGeocodeStatus');
+  addrEl.textContent = addr || '（現場住所未入力）';
+
+  if (!addr) {
+    renderPlDbList();
+    return;
+  }
+
+  statusEl.textContent = '座標取得中…';
+  try {
+    const url = 'https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(addr);
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && data.length) {
+      _pldbLng = parseFloat(data[0].geometry.coordinates[0]);
+      _pldbLat = parseFloat(data[0].geometry.coordinates[1]);
+      statusEl.textContent = '✓ 座標取得済み';
+    } else {
+      statusEl.textContent = '（座標取得失敗 — 全件表示）';
+      document.getElementById('pldbRadius').value = '999';
+    }
+  } catch(e) {
+    statusEl.textContent = '（座標取得エラー — 全件表示）';
+    document.getElementById('pldbRadius').value = '999';
+  }
+  renderPlDbList();
+}
+
+function closePlDbModal() {
+  document.getElementById('plDbOverlay').classList.add('hidden');
+}
+
+function renderPlDbList() {
+  const list = document.getElementById('pldbList');
+  const radius = parseFloat(document.getElementById('pldbRadius').value);
+  const q = (document.getElementById('pldbSearch')?.value || '').toLowerCase();
+
+  // 距離計算 & フィルタリング
+  let items = parkingMasters.map(p => {
+    let dist = null;
+    if (_pldbLat && _pldbLng && p.lat && p.lng) {
+      dist = haversineKm(_pldbLat, _pldbLng, p.lat, p.lng);
+    }
+    return { ...p, dist };
+  });
+
+  // 半径フィルタ（座標がある場合のみ）
+  if (_pldbLat && _pldbLng && radius < 999) {
+    items = items.filter(p => p.dist === null || p.dist <= radius);
+  }
+
+  // テキスト絞り込み
+  if (q) {
+    items = items.filter(p =>
+      (p.name||'').toLowerCase().includes(q) ||
+      (p.address||'').toLowerCase().includes(q) ||
+      (p.supplierName||'').toLowerCase().includes(q)
+    );
+  }
+
+  // 距離順ソート（距離なしは末尾）
+  items.sort((a, b) => {
+    if (a.dist === null && b.dist === null) return 0;
+    if (a.dist === null) return 1;
+    if (b.dist === null) return -1;
+    return a.dist - b.dist;
+  });
+
+  if (!items.length) {
+    list.innerHTML = '<div class="pldb-empty">条件に該当する駐車場がありません</div>';
+    return;
+  }
+
+  const fmt = v => v ? parseInt(v).toLocaleString() : null;
+  list.innerHTML = items.map(p => {
+    const distStr = p.dist !== null ? (p.dist < 1 ? Math.round(p.dist*1000) + 'm' : p.dist.toFixed(1) + 'km') : '距離不明';
+    const photo = (p.photoUrls && p.photoUrls[0]) ? '<img src="' + p.photoUrls[0] + '" style="width:60px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;flex-shrink:0" loading="lazy">' : '';
+    const rentStr = fmt(p.rentMonthly) ? '月額¥' + fmt(p.rentMonthly) : fmt(p.rentDaily) ? '日額¥' + fmt(p.rentDaily) : '';
+    return '<div class="pldb-card">'
+      + (photo ? photo : '')
+      + '<div class="pldb-card-info">'
+      + '<div class="pldb-card-name">🅿 ' + esc(p.name) + '</div>'
+      + '<div class="pldb-card-meta">'
+      + (p.address ? '<span>📍 ' + esc(p.address) + '</span>' : '')
+      + (p.vehicleType ? '<span>🚗 ' + esc(p.vehicleType) + '</span>' : '')
+      + (p.supplierName ? '<span>🏢 ' + esc(p.supplierName) + '</span>' : '')
+      + (p.tel ? '<span>📞 ' + esc(p.tel) + '</span>' : '')
+      + (rentStr ? '<span>💴 ' + rentStr + '</span>' : '')
+      + (p.startProRate || p.endProRate ? '<span>日割 開始:' + esc(p.startProRate||'-') + ' 終了:' + esc(p.endProRate||'-') + '</span>' : '')
+      + '</div>'
+      + (p.memo ? '<div style="font-size:11px;color:#6b7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px">' + esc(p.memo) + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+      + '<span class="pldb-card-dist">' + distStr + '</span>'
+      + '<button class="pldb-btn-add" onclick="selectPlFromDb(\'' + p.id + '\')">＋ 追加</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function selectPlFromDb(pmId) {
+  const p = parkingMasters.find(p => p.id === pmId);
+  if (!p) return;
+
+  // 駐車場DBデータを案件の駐車場カードへ転記
+  const pl = {
+    name: p.name || '',
+    address: p.address || '',
+    vehicleType: p.vehicleType || '',
+    supplierName: p.supplierName || '',
+    supplierPhone: p.tel || '',
+    supplierFax: p.fax || '',
+    rateType: p.rentMonthly ? 'monthly' : (p.rentDaily ? 'daily' : 'monthly'),
+    monthlyRent: p.rentMonthly ? parseFloat(p.rentMonthly) : null,
+    dailyRent: p.rentDaily ? parseFloat(p.rentDaily) : null,
+    adminFee: p.fee ? parseFloat(p.fee) : null,
+    keyMoney: p.keyMoney ? parseFloat(p.keyMoney) : null,
+    deposit: p.deposit ? parseFloat(p.deposit) : null,
+    startProRate: p.startProRate === '可',
+    endProRate: p.endProRate === '可',
+    lotNote: p.memo || '',
+    photo: (p.photoUrls && p.photoUrls[0]) ? p.photoUrls[0] : '',
+  };
+
+  addParkingLotCard(pl);
+  closePlDbModal();
+  showToast('🅿 ' + esc(p.name) + ' を駐車場に追加しました');
+}
+
 window.addEventListener('DOMContentLoaded', initApp);
 </script>
+
+<!-- ── 駐車場DB選択モーダル ── -->
+<div class="pldb-overlay hidden" id="plDbOverlay">
+  <div class="pldb-modal">
+    <div class="pldb-header">
+      <h3>🅿 駐車場DBから選択</h3>
+      <button onclick="closePlDbModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280">×</button>
+    </div>
+    <div class="pldb-controls">
+      <div class="pldb-addr">
+        <span style="color:#6b7280">📍 現場住所：</span>
+        <span id="pldbSiteAddr" style="font-weight:500">-</span>
+        <span id="pldbGeocodeStatus" style="font-size:11px;color:#6366f1"></span>
+      </div>
+      <div class="pldb-filters">
+        <select id="pldbRadius" onchange="renderPlDbList()">
+          <option value="1">1km以内</option>
+          <option value="3" selected>3km以内</option>
+          <option value="5">5km以内</option>
+          <option value="10">10km以内</option>
+          <option value="999">全件表示</option>
+        </select>
+        <input id="pldbSearch" type="text" placeholder="名称・住所・仕入先で絞り込み…" oninput="renderPlDbList()">
+      </div>
+    </div>
+    <div class="pldb-body" id="pldbList">
+      <div class="pldb-empty">検索中…</div>
+    </div>
+  </div>
+</div>
 
 <!-- ── 駐車場DB モーダル ── -->
 <div class="pm-modal-overlay hidden" id="pmModalOverlay">
@@ -4246,7 +4431,16 @@ window.addEventListener('DOMContentLoaded', initApp);
           <label>保証金（税込）</label>
           <input type="number" id="pmf_deposit" placeholder="例：100000" min="0">
         </div>
-        <div></div>
+        <div class="pmf-group">
+          <label>対応車両</label>
+          <select id="pmf_vehicleType">
+            <option value="">（未選択）</option>
+            <option value="軽自動車のみ">軽自動車のみ</option>
+            <option value="普通車まで">普通車まで</option>
+            <option value="普通車・工事関係車両(ﾊｲｴｰｽ程度)">普通車・工事関係車両(ﾊｲｴｰｽ程度)</option>
+            <option value="工事関係車両可(条件有り)">工事関係車両可(条件有り)</option>
+          </select>
+        </div>
       </div>
       <div class="pmf-section-title">仕入先情報</div>
       <div class="pmf-group">
@@ -4300,10 +4494,6 @@ window.addEventListener('DOMContentLoaded', initApp);
       <div class="pmf-group">
         <label>条件メモ</label>
         <textarea id="pmf_memo" placeholder="特記事項・条件など自由記入"></textarea>
-      </div>
-      <div class="pmf-section-title">過去の取引案件との紐付け</div>
-      <div id="pmfLinkList" class="pmf-link-list">
-        <span style="color:#9ca3af;font-size:13px">案件がありません</span>
       </div>
     </div>
     <div class="pmf-footer">
