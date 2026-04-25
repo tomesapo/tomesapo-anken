@@ -317,6 +317,56 @@
   /* Map popup */
   .pm-popup{min-width:180px}
   .pm-popup b{font-size:14px;display:block;margin-bottom:4px}
+  /* ── ⑤ 売上集計ビュー ── */
+  .sv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center}
+  .sv-overlay.hidden{display:none}
+  .sv-modal{background:#fff;border-radius:12px;width:min(96vw,860px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .sv-header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0;background:var(--primary);color:white;border-radius:12px 12px 0 0}
+  .sv-header h2{font-size:18px;font-weight:700;margin:0;flex:1;color:white}
+  .sv-close-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit}
+  .sv-close-btn:hover{background:rgba(255,255,255,.3)}
+  .sv-tabs{display:flex;gap:4px;padding:12px 16px 0;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+  .sv-tab{padding:8px 20px;border-radius:8px 8px 0 0;border:1px solid transparent;background:none;cursor:pointer;font-size:14px;font-weight:500;color:#6b7280}
+  .sv-tab.active{background:#fff;border-color:#e5e7eb;border-bottom-color:#fff;color:#1e3a5f;margin-bottom:-1px}
+  .sv-body{flex:1;overflow-y:auto;padding:16px}
+  .sv-filter-row{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .sv-filter-row select,.sv-filter-row input{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px}
+  .sv-table{width:100%;border-collapse:collapse;font-size:13px}
+  .sv-table th{background:#1e3a5f;color:#fff;padding:9px 12px;text-align:right;font-weight:600;white-space:nowrap;position:sticky;top:0}
+  .sv-table th:first-child{text-align:left}
+  .sv-table th:nth-child(2){text-align:left}
+  .sv-table td{padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:right;vertical-align:top}
+  .sv-table td:first-child{text-align:left;font-weight:600;color:#1e3a5f}
+  .sv-table td:nth-child(2){text-align:left;color:#6b7280}
+  .sv-table tr:hover td{background:#f0f9ff}
+  .sv-table tr.sv-total td{background:#f0fdf4;font-weight:700;border-top:2px solid #16a34a}
+  .sv-profit-pos{color:#16a34a}
+  .sv-profit-neg{color:#dc2626}
+  .sv-badge-add{font-size:10px;background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 4px;margin-left:4px;font-weight:600}
+  .sv-badge-ext{font-size:10px;background:#ede9fe;color:#5b21b6;border-radius:3px;padding:1px 4px;margin-left:4px;font-weight:600}
+  /* ── ① 契約期間アラート ── */
+  .alert-bar{padding:0 20px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
+  .alert-card{display:flex;align-items:center;gap:12px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;font-size:13px}
+  .alert-card.urgent{background:#fef2f2;border-color:#fca5a5}
+  .alert-icon{font-size:18px;flex-shrink:0}
+  .alert-body{flex:1}
+  .alert-title{font-weight:700;color:#92400e}
+  .alert-card.urgent .alert-title{color:#991b1b}
+  .alert-sub{color:#6b7280;font-size:12px;margin-top:2px}
+  .alert-days{font-weight:700;font-size:14px;white-space:nowrap;color:#ea580c}
+  .alert-card.urgent .alert-days{color:#dc2626}
+  .alert-link{padding:4px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap}
+  .alert-link:hover{background:#2563eb}
+  /* ── ② ステータス履歴タイムライン ── */
+  .status-timeline{display:flex;flex-direction:column;gap:0}
+  .tl-item{display:flex;align-items:flex-start;gap:10px;padding:6px 0;position:relative}
+  .tl-item:not(:last-child)::after{content:'';position:absolute;left:9px;top:22px;bottom:-6px;width:2px;background:#e5e7eb}
+  .tl-dot{width:20px;height:20px;border-radius:50%;border:2px solid #1e3a5f;background:#fff;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center}
+  .tl-dot.current{background:#1e3a5f}
+  .tl-dot.current::after{content:'';width:8px;height:8px;border-radius:50%;background:#fff}
+  .tl-content{flex:1}
+  .tl-status{font-weight:600;font-size:13px;color:#1e3a5f}
+  .tl-date{font-size:11px;color:#9ca3af;margin-top:1px}
   /* 駐車場DB選択モーダル */
   .pldb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1300;display:flex;align-items:center;justify-content:center}
   .pldb-overlay.hidden{display:none}
@@ -365,6 +415,9 @@
     <button class="btn btn-ghost" onclick="openPMModal()">
       🅿 駐車場DB
     </button>
+    <button class="btn btn-ghost" onclick="openSalesView()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>売上集計
+    </button>
     <button class="btn btn-ghost" onclick="openMonthlyReport()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><rect x="12" y="13" width="3" height="5" fill="currentColor" stroke="none"/><rect x="16" y="11" width="3" height="7" fill="currentColor" stroke="none"/><rect x="8" y="15" width="3" height="3" fill="currentColor" stroke="none"/></svg>月次レポート
     </button>
@@ -398,6 +451,22 @@
   </div>
 </div>
 
+<!-- ── ⑤ 売上集計ビュー ── -->
+<div class="sv-overlay hidden" id="svOverlay">
+  <div class="sv-modal">
+    <div class="sv-header">
+      <h2>📊 売上集計<span style="font-size:12px;font-weight:normal;color:rgba(255,255,255,.7);margin-left:10px">未請求・請求済・入金済のみ対象</span></h2>
+      <button class="sv-close-btn" onclick="exportSalesExcel()">📊 Excel出力</button>
+      <button class="sv-close-btn" onclick="closeSalesView()">✕ 閉じる</button>
+    </div>
+    <div class="sv-tabs">
+      <button class="sv-tab active" id="svTabCustomer" onclick="switchSalesTab('customer')">👥 顧客別</button>
+      <button class="sv-tab" id="svTabSite" onclick="switchSalesTab('site')">📍 現場別</button>
+    </div>
+    <div class="sv-body" id="svBody"></div>
+  </div>
+</div>
+
 <div class="monthly-overlay" id="monthlyOverlay">
   <div class="monthly-panel">
     <div class="monthly-header">
@@ -423,6 +492,7 @@
   </div>
 
   <div class="stats-bar" id="statsBar"></div>
+  <div class="alert-bar" id="alertBar"></div>
 
   <div class="controls">
     <div class="controls-left">
@@ -1272,8 +1342,14 @@ async function saveCase() {
   const estP=parseFloat((document.getElementById('f_estPurchase').value||'').replace(/,/g,''))||null;
   const fixS=parseFloat((document.getElementById('f_fixedSales').value||'').replace(/,/g,''))||null;
   const fixP=parseFloat((document.getElementById('f_fixedPurchase').value||'').replace(/,/g,''))||null;
+  const newStatus = document.getElementById('f_status').value;
+  const oldCase = editingId ? cases.find(c=>c.id===editingId) : null;
+  const statusHistory = oldCase ? (oldCase.statusHistory||[]).slice() : [];
+  if (!oldCase || oldCase.status !== newStatus) {
+    statusHistory.push({ status: newStatus, changedAt: new Date().toISOString() });
+  }
   const data={
-    caseNo, status:document.getElementById('f_status').value,
+    caseNo, status: newStatus,
     customerName:cust.name, baseName, staffName, siteName,
     siteAddress:document.getElementById('f_siteAddress').value.trim(),
     receptionDate:document.getElementById('f_receptionDate').value,
@@ -1299,6 +1375,7 @@ async function saveCase() {
     caseType:document.getElementById('f_caseType')?.value||'通常',
     parentCaseNo:document.getElementById('f_parentCaseNo')?.value.trim()||null,
     parkingLots:getParkingLotsFromForm(),
+    statusHistory,
     updatedAt:new Date().toISOString(),
   };
   const savedEditingId = editingId;
@@ -1347,6 +1424,17 @@ function openDetail(id) {
     html+='</div>';
   }
   if(c.caseNote){html+='<div class="detail-section"><div class="detail-section-title">案件メモ</div><div style="font-size:13px;color:var(--gray-700);line-height:1.7;white-space:pre-wrap">'+esc(c.caseNote)+'</div></div>';}
+  if(c.statusHistory&&c.statusHistory.length){
+    html+='<div class="detail-section"><div class="detail-section-title">ステータス履歴</div><div class="status-timeline">';
+    const hist=[...c.statusHistory].reverse();
+    hist.forEach((h,i)=>{
+      const isCurrent=(i===0);
+      const dt=h.changedAt?new Date(h.changedAt):null;
+      const dtStr=dt?dt.getFullYear()+'/'+(dt.getMonth()+1)+'/'+(dt.getDate())+' '+(dt.getHours()).toString().padStart(2,'0')+':'+(dt.getMinutes()).toString().padStart(2,'0'):'';
+      html+='<div class="tl-item"><div class="tl-dot'+(isCurrent?' current':'')+'"></div><div class="tl-content"><div class="tl-status"><span class="status-badge s-'+h.status+'">'+h.status+'</span></div><div class="tl-date">'+dtStr+'</div></div></div>';
+    });
+    html+='</div></div>';
+  }
   if(c.parkingLots&&c.parkingLots.length){html+=renderParkingLotsDetail(c);}
   document.getElementById('detailBody').innerHTML=html;
   document.getElementById('detailOverlay').classList.add('open');
@@ -1410,7 +1498,7 @@ function getFiltered(){
   });
   return data;
 }
-function renderAll(){renderTable();renderCards();}
+function renderAll(){renderTable();renderCards();renderContractAlerts();}
 
 // ── PC テーブル ──
 function renderTable(){
@@ -3808,6 +3896,304 @@ async function deleteFile(caseId,fileName){
 }
 
 // ═══════════════════════════════════════════════
+// ── ⑤ 売上集計ビュー ──
+// ═══════════════════════════════════════════════
+let _svTab = 'customer';
+let _svYear = '';
+
+function openSalesView() {
+  _svYear = '';
+  document.getElementById('svOverlay').classList.remove('hidden');
+  switchSalesTab('customer');
+}
+function closeSalesView() {
+  document.getElementById('svOverlay').classList.add('hidden');
+}
+function switchSalesTab(tab) {
+  _svTab = tab;
+  document.getElementById('svTabCustomer').classList.toggle('active', tab === 'customer');
+  document.getElementById('svTabSite').classList.toggle('active', tab === 'site');
+  renderSalesView();
+}
+
+// ベース案件番号を取得（-T1/-E1 等のサフィックスを除去）
+function baseCaseNo(c) {
+  if (c.parentCaseNo) return c.parentCaseNo;
+  return c.caseNo;
+}
+
+// 売上集計対象ステータス（未請求以降）
+const SV_TARGET_STATUSES = ['未請求', '請求済', '入金済'];
+
+// 対象年度 × 対象ステータスで案件を絞り込む
+function svFilteredCases() {
+  let result = cases.filter(c => SV_TARGET_STATUSES.includes(c.status));
+  if (_svYear) result = result.filter(c => (c.receptionDate||c.createdAt||'').startsWith(_svYear));
+  return result;
+}
+
+// 利用可能な年一覧（集計対象ステータスの案件のみ）
+function svYears() {
+  const ys = new Set();
+  cases.filter(c => SV_TARGET_STATUSES.includes(c.status)).forEach(c => {
+    const y = (c.receptionDate||c.createdAt||'').slice(0,4);
+    if (y) ys.add(y);
+  });
+  return [...ys].sort().reverse();
+}
+
+function renderSalesView() {
+  const body = document.getElementById('svBody');
+  const years = svYears();
+  const yearOpts = '<option value="">全期間</option>' + years.map(y => `<option value="${y}" ${_svYear===y?'selected':''}>${y}年</option>`).join('');
+  const filterHtml = `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_svYear=this.value;renderSalesView()">${yearOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">受付日で絞り込み</span></div>`;
+
+  if (_svTab === 'customer') body.innerHTML = filterHtml + renderSalesCustomer();
+  else body.innerHTML = filterHtml + renderSalesSite();
+}
+
+function renderSalesCustomer() {
+  const src = svFilteredCases();
+  // 顧客ごとに集計
+  const map = {};
+  src.forEach(c => {
+    const key = c.customerName || '（未設定）';
+    if (!map[key]) map[key] = { name: key, total: 0, purchase: 0, caseCount: 0, addCount: 0, extCount: 0 };
+    const g = map[key];
+    const isBase = !c.caseType || c.caseType === '通常';
+    if (isBase) g.caseCount++;
+    if (c.caseType === '追加') g.addCount++;
+    if (c.caseType === '延長') g.extCount++;
+    g.total += c.fixedSales || 0;
+    g.purchase += c.fixedPurchase || 0;
+  });
+  const rows = Object.values(map).sort((a,b) => b.total - a.total);
+  const totSales = rows.reduce((s,r)=>s+r.total,0);
+  const totPurchase = rows.reduce((s,r)=>s+r.purchase,0);
+  const totCases = rows.reduce((s,r)=>s+r.caseCount,0);
+  const f = v => v ? '¥' + Math.round(v).toLocaleString() : '-';
+  const pct = (s,p) => s ? Math.round((s-p)/s*100) + '%' : '-';
+  const profitCls = v => v > 0 ? ' class="sv-profit-pos"' : v < 0 ? ' class="sv-profit-neg"' : '';
+  let html = '<table class="sv-table"><thead><tr><th>顧客名</th><th>契約数</th><th>追加/延長</th><th>確定売上（税別）</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const profit = r.total - r.purchase;
+    const addBadge = r.addCount ? `<span class="sv-badge-add">追加×${r.addCount}</span>` : '';
+    const extBadge = r.extCount ? `<span class="sv-badge-ext">延長×${r.extCount}</span>` : '';
+    html += `<tr><td>${esc(r.name)}</td><td style="text-align:right">${r.caseCount}件</td><td style="text-align:left">${addBadge}${extBadge}</td><td>${f(r.total)}</td><td>${f(r.purchase)}</td><td${profitCls(profit)}>${f(profit)}</td><td>${pct(r.total,r.purchase)}</td></tr>`;
+  });
+  const totProfit = totSales - totPurchase;
+  html += `<tr class="sv-total"><td>合計</td><td style="text-align:right">${totCases}件</td><td></td><td>${f(totSales)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderSalesSite() {
+  const src = svFilteredCases();
+  // 現場単位（ベース案件番号）でグループ化
+  const map = {};
+  src.forEach(c => {
+    const key = baseCaseNo(c);
+    if (!map[key]) {
+      const base = src.find(x => x.caseNo === key) || c;
+      map[key] = { baseCaseNo: key, siteName: base.siteName||'-', customerName: base.customerName||'-', sales: 0, purchase: 0, cases: [] };
+    }
+    map[key].sales += c.fixedSales || 0;
+    map[key].purchase += c.fixedPurchase || 0;
+    map[key].cases.push(c);
+  });
+  const rows = Object.values(map).sort((a,b) => b.sales - a.sales);
+  const totSales = rows.reduce((s,r)=>s+r.sales,0);
+  const totPurchase = rows.reduce((s,r)=>s+r.purchase,0);
+  const f = v => v ? '¥' + Math.round(v).toLocaleString() : '-';
+  const pct = (s,p) => s ? Math.round((s-p)/s*100) + '%' : '-';
+  const profitCls = v => v > 0 ? ' class="sv-profit-pos"' : v < 0 ? ' class="sv-profit-neg"' : '';
+  let html = '<table class="sv-table"><thead><tr><th>案件番号</th><th>現場名 / 顧客名</th><th>内訳</th><th>確定売上（税別）</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const profit = r.sales - r.purchase;
+    const addCases = r.cases.filter(c=>c.caseType==='追加');
+    const extCases = r.cases.filter(c=>c.caseType==='延長');
+    const addBadge = addCases.length ? `<span class="sv-badge-add">追加×${addCases.length}</span>` : '';
+    const extBadge = extCases.length ? `<span class="sv-badge-ext">延長×${extCases.length}</span>` : '';
+    html += `<tr>
+      <td>${esc(r.baseCaseNo)}</td>
+      <td><div>${esc(r.siteName)}</div><div style="font-size:11px;color:#9ca3af">${esc(r.customerName)}</div></td>
+      <td style="text-align:left">${addBadge}${extBadge}</td>
+      <td>${f(r.sales)}</td><td>${f(r.purchase)}</td>
+      <td${profitCls(profit)}>${f(profit)}</td>
+      <td>${pct(r.sales,r.purchase)}</td>
+    </tr>`;
+  });
+  const totProfit = totSales - totPurchase;
+  html += `<tr class="sv-total"><td colspan="2">合計 ${rows.length}現場</td><td></td><td>${f(totSales)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
+  html += '</tbody></table>';
+  return html;
+}
+
+function exportSalesExcel() {
+  const wb = XLSX.utils.book_new();
+  const fv = v => v ? Math.round(v) : 0;
+  const fp = (s,p) => s ? Math.round((s-p)/s*100) : 0;
+
+  // 全セルに適用する共通スタイルを生成
+  function makeStyle(overrides) {
+    return Object.assign({
+      font: { name: 'Noto Sans JP', sz: 11 },
+      alignment: { vertical: 'center', wrapText: false }
+    }, overrides);
+  }
+  // aoa（配列の配列）からスタイル付きワークシートを生成
+  function aoaToStyledSheet(data) {
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) ws[addr] = { t: 'z', v: '' };
+        const isHeader = (R === 0);
+        ws[addr].s = makeStyle(isHeader ? {
+          font: { name: 'Noto Sans JP', sz: 11, bold: true },
+          fill: { fgColor: { rgb: 'D5E8F0' } },
+          alignment: { vertical: 'center', horizontal: 'center' }
+        } : {});
+      }
+    }
+    return ws;
+  }
+
+  const src = svFilteredCases();
+
+  // 顧客別シート
+  const custData = [['顧客名','契約数','追加件数','延長件数','確定売上(税別)','確定仕入(税別)','確定粗利','粗利率(%)']];
+  const cmap = {};
+  src.forEach(c => {
+    const k = c.customerName||'未設定';
+    if (!cmap[k]) cmap[k] = { name:k, total:0, purchase:0, caseCount:0, addCount:0, extCount:0 };
+    const g = cmap[k];
+    if (!c.caseType||c.caseType==='通常') g.caseCount++;
+    if (c.caseType==='追加') g.addCount++;
+    if (c.caseType==='延長') g.extCount++;
+    g.total += c.fixedSales||0; g.purchase += c.fixedPurchase||0;
+  });
+  Object.values(cmap).sort((a,b)=>b.total-a.total).forEach(r => {
+    custData.push([r.name, r.caseCount, r.addCount, r.extCount, fv(r.total), fv(r.purchase), fv(r.total-r.purchase), fp(r.total,r.purchase)]);
+  });
+  const wsC = aoaToStyledSheet(custData);
+  wsC['!cols'] = [28,10,10,10,18,18,14,10].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, wsC, '顧客別');
+
+  // 現場別シート
+  const siteData = [['案件番号','現場名','顧客名','追加件数','延長件数','確定売上(税別)','確定仕入(税別)','確定粗利','粗利率(%)']];
+  const smap = {};
+  src.forEach(c => {
+    const k = baseCaseNo(c);
+    if (!smap[k]) { const b=src.find(x=>x.caseNo===k)||c; smap[k]={key:k,siteName:b.siteName||'-',custName:b.customerName||'-',sales:0,purchase:0,addCount:0,extCount:0}; }
+    smap[k].sales += c.fixedSales||0; smap[k].purchase += c.fixedPurchase||0;
+    if (c.caseType==='追加') smap[k].addCount++;
+    if (c.caseType==='延長') smap[k].extCount++;
+  });
+  Object.values(smap).sort((a,b)=>b.sales-a.sales).forEach(r => {
+    siteData.push([r.key, r.siteName, r.custName, r.addCount, r.extCount, fv(r.sales), fv(r.purchase), fv(r.sales-r.purchase), fp(r.sales,r.purchase)]);
+  });
+  const wsS = aoaToStyledSheet(siteData);
+  wsS['!cols'] = [14,28,20,10,10,18,18,14,10].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, wsS, '現場別');
+
+  XLSX.writeFile(wb, '売上集計' + (_svYear ? '_' + _svYear : '') + '.xlsx');
+}
+
+// ═══════════════════════════════════════════════
+// ── ① 契約期間アラート ──
+// ═══════════════════════════════════════════════
+function renderContractAlerts() {
+  const bar = document.getElementById('alertBar');
+  if (!bar) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const alerts = [];
+  cases.forEach(c => {
+    if (!c.parkingLots) return;
+    c.parkingLots.forEach(pl => {
+      if (!pl.contractEnd) return;
+      const end = new Date(pl.contractEnd); end.setHours(0,0,0,0);
+      const diff = Math.round((end - today) / 86400000);
+      if (diff <= 14) {
+        alerts.push({ c, pl, diff });
+      }
+    });
+  });
+  alerts.sort((a,b) => a.diff - b.diff);
+  if (!alerts.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = alerts.map(({c, pl, diff}) => {
+    const urgent = diff <= 3;
+    const diffStr = diff < 0 ? '終了済み (' + Math.abs(diff) + '日経過)' : diff === 0 ? '本日終了' : diff + '日後に終了';
+    return '<div class="alert-card' + (urgent ? ' urgent' : '') + '">'
+      + '<span class="alert-icon">' + (urgent ? '🚨' : '⚠️') + '</span>'
+      + '<div class="alert-body">'
+      + '<div class="alert-title">' + esc(c.caseNo) + '　' + esc(c.siteName) + '</div>'
+      + '<div class="alert-sub">駐車場：' + esc(pl.name||'名称未設定') + '　契約終了日：' + pl.contractEnd.replace(/-/g,'/') + '</div>'
+      + '</div>'
+      + '<span class="alert-days">' + diffStr + '</span>'
+      + '<button class="alert-link" onclick="openDetail(\'' + c.id + '\')">詳細</button>'
+      + '</div>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ── ④ マップ上の案件ピン ──
+// ═══════════════════════════════════════════════
+let _showCaseMarkers = false, _caseMarkers = [], _caseGeoCache = {};
+
+function toggleCaseMarkers() {
+  _showCaseMarkers = !_showCaseMarkers;
+  const btn = document.getElementById('pmCaseToggleBtn');
+  if (btn) {
+    btn.style.background = _showCaseMarkers ? '#1e3a5f' : '#fff';
+    btn.style.color = _showCaseMarkers ? '#fff' : '#374151';
+    btn.textContent = _showCaseMarkers ? '📍 案件を非表示' : '📍 案件を表示';
+  }
+  if (_showCaseMarkers) refreshCaseMarkers();
+  else { _caseMarkers.forEach(m => pmMap && pmMap.removeLayer(m)); _caseMarkers = []; }
+}
+
+// オレンジ色の案件用アイコン
+function createCaseIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;background:#ea580c;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.3);transform:rotate(-45deg);margin-top:-4px"></div>',
+    iconSize: [24, 28], iconAnchor: [12, 28], popupAnchor: [0, -28]
+  });
+}
+
+async function refreshCaseMarkers() {
+  if (!pmMap || !_showCaseMarkers) return;
+  _caseMarkers.forEach(m => pmMap.removeLayer(m));
+  _caseMarkers = [];
+  const targets = cases.filter(c => c.siteAddress && (c.status === '調査中' || c.status === '未調査' || c.status === '再調査' || c.status === '提案済' || c.status === '未申込' || c.status === '契約中'));
+  for (const c of targets) {
+    const addr = c.siteAddress;
+    if (!_caseGeoCache[addr]) {
+      try {
+        const res = await fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(addr));
+        const data = await res.json();
+        if (data && data.length) {
+          _caseGeoCache[addr] = { lat: parseFloat(data[0].geometry.coordinates[1]), lng: parseFloat(data[0].geometry.coordinates[0]) };
+        } else { _caseGeoCache[addr] = null; }
+      } catch(e) { _caseGeoCache[addr] = null; }
+    }
+    const geo = _caseGeoCache[addr];
+    if (!geo) continue;
+    const popup = '<div class="pm-popup">'
+      + '<b style="color:#ea580c">📋 ' + esc(c.caseNo) + '</b>'
+      + '<div class="pm-popup-meta">'
+      + (c.siteName ? esc(c.siteName) + '<br>' : '')
+      + (c.siteAddress ? '📍 ' + esc(c.siteAddress) + '<br>' : '')
+      + '<span class="status-badge s-' + c.status + '">' + c.status + '</span>'
+      + '</div></div>';
+    const marker = L.marker([geo.lat, geo.lng], { icon: createCaseIcon() }).addTo(pmMap).bindPopup(popup);
+    _caseMarkers.push(marker);
+  }
+}
+
+// ═══════════════════════════════════════════════
 // ── 駐車場データベース ──
 // ═══════════════════════════════════════════════
 let pmMap = null, pmEditingId = null, pmMarkers = [];
@@ -4372,12 +4758,17 @@ window.addEventListener('DOMContentLoaded', initApp);
         </div>
         <!-- マップタブ -->
         <div class="pm-tab-pane" id="pmMapPane" style="position:relative">
-          <div id="pmMapSearchBar" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:6px;width:min(90%,420px)">
-            <input id="pmMapSearch" type="text" placeholder="駐車場名・住所で絞り込み…"
-              style="flex:1;padding:8px 14px;border-radius:8px;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);font-size:14px;outline:none"
-              oninput="filterPMMarkers()" >
-            <button onclick="clearPMMapSearch()" title="クリア"
-              style="padding:8px 12px;border-radius:8px;background:#fff;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:16px;color:#6b7280">✕</button>
+          <div id="pmMapSearchBar" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;width:min(90%,480px)">
+            <div style="display:flex;gap:6px">
+              <button id="pmCaseToggleBtn" onclick="toggleCaseMarkers()" style="padding:8px 14px;border-radius:8px;background:#fff;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:13px;font-weight:600;color:#374151;white-space:nowrap">📍 案件を表示</button>
+            </div>
+            <div style="display:flex;gap:6px">
+              <input id="pmMapSearch" type="text" placeholder="駐車場名・住所で絞り込み…"
+                style="flex:1;padding:8px 14px;border-radius:8px;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);font-size:14px;outline:none"
+                oninput="filterPMMarkers()" >
+              <button onclick="clearPMMapSearch()" title="クリア"
+                style="padding:8px 12px;border-radius:8px;background:#fff;border:1px solid #d1d5db;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:16px;color:#6b7280">✕</button>
+            </div>
           </div>
           <div id="pmMap"></div>
         </div>
