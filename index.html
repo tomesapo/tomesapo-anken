@@ -3983,6 +3983,17 @@ function buildMonthlyData(period) {
             }
           }
 
+          // 契約開始月に一時金（礼金・事務手数料・調整金）を加算
+          if (isF) {
+            var quoteAdmin = pl.quoteAdminFee != null ? pl.quoteAdminFee : (pl.adminFee || 0);
+            var quoteKey   = pl.quoteKeyMoney != null ? pl.quoteKeyMoney : (pl.keyMoney  || 0);
+            var costAdmin  = pl.adminFee || 0;
+            var costKey    = pl.keyMoney || 0;
+            salesAmt += units * (quoteAdmin + quoteKey);
+            costAmt  += units * (costAdmin  + costKey);
+            if (pl.adjustmentAmount) costAmt += pl.adjustmentAmount;
+          }
+
           var costExcl = Math.round(costAmt / 1.1);
           result[idx].sales    += salesAmt;
           result[idx].purchase += costExcl;
