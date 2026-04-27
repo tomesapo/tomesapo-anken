@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <!-- Storage SDK は動的ロード（uploadFiles実行時） -->
 <style>
   :root {
@@ -389,6 +390,28 @@
   .pldb-btn-add:hover{background:#2563eb}
   .pldb-empty{text-align:center;color:#9ca3af;padding:32px;font-size:14px}
   .pm-popup-meta{font-size:12px;color:#4b5563;line-height:1.6}
+
+/* ── Authentication ── */
+.auth-overlay { position:fixed; inset:0; z-index:99999; background:linear-gradient(135deg,#1e3a5f,#1e40af); display:flex; align-items:center; justify-content:center; padding:20px; }
+.auth-overlay.hidden { display:none; }
+.auth-box { background:white; border-radius:16px; padding:32px 36px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.auth-logo { font-size:24px; font-weight:700; color:#1e3a5f; text-align:center; margin-bottom:8px; }
+.auth-box h2 { font-size:14px; font-weight:600; color:#6b7280; text-align:center; margin-bottom:20px; }
+.auth-field { margin-bottom:14px; }
+.auth-field label { display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:5px; }
+.auth-field input { width:100%; padding:10px 12px; font-size:14px; border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box; outline:none; }
+.auth-field input:focus { border-color:#1e3a5f; box-shadow:0 0 0 3px rgba(30,58,95,.1); }
+.auth-btn { width:100%; padding:11px; background:#1e3a5f; color:white; font-size:14px; font-weight:600; border:none; border-radius:8px; cursor:pointer; margin-top:8px; transition:background .15s; }
+.auth-btn:hover { background:#172d49; }
+.auth-btn:disabled { background:#9ca3af; cursor:not-allowed; }
+.auth-error { font-size:13px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; margin-bottom:14px; display:none; }
+.auth-foot { font-size:12px; color:#6b7280; text-align:center; margin-top:14px; }
+.auth-foot a { color:#1e3a5f; text-decoration:none; font-weight:600; }
+.auth-foot a:hover { text-decoration:underline; }
+.user-info { display:flex; align-items:center; gap:8px; padding:4px 10px; background:rgba(255,255,255,.1); border-radius:6px; font-size:12px; color:rgba(255,255,255,.95); }
+.user-info-email { font-weight:500; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.user-info-logout { background:transparent; border:1px solid rgba(255,255,255,.4); color:white; font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
+.user-info-logout:hover { background:rgba(255,255,255,.15); }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -397,6 +420,25 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
+<!-- ── ログイン画面 ── -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-logo">📋 案件管理</div>
+    <h2>ログインしてください</h2>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-field">
+      <label>メールアドレス</label>
+      <input type="email" id="authEmail" placeholder="user@example.com" autocomplete="username">
+    </div>
+    <div class="auth-field">
+      <label>パスワード</label>
+      <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="auth-btn" id="authLoginBtn" onclick="doLogin()">ログイン</button>
+    <div class="auth-foot">パスワードを忘れた場合 <a href="#" onclick="doResetPassword();return false">再設定メールを送信</a></div>
+  </div>
+</div>
+
 
 <div class="loading-overlay hidden" id="loadingOverlay">
   <div class="spinner"></div>
@@ -425,6 +467,11 @@
     <button class="btn btn-ghost" onclick="openModal()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新規案件
     </button>
+    <div class="user-info" id="authUserInfo" style="display:none">
+      <span>👤</span>
+      <span class="user-info-email" id="authUserEmail"></span>
+      <button class="user-info-logout" onclick="doLogout()">ログアウト</button>
+    </div>
   </div>
   <button class="hamburger" onclick="toggleDrawer()">&#9776;</button>
 
@@ -737,9 +784,9 @@ const firebaseConfig = {
 // ══════════════════════════════════════════════════════════════
 
 const FIREBASE_OK = !!(firebaseConfig.projectId && firebaseConfig.apiKey);
-let db = null, storage = null;
+let db = null, storage = null, auth = null;
 if (FIREBASE_OK) {
-  try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+  try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); auth = firebase.auth(); }
   catch(e) { console.error('Firebase init error:', e); }
   try { if(firebase.storage) storage = firebase.storage(); }
   catch(e) { console.error('Storage init error:', e); }
@@ -791,15 +838,45 @@ function loadPMLocal() {
 }
 
 // ── 初期化 ──
+let _appStarted = false;
 async function initApp() {
-  // まず即座にアプリを起動（Firebaseはバックグラウンドで同期）
   if (!FIREBASE_OK) {
+    // Firebase未設定時は認証スキップ、ローカルのみで動作
+    document.getElementById('authOverlay').classList.add('hidden');
     document.getElementById('setupBanner').style.display = 'block';
+    loadPMLocal();
+    hideLoading(); renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
+    return;
   }
+
+  // 認証状態を監視
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      // ログイン済み：ログイン画面を非表示にしてアプリ起動
+      document.getElementById('authOverlay').classList.add('hidden');
+      const userInfoEl = document.getElementById('authUserInfo');
+      const emailEl = document.getElementById('authUserEmail');
+      if (userInfoEl) userInfoEl.style.display = '';
+      if (emailEl) emailEl.textContent = user.email || '';
+      if (!_appStarted) { _appStarted = true; startApp(); }
+    } else {
+      // 未ログイン：ログイン画面を表示してデータをクリア
+      document.getElementById('authOverlay').classList.remove('hidden');
+      const userInfoEl = document.getElementById('authUserInfo');
+      if (userInfoEl) userInfoEl.style.display = 'none';
+      hideLoading();
+      cases = []; parkingMasters = []; masterData = { customers: [] };
+      renderStats(); renderAll();
+      // 入力フォームにフォーカス
+      setTimeout(() => { const e = document.getElementById('authEmail'); if (e) e.focus(); }, 50);
+    }
+  });
+}
+
+// アプリ起動（認証済み後に呼ばれる）
+async function startApp() {
   loadPMLocal();
   hideLoading(); renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
-  if (!FIREBASE_OK) return;
-
   // Firebase同期（バックグラウンド）
   try {
     const mDoc = await db.doc('master/data').get();
@@ -821,6 +898,84 @@ async function initApp() {
     }, err => { showToast('同期エラー: ' + err.message); });
   } catch(e) { showToast('Firebase接続エラー: ' + e.message); }
 }
+
+// ── 認証関連 ──
+async function doLogin() {
+  if (!auth) { showToast('認証システムが初期化されていません'); return; }
+  const email = (document.getElementById('authEmail').value || '').trim();
+  const password = document.getElementById('authPassword').value || '';
+  const errEl = document.getElementById('authError');
+  const btn = document.getElementById('authLoginBtn');
+  errEl.style.color = '';
+  if (!email || !password) {
+    errEl.textContent = 'メールアドレスとパスワードを入力してください';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'ログイン中...';
+  errEl.style.display = 'none';
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    document.getElementById('authPassword').value = '';
+    // onAuthStateChanged が発火してアプリ起動される
+  } catch(e) {
+    let msg = e.message;
+    const c = e.code || '';
+    if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') {
+      msg = 'メールアドレスまたはパスワードが正しくありません';
+    } else if (c === 'auth/invalid-email') {
+      msg = 'メールアドレスの形式が正しくありません';
+    } else if (c === 'auth/too-many-requests') {
+      msg = 'ログイン試行回数が多すぎます。しばらく待ってから再試行してください';
+    } else if (c === 'auth/network-request-failed') {
+      msg = 'ネットワークエラーが発生しました。接続を確認してください';
+    } else if (c === 'auth/user-disabled') {
+      msg = 'このアカウントは無効化されています';
+    }
+    errEl.textContent = '⚠ ' + msg;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'ログイン';
+  }
+}
+
+async function doLogout() {
+  if (!auth) return;
+  if (!confirm('ログアウトしますか？')) return;
+  try {
+    await auth.signOut();
+    // onAuthStateChanged が発火してログイン画面表示
+    setTimeout(() => location.reload(), 100);
+  } catch(e) {
+    showToast('ログアウトエラー: ' + e.message);
+  }
+}
+
+async function doResetPassword() {
+  if (!auth) return;
+  const email = (document.getElementById('authEmail').value || '').trim();
+  const errEl = document.getElementById('authError');
+  if (!email) {
+    errEl.style.color = '';
+    errEl.textContent = 'メールアドレスを入力してから「再設定メールを送信」をクリックしてください';
+    errEl.style.display = 'block';
+    return;
+  }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    errEl.style.color = '#16a34a';
+    errEl.textContent = '✓ ' + email + ' にパスワード再設定メールを送信しました。受信トレイをご確認ください';
+    errEl.style.display = 'block';
+  } catch(e) {
+    errEl.style.color = '';
+    let msg = e.message;
+    if (e.code === 'auth/user-not-found') msg = 'このメールアドレスは登録されていません';
+    if (e.code === 'auth/invalid-email') msg = 'メールアドレスの形式が正しくありません';
+    errEl.textContent = '⚠ ' + msg;
+    errEl.style.display = 'block';
+  }
+}
+
 function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
 
 // ── マスタ helpers ──
