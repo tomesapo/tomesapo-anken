@@ -881,6 +881,7 @@ async function startApp() {
   try {
     const mDoc = await db.doc('master/data').get();
     if (mDoc.exists) { masterData = mDoc.data(); syncCustomerFilter(); renderAll(); }
+    ensureDefaultBranch();
     db.collection('parkingMasters').onSnapshot(snap => {
       parkingMasters = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       renderPMList(); if(pmMap) refreshPMMarkers();
@@ -2318,8 +2319,11 @@ function generateEstimate(caseId,plId){
   '</div><div class="rb">'+
   '<div class="rr"><span class="ll">発行日</span><span>'+todayStr+'</span></div>'+
   '<div class="rr"><span class="ll">見積番号</span><span>'+estimateNo+'</span></div>'+
-  '<div style="margin-top:6px;font-weight:bold">株式会社 TomeSapo</div>'+
-  '<div>〒487-0024</div><div>愛知県春日井市大留町6-5-9</div><div>✉：info@tomesapo.co.jp</div>'+
+  (function(){var br=getCaseBranch(c); return '<div style="margin-top:6px;font-weight:bold">'+e(br.name||'')+'</div>'+
+  (br.postalCode?'<div>〒'+e(br.postalCode)+'</div>':'')+
+  (br.address?'<div>'+e(br.address)+'</div>':'')+
+  (br.email?'<div>✉：'+e(br.email)+'</div>':'')+
+  (br.tel?'<div>☎：'+e(br.tel)+'</div>':'');})()+
   '</div></div>'+
   '<p style="font-size:11px;margin-bottom:6px">下記の通りお見積り申し上げます。</p>'+
   '<div class="ab"><span class="at">お見積金額(税込)</span><span class="an">'+fmtN(total)+'円</span></div>'+
@@ -2446,7 +2450,12 @@ function generateProposal(caseId){
       inf+='<tr><th>備考</th><td>&nbsp;</td></tr>';
       inf+='</table>';
     });
-    inf+='<div class="cf">株式会社 TomeSapo｜愛知県春日井市大留町6-5-9<br>✉：info@tomesapo.co.jp</div>';
+    var _kbr=getCaseBranch(c);
+    inf+='<div class="cf">'+
+      [_kbr.name||'',_kbr.address||''].filter(Boolean).join('｜')+
+      (_kbr.email?'<br>✉：'+_kbr.email:'')+
+      (_kbr.tel?'　☎：'+_kbr.tel:'')+
+    '</div>';
     inf+='<div class="ds">※本資料記載の空き状況は提案時点の情報であり、申込時には変動している場合があります。<br>※本資料は提案時点での内容であり、契約確定時に条件が変更となる場合があります。</div>';
 
     // 地図プレースホルダー（クリック→画像アップロード）
@@ -3683,7 +3692,7 @@ function openProposalMail(data){
     custName+'\n'+
     staffName+' 様\n\n'+
     'いつも大変お世話になっております。\n'+
-    '株式会社 TomeSapoの古田でございます。\n\n'+
+    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n';})()+
     '【'+siteName+'】につきまして、下記の通りご提案資料をお送りいたします。\n'+
     '・駐車場案内図\n'+
     '・見積書兼発注書\n\n'+
@@ -3691,11 +3700,11 @@ function openProposalMail(data){
     '何かご不明点等ございましたら、お気軽にお知らせください。\n\n'+
     '引き続き、何卒よろしくお願いいたします。\n\n'+
     '━━━━━━━━━━━━━━━━━━━━\n'+
-    '株式会社 TomeSapo\n'+
+    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'\n'+
     '古田 知也（TOMOYA FURUTA）\n'+
     '－－－－－－－－－－－－－－－－－－－－\n'+
-    '090-6335-5765\n'+
-    'info@tomesapo.co.jp\n'+
+    (br.tel?br.tel+'\n':'090-6335-5765\n')+
+    (br.email||'info@tomesapo.co.jp')+'\n';})()+
     '━━━━━━━━━━━━━━━━━━━━'
   );
   window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
@@ -3729,7 +3738,7 @@ function openKakuteiMail(data){
     custName+'\n'+
     staffName+' 様\n\n'+
     'いつも大変お世話になっております。\n'+
-    '株式会社 TomeSapoの古田でございます。\n\n'+
+    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n';})()+
     '【'+siteName+'】につきまして、契約内容が確定いたしましたので、下記資料をお送りいたします。\n'+
     '・駐車場区画図\n'+
     '・確定明細書\n\n'+
@@ -3737,11 +3746,11 @@ function openKakuteiMail(data){
     '問題ございませんでしたら、本資料内容にてご利用開始をお願いいたします。\n\n'+
     '引き続き、何卒よろしくお願いいたします。\n\n'+
     '━━━━━━━━━━━━━━━━━━━━\n'+
-    '株式会社 TomeSapo\n'+
+    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'\n'+
     '古田 知也（TOMOYA FURUTA）\n'+
     '－－－－－－－－－－－－－－－－－－－－\n'+
-    '090-6335-5765\n'+
-    'info@tomesapo.co.jp\n'+
+    (br.tel?br.tel+'\n':'090-6335-5765\n')+
+    (br.email||'info@tomesapo.co.jp')+'\n';})()+
     '━━━━━━━━━━━━━━━━━━━━'
   );
   window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
@@ -4251,6 +4260,13 @@ async function _genInvoiceFromTemplate(c) {
   if (bank.accountName) {
     setV('U15', '名義　' + bank.accountName);
   }
+
+  // 自社拠点情報（U8-U11）を上書き
+  const branch = getCaseBranch(c);
+  if (branch.name)       setV('U8', branch.name);
+  if (branch.postalCode) setV('U9', '〒' + branch.postalCode);
+  if (branch.address)    setV('U10', branch.address);
+  if (branch.email)      setV('U11', '✉：' + branch.email);
 
   setV('Y16', fmtD(c.paymentDue || ''));
 
