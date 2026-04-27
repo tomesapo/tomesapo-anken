@@ -406,6 +406,35 @@
 .branch-field input { padding:5px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:4px; outline:none; }
 .branch-field input:focus { border-color:#1e3a5f; }
 
+/* ── ゴミ箱 ── */
+.trash-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px; }
+.trash-overlay.hidden { display:none; }
+.trash-modal { background:white; border-radius:12px; width:100%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+.trash-header { background:#1e3a5f; color:white; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+.trash-header h2 { font-size:16px; margin:0; font-weight:700; }
+.trash-close-btn { background:transparent; border:none; color:white; font-size:20px; cursor:pointer; padding:4px 10px; border-radius:4px; }
+.trash-close-btn:hover { background:rgba(255,255,255,.15); }
+.trash-tabs { display:flex; border-bottom:1px solid #e5e7eb; background:#f9fafb; }
+.trash-tab { background:transparent; border:none; padding:11px 20px; font-size:13px; cursor:pointer; color:#6b7280; border-bottom:2px solid transparent; }
+.trash-tab:hover { background:#f3f4f6; }
+.trash-tab.active { color:#1e3a5f; border-bottom-color:#1e3a5f; font-weight:600; background:white; }
+.trash-tab .trash-cnt { background:#e5e7eb; color:#6b7280; font-size:10px; padding:2px 6px; border-radius:10px; margin-left:5px; font-weight:700; }
+.trash-tab.active .trash-cnt { background:#dbeafe; color:#1e40af; }
+.trash-body { flex:1; overflow-y:auto; padding:14px 20px; }
+.trash-table { width:100%; border-collapse:collapse; font-size:13px; }
+.trash-table th { background:#f3f4f6; color:#6b7280; padding:8px 10px; text-align:left; font-size:11px; font-weight:600; border-bottom:1px solid #e5e7eb; }
+.trash-table td { padding:9px 10px; border-bottom:1px solid #f3f4f6; }
+.trash-table tr:hover { background:#fafafa; }
+.trash-empty { text-align:center; color:#9ca3af; padding:40px 20px; font-size:14px; }
+.trash-action-btns { display:flex; gap:6px; }
+.trash-restore-btn { background:#fff; border:1px solid #16a34a; color:#16a34a; font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer; }
+.trash-restore-btn:hover { background:#dcfce7; }
+.trash-purge-btn { background:#fff; border:1px solid #b91c1c; color:#b91c1c; font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer; }
+.trash-purge-btn:hover { background:#fef2f2; }
+.trash-foot { padding:12px 20px; border-top:1px solid #e5e7eb; background:#f9fafb; display:flex; justify-content:flex-end; }
+.trash-purge-all-btn { background:#b91c1c; border:none; color:white; font-size:12px; padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:600; }
+.trash-purge-all-btn:hover { background:#991b1b; }
+
 /* ── Authentication ── */
 .auth-overlay { position:fixed; inset:0; z-index:99999; background:linear-gradient(135deg,#1e3a5f,#1e40af); display:flex; align-items:center; justify-content:center; padding:20px; }
 .auth-overlay.hidden { display:none; }
@@ -479,6 +508,9 @@
     <button class="btn btn-ghost" onclick="openMonthlyReport()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><rect x="12" y="13" width="3" height="5" fill="currentColor" stroke="none"/><rect x="16" y="11" width="3" height="7" fill="currentColor" stroke="none"/><rect x="8" y="15" width="3" height="3" fill="currentColor" stroke="none"/></svg>月次レポート
     </button>
+    <button class="btn btn-ghost" onclick="openTrash()" title="ゴミ箱">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>ゴミ箱
+    </button>
     <button class="btn btn-ghost" onclick="openModal()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新規案件
     </button>
@@ -508,9 +540,35 @@
     </button>
 
     <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openTrash();closeDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>ゴミ箱
+    </button>
+
+    <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="openMonthlyReport();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>月次レポート
     </button>
+  </div>
+</div>
+
+
+<!-- ── ゴミ箱 ── -->
+<div class="trash-overlay hidden" id="trashOverlay">
+  <div class="trash-modal">
+    <div class="trash-header">
+      <h2>🗑 ゴミ箱</h2>
+      <button class="trash-close-btn" onclick="closeTrash()">✕</button>
+    </div>
+    <div class="trash-tabs">
+      <button class="trash-tab active" id="trashTab_cases" onclick="switchTrashTab('cases')">案件 <span class="trash-cnt" id="trashCnt_cases">0</span></button>
+      <button class="trash-tab" id="trashTab_customers" onclick="switchTrashTab('customers')">顧客 <span class="trash-cnt" id="trashCnt_customers">0</span></button>
+      <button class="trash-tab" id="trashTab_pm" onclick="switchTrashTab('pm')">駐車場マスタ <span class="trash-cnt" id="trashCnt_pm">0</span></button>
+      <button class="trash-tab" id="trashTab_branches" onclick="switchTrashTab('branches')">自社拠点 <span class="trash-cnt" id="trashCnt_branches">0</span></button>
+    </div>
+    <div class="trash-body" id="trashBody"></div>
+    <div class="trash-foot">
+      <button class="trash-purge-all-btn" onclick="purgeAllTrash()">🗑 表示中タブを全て完全削除</button>
+    </div>
   </div>
 </div>
 
@@ -816,7 +874,9 @@ if (FIREBASE_OK) {
 
 let masterData = { customers: [] };
 let cases = [];
+let deletedCases = [];
 let parkingMasters = [];
+let deletedParkingMasters = [];
 let activeStatuses = null;
 let editingId = null, detailId = null, deleteCallback = null;
 let sortKey = 'caseNo', sortDir = 1;
@@ -905,11 +965,14 @@ async function startApp() {
     if (mDoc.exists) { masterData = mDoc.data(); syncCustomerFilter(); renderAll(); }
     ensureDefaultBranch();
     db.collection('parkingMasters').onSnapshot(snap => {
-      parkingMasters = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      parkingMasters = all.filter(p => !p.deleted);
+      deletedParkingMasters = all.filter(p => p.deleted);
       renderPMList(); if(pmMap) refreshPMMarkers();
+      if (document.getElementById('trashOverlay') && !document.getElementById('trashOverlay').classList.contains('hidden')) renderTrashTab();
     }, err => {});
     db.collection('cases').onSnapshot(snap => {
-      cases = snap.docs.map(d => {
+      const all = snap.docs.map(d => {
         const c = { ...d.data(), id: d.id };
         if(c.parkingLots) c.parkingLots = c.parkingLots.map(pl => {
           if(pl.vehicleType === '普通車・工事関係車両(ハイエース程度)') pl = {...pl, vehicleType:'普通車・工事関係車両(ﾊｲｴｰｽ程度)'};
@@ -917,7 +980,10 @@ async function startApp() {
         });
         return c;
       });
+      cases = all.filter(c => !c.deleted);
+      deletedCases = all.filter(c => c.deleted);
       renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
+      if (document.getElementById('trashOverlay') && !document.getElementById('trashOverlay').classList.contains('hidden')) renderTrashTab();
     }, err => { showToast('同期エラー: ' + err.message); });
   } catch(e) { showToast('Firebase接続エラー: ' + e.message); }
 }
@@ -1003,7 +1069,7 @@ function hideLoading() { document.getElementById('loadingOverlay').classList.add
 
 // ── マスタ helpers ──
 const getCustomer = id => masterData.customers.find(c => c.id === id);
-const getCustomerByName = name => masterData.customers.find(c => c.name === name);
+const getCustomerByName = name => activeCustomers().find(c => c.name === name);
 const nextCode = () => String(Math.max(0, ...masterData.customers.map(c => parseInt(c.code)||0)) + 1).padStart(3,'0');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
@@ -1017,9 +1083,12 @@ function addCustomer() {
 }
 function deleteCustomer(id) {
   const cust = getCustomer(id);
-  openConfirm('<strong>' + esc(cust ? cust.name : '') + '</strong> を削除しますか？<br>拠点・担当者も削除されます。', () => {
-    masterData.customers = masterData.customers.filter(c => c.id !== id);
-    renderMaster(); syncCustomerFilter(); saveMasterToFS(); showToast('顧客を削除しました');
+  openConfirm('<strong>' + esc(cust ? cust.name : '') + '</strong> をゴミ箱に移動しますか？', () => {
+    if (cust) cust.deleted = true;
+    saveMasterToFS();
+    renderMaster(); syncCustomerFilter();
+    if (!document.getElementById('trashOverlay').classList.contains('hidden')) renderTrashTab();
+    showToast('顧客をゴミ箱に移動しました');
   });
 }
 
@@ -1077,11 +1146,12 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 
 function renderMaster() {
   const container = document.getElementById('masterCustomerList');
-  if (!masterData.customers.length) {
+  const active = activeCustomers();
+  if (!active.length) {
     container.innerHTML = '<p style="color:var(--gray-500);padding:16px 0;text-align:center">顧客がまだ登録されていません</p>';
     return;
   }
-  container.innerHTML = masterData.customers.map(cust => {
+  container.innerHTML = active.map(cust => {
     const basesHtml = cust.bases.map(base => {
       const staffRows = base.staff.map(s =>
         '<tr>' +
@@ -1201,6 +1271,13 @@ function updateBankInfo() {
   saveMasterToFS();
 }
 
+// ── アクティブなマスタデータの取得（ゴミ箱を除外） ──
+function activeCustomers() {
+  return (masterData.customers || []).filter(c => !c.deleted);
+}
+function activeBranches() {
+  return (masterData.companyBranches || []).filter(b => !b.deleted);
+}
 // ── 自社拠点 ──
 function ensureDefaultBranch() {
   if (!masterData.companyBranches || !masterData.companyBranches.length) {
@@ -1215,18 +1292,18 @@ function ensureDefaultBranch() {
     }];
     saveMasterToFS();
   }
-  const branches = masterData.companyBranches;
-  if (!branches.some(b => b.isDefault) && branches.length) {
-    branches[0].isDefault = true;
+  const active = (masterData.companyBranches || []).filter(b => !b.deleted);
+  if (active.length && !active.some(b => b.isDefault)) {
+    active[0].isDefault = true;
     saveMasterToFS();
   }
 }
 function getCaseBranch(c) {
   ensureDefaultBranch();
-  const branches = masterData.companyBranches || [];
+  const branches = activeBranches();
   if (c && c.branchId) {
-    const found = branches.find(b => b.id === c.branchId);
-    if (found) return found;
+    const found = (masterData.companyBranches || []).find(b => b.id === c.branchId);
+    if (found) return found;  // 削除済み拠点でも案件で参照中なら返す
   }
   return branches.find(b => b.isDefault) || branches[0] || {
     name:'', postalCode:'', address:'', email:'', tel:''
@@ -1236,7 +1313,7 @@ function renderBranches() {
   ensureDefaultBranch();
   const list = document.getElementById('branchList');
   if (!list) return;
-  const branches = masterData.companyBranches || [];
+  const branches = activeBranches();
   list.innerHTML = branches.map(b => {
     const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     return '<div class="branch-card">' +
@@ -1282,25 +1359,27 @@ function setBranchDefault(id) {
 }
 function deleteBranch(id) {
   const branches = masterData.companyBranches || [];
-  if (branches.length <= 1) { showToast('最後の拠点は削除できません'); return; }
+  const activeCount = branches.filter(x => !x.deleted).length;
+  if (activeCount <= 1) { showToast('最後の拠点は削除できません'); return; }
   const b = branches.find(x => x.id === id);
   if (!b) return;
-  if (!confirm('「' + (b.name || '無題') + '」を削除しますか？')) return;
-  const wasDefault = b.isDefault;
-  masterData.companyBranches = branches.filter(x => x.id !== id);
-  if (wasDefault && masterData.companyBranches.length) {
-    masterData.companyBranches[0].isDefault = true;
+  if (!confirm('「' + (b.name || '無題') + '」をゴミ箱に移動しますか？')) return;
+  b.deleted = true;
+  if (b.isDefault) {
+    b.isDefault = false;
+    const next = branches.find(x => !x.deleted);
+    if (next) next.isDefault = true;
   }
   saveMasterToFS();
   renderBranches();
+  if (!document.getElementById('trashOverlay').classList.contains('hidden')) renderTrashTab();
 }
 function populateBranchSelector(selectedId) {
   ensureDefaultBranch();
   const sel = document.getElementById('f_branchId');
   if (!sel) return;
-  const branches = masterData.companyBranches || [];
+  const branches = activeBranches();
   const defaultBranch = branches.find(b => b.isDefault);
-  // selectedIdが未設定または存在しない拠点を指している場合、主拠点を選択
   let activeId = selectedId;
   if (!activeId || !branches.some(b => b.id === activeId)) {
     activeId = defaultBranch ? defaultBranch.id : (branches[0] ? branches[0].id : '');
@@ -1310,6 +1389,168 @@ function populateBranchSelector(selectedId) {
       (b.name || '無題') + (b.isDefault ? '（主拠点）' : '') +
     '</option>').join('');
 }
+
+// ── ゴミ箱・復元 ──
+let _trashTab = 'cases';
+function openTrash() {
+  document.getElementById('trashOverlay').classList.remove('hidden');
+  renderTrashTab();
+}
+function closeTrash() {
+  document.getElementById('trashOverlay').classList.add('hidden');
+}
+function switchTrashTab(tab) {
+  _trashTab = tab;
+  ['cases','customers','pm','branches'].forEach(t => {
+    const el = document.getElementById('trashTab_' + t);
+    if (el) el.classList.toggle('active', t === tab);
+  });
+  renderTrashTab();
+}
+function renderTrashTab() {
+  // カウント更新
+  document.getElementById('trashCnt_cases').textContent    = (deletedCases||[]).length;
+  document.getElementById('trashCnt_customers').textContent= ((masterData.customers||[]).filter(c=>c.deleted)).length;
+  document.getElementById('trashCnt_pm').textContent       = (deletedParkingMasters||[]).length;
+  document.getElementById('trashCnt_branches').textContent = ((masterData.companyBranches||[]).filter(b=>b.deleted)).length;
+
+  const body = document.getElementById('trashBody');
+  if (!body) return;
+  const escH = s => (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  let html = '';
+  if (_trashTab === 'cases') {
+    if (!deletedCases.length) { body.innerHTML = '<div class="trash-empty">ゴミ箱に案件はありません</div>'; return; }
+    html = '<table class="trash-table"><thead><tr><th>案件番号</th><th>顧客名</th><th>現場名</th><th style="width:160px">操作</th></tr></thead><tbody>';
+    deletedCases.forEach(c => {
+      html += '<tr>' +
+        '<td>' + escH(c.caseNo||'') + '</td>' +
+        '<td>' + escH(c.customerName||'') + '</td>' +
+        '<td>' + escH(c.siteName||'') + '</td>' +
+        '<td><div class="trash-action-btns">' +
+          '<button class="trash-restore-btn" onclick="restoreItem(\'cases\',\''+c.id+'\')">復元</button>' +
+          '<button class="trash-purge-btn" onclick="purgeItem(\'cases\',\''+c.id+'\')">完全削除</button>' +
+        '</div></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+  } else if (_trashTab === 'customers') {
+    const list = (masterData.customers||[]).filter(c => c.deleted);
+    if (!list.length) { body.innerHTML = '<div class="trash-empty">ゴミ箱に顧客はありません</div>'; return; }
+    html = '<table class="trash-table"><thead><tr><th>顧客番号</th><th>顧客名</th><th>拠点数</th><th style="width:160px">操作</th></tr></thead><tbody>';
+    list.forEach(c => {
+      html += '<tr>' +
+        '<td>' + escH(c.code||'') + '</td>' +
+        '<td>' + escH(c.name||'') + '</td>' +
+        '<td>' + ((c.bases||[]).length) + '</td>' +
+        '<td><div class="trash-action-btns">' +
+          '<button class="trash-restore-btn" onclick="restoreItem(\'customers\',\''+c.id+'\')">復元</button>' +
+          '<button class="trash-purge-btn" onclick="purgeItem(\'customers\',\''+c.id+'\')">完全削除</button>' +
+        '</div></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+  } else if (_trashTab === 'pm') {
+    if (!deletedParkingMasters.length) { body.innerHTML = '<div class="trash-empty">ゴミ箱に駐車場マスタはありません</div>'; return; }
+    html = '<table class="trash-table"><thead><tr><th>駐車場名</th><th>住所</th><th style="width:160px">操作</th></tr></thead><tbody>';
+    deletedParkingMasters.forEach(p => {
+      html += '<tr>' +
+        '<td>' + escH(p.name||'') + '</td>' +
+        '<td>' + escH(p.address||'') + '</td>' +
+        '<td><div class="trash-action-btns">' +
+          '<button class="trash-restore-btn" onclick="restoreItem(\'pm\',\''+p.id+'\')">復元</button>' +
+          '<button class="trash-purge-btn" onclick="purgeItem(\'pm\',\''+p.id+'\')">完全削除</button>' +
+        '</div></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+  } else if (_trashTab === 'branches') {
+    const list = (masterData.companyBranches||[]).filter(b => b.deleted);
+    if (!list.length) { body.innerHTML = '<div class="trash-empty">ゴミ箱に自社拠点はありません</div>'; return; }
+    html = '<table class="trash-table"><thead><tr><th>拠点名・会社名</th><th>住所</th><th style="width:160px">操作</th></tr></thead><tbody>';
+    list.forEach(b => {
+      html += '<tr>' +
+        '<td>' + escH(b.name||'') + '</td>' +
+        '<td>' + escH(b.address||'') + '</td>' +
+        '<td><div class="trash-action-btns">' +
+          '<button class="trash-restore-btn" onclick="restoreItem(\'branches\',\''+b.id+'\')">復元</button>' +
+          '<button class="trash-purge-btn" onclick="purgeItem(\'branches\',\''+b.id+'\')">完全削除</button>' +
+        '</div></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+  body.innerHTML = html;
+}
+async function restoreItem(type, id) {
+  if (!confirm('復元しますか？')) return;
+  try {
+    if (type === 'cases') {
+      if (db) await db.collection('cases').doc(id).update({deleted:false});
+      else { /* local fallback */ }
+    } else if (type === 'pm') {
+      if (db) await db.collection('parkingMasters').doc(id).update({deleted:false});
+      else { /* local fallback */ }
+    } else if (type === 'customers') {
+      const c = (masterData.customers||[]).find(x => x.id === id);
+      if (c) { c.deleted = false; await saveMasterToFS(); }
+      renderMaster(); syncCustomerFilter();
+    } else if (type === 'branches') {
+      const b = (masterData.companyBranches||[]).find(x => x.id === id);
+      if (b) { b.deleted = false; await saveMasterToFS(); }
+      renderBranches();
+    }
+    showToast('復元しました');
+    renderTrashTab();
+  } catch(e) { showToast('復元エラー: ' + e.message); }
+}
+async function purgeItem(type, id) {
+  if (!confirm('完全に削除しますか？復元できません。')) return;
+  try {
+    if (type === 'cases') {
+      if (db) await db.collection('cases').doc(id).delete();
+    } else if (type === 'pm') {
+      if (db) await db.collection('parkingMasters').doc(id).delete();
+    } else if (type === 'customers') {
+      masterData.customers = (masterData.customers||[]).filter(c => c.id !== id);
+      await saveMasterToFS();
+      renderMaster(); syncCustomerFilter();
+    } else if (type === 'branches') {
+      masterData.companyBranches = (masterData.companyBranches||[]).filter(b => b.id !== id);
+      await saveMasterToFS();
+      renderBranches();
+    }
+    showToast('完全に削除しました');
+    renderTrashTab();
+  } catch(e) { showToast('削除エラー: ' + e.message); }
+}
+async function purgeAllTrash() {
+  const labels = {cases:'案件', customers:'顧客', pm:'駐車場マスタ', branches:'自社拠点'};
+  const label = labels[_trashTab] || '';
+  if (!confirm('ゴミ箱内のすべての' + label + 'を完全に削除しますか？復元できません。')) return;
+  try {
+    if (_trashTab === 'cases') {
+      if (db) {
+        for (const c of deletedCases) await db.collection('cases').doc(c.id).delete();
+      }
+    } else if (_trashTab === 'pm') {
+      if (db) {
+        for (const p of deletedParkingMasters) await db.collection('parkingMasters').doc(p.id).delete();
+      }
+    } else if (_trashTab === 'customers') {
+      masterData.customers = (masterData.customers||[]).filter(c => !c.deleted);
+      await saveMasterToFS();
+      renderMaster(); syncCustomerFilter();
+    } else if (_trashTab === 'branches') {
+      masterData.companyBranches = (masterData.companyBranches||[]).filter(b => !b.deleted);
+      await saveMasterToFS();
+      renderBranches();
+    }
+    showToast('完全に削除しました');
+    renderTrashTab();
+  } catch(e) { showToast('削除エラー: ' + e.message); }
+}
+
 function closeMasterModal() { document.getElementById('masterOverlay').classList.remove('open'); }
 
 // ── 案件番号 自動採番 ──
@@ -1872,17 +2113,17 @@ function closeDetail(){document.getElementById('detailOverlay').classList.remove
 function editFromDetail(){const id=detailId;closeDetail();openModal(id);}
 function deleteFromDetail(){
   const id=detailId;const c=cases.find(x=>x.id===id);
-  openConfirm('<strong>'+c.caseNo+'</strong> を削除しますか？<br>この操作は元に戻せません。',async()=>{
-    if(db){try{await deleteCaseFromFS(id);showToast('案件を削除しました');}catch(e){return;}}
-    else{cases=cases.filter(x=>x.id!==id);showToast('案件を削除しました');renderStats();renderAll();updateYearFilter();syncCustomerFilter();}
+  openConfirm('<strong>'+c.caseNo+'</strong> をゴミ箱に移動しますか？',async()=>{
+    if(db){try{await db.collection('cases').doc(id).update({deleted:true});showToast('案件をゴミ箱に移動しました');}catch(e){showToast('エラー: '+e.message);return;}}
+    else{cases=cases.filter(x=>x.id!==id);showToast('案件をゴミ箱に移動しました');renderStats();renderAll();updateYearFilter();syncCustomerFilter();}
     closeDetail();
   });
 }
 function deleteCase(id,e){
   e.stopPropagation();const c=cases.find(x=>x.id===id);
-  openConfirm('<strong>'+c.caseNo+'</strong> を削除しますか？<br>この操作は元に戻せません。',async()=>{
-    if(db){try{await deleteCaseFromFS(id);showToast('案件を削除しました');}catch(e){return;}}
-    else{cases=cases.filter(x=>x.id!==id);showToast('案件を削除しました');renderStats();renderAll();updateYearFilter();syncCustomerFilter();}
+  openConfirm('<strong>'+c.caseNo+'</strong> をゴミ箱に移動しますか？',async()=>{
+    if(db){try{await db.collection('cases').doc(id).update({deleted:true});showToast('案件をゴミ箱に移動しました');}catch(e){showToast('エラー: '+e.message);return;}}
+    else{cases=cases.filter(x=>x.id!==id);showToast('案件をゴミ箱に移動しました');renderStats();renderAll();updateYearFilter();syncCustomerFilter();}
   });
 }
 function openConfirm(msg,cb){
@@ -2041,7 +2282,7 @@ function updateYearFilter(){
   psel.innerHTML='<option value="">すべての期</option>'+periods.map(p=>'<option value="'+p+'"'+(String(p)===pcur?' selected':'')+'>'+'第'+p+'期</option>').join('');
 }
 function syncCustomerFilter(){
-  const names=[...new Set(masterData.customers.map(c=>c.name))].sort();
+  const names=[...new Set(activeCustomers().map(c=>c.name))].sort();
   const sel=document.getElementById('customerFilter'),cur=sel.value;
   sel.innerHTML='<option value="">すべての顧客</option>'+names.map(n=>'<option'+(n===cur?' selected':'')+'>'+n+'</option>').join('');
 }
@@ -5155,14 +5396,18 @@ async function savePM() {
 
 async function deletePM(id) {
   const p = parkingMasters.find(p => p.id === id);
-  openConfirm('<strong>' + esc(p ? p.name : '') + '</strong> を削除しますか？', async () => {
-    parkingMasters = parkingMasters.filter(p => p.id !== id);
+  openConfirm('<strong>' + esc(p ? p.name : '') + '</strong> をゴミ箱に移動しますか？', async () => {
     try {
-      await deletePMFromFS(id);
-      showToast('駐車場を削除しました');
+      if (db) {
+        await db.collection('parkingMasters').doc(id).update({deleted:true});
+      } else {
+        parkingMasters = parkingMasters.filter(p => p.id !== id);
+        savePMLocal();
+      }
+      showToast('駐車場をゴミ箱に移動しました');
       renderPMList();
       if (pmMap) refreshPMMarkers();
-    } catch(e) {}
+    } catch(e) { showToast('エラー: '+e.message); }
   });
 }
 
