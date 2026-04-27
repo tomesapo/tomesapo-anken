@@ -391,6 +391,7 @@
   .pm-popup-meta{font-size:12px;color:#4b5563;line-height:1.6}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -660,6 +661,9 @@
     <div class="detail-body" id="detailBody"></div>
     <div class="detail-actions">
       <button class="btn btn-primary" onclick="editFromDetail()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>編集</button>
+      <button class="btn btn-outline" id="invoiceBtn" style="display:none" onclick="generateInvoiceExcel(cases.find(c=>c.id===detailId))">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>請求書出力
+      </button>
       <button class="btn btn-danger" onclick="deleteFromDetail()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>削除</button>
     </div>
   </div>
@@ -673,6 +677,23 @@
       <button class="modal-close" onclick="closeMasterModal()"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body" style="max-height:80vh;overflow-y:auto">
+      <!-- 振込先設定 -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏦 振込先設定（請求書に記載）</div>
+        <div class="master-field-grid">
+          <div class="master-field-group"><div class="master-field-label">金融機関名</div><input class="master-field-input" id="bankName" placeholder="○○銀行" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">支店名</div><input class="master-field-input" id="bankBranchName" placeholder="○○支店" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">預金種目</div>
+            <select class="master-field-select" id="bankAccountType" onchange="updateBankInfo()">
+              <option value="">── 選択 ──</option>
+              <option value="普通預金">普通預金</option>
+              <option value="当座預金">当座預金</option>
+            </select>
+          </div>
+          <div class="master-field-group"><div class="master-field-label">口座番号</div><input class="master-field-input" id="bankAccountNo" placeholder="0000000" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">口座名義（カナ）</div><input class="master-field-input" id="bankAccountName" placeholder="カ）トメサポ" oninput="updateBankInfo()"></div>
+        </div>
+      </div>
       <div id="masterCustomerList"></div>
       <div class="master-add-customer">
         <input type="text" id="newCustomerName" placeholder="新規顧客名を入力" onkeydown="if(event.key==='Enter')addCustomer()">
@@ -943,7 +964,63 @@ function renderMaster() {
   }).join('');
 }
 
-function openMasterModal() { renderMaster(); document.getElementById('masterOverlay').classList.add('open'); }
+function openMasterModal() {
+  renderMaster();
+  // 振込先フィールドを現在の値で埋める
+  const bank = masterData.bankInfo || {};
+  ['bankName','bankBranchName','bankAccountNo','bankAccountName'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = bank[id.replace('bank','').replace(/^([A-Z])/,m=>m.toLowerCase())] || bank[id] || '';
+  });
+  // bankAccountTypeはkeyが違うので個別に
+  const sel = document.getElementById('bankAccountType');
+  if (sel) sel.value = bank.accountType || '';
+  document.getElementById('bankName').value = bank.bankName || '';
+  document.getElementById('bankBranchName').value = bank.branchName || '';
+  document.getElementById('bankAccountNo').value = bank.accountNo || '';
+  document.getElementById('bankAccountName').value = bank.accountName || '';
+  // テンプレート状態表示
+  const tmplName = localStorage.getItem('invoiceTemplateName');
+  const tmplStatus = document.getElementById('invoiceTmplStatus');
+  if (tmplStatus) tmplStatus.textContent = tmplName ? '設定済み: ' + tmplName : '未設定';
+  document.getElementById('masterOverlay').classList.add('open');
+}
+function loadInvoiceTemplate(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const b64 = e.target.result.split(',')[1];
+      localStorage.setItem('invoiceTemplate', b64);
+      localStorage.setItem('invoiceTemplateName', file.name);
+      const el = document.getElementById('invoiceTmplStatus');
+      if (el) el.textContent = '設定済み: ' + file.name;
+      showToast('テンプレートを保存しました');
+    } catch(err) {
+      showToast('テンプレートの保存に失敗しました（ストレージ容量不足の可能性）');
+    }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+function clearInvoiceTemplate() {
+  localStorage.removeItem('invoiceTemplate');
+  localStorage.removeItem('invoiceTemplateName');
+  const el = document.getElementById('invoiceTmplStatus');
+  if (el) el.textContent = '未設定';
+  showToast('テンプレートをリセットしました');
+}
+function updateBankInfo() {
+  masterData.bankInfo = {
+    bankName:     document.getElementById('bankName').value.trim(),
+    branchName:   document.getElementById('bankBranchName').value.trim(),
+    accountType:  document.getElementById('bankAccountType').value,
+    accountNo:    document.getElementById('bankAccountNo').value.trim(),
+    accountName:  document.getElementById('bankAccountName').value.trim(),
+  };
+  saveMasterToFS();
+}
 function closeMasterModal() { document.getElementById('masterOverlay').classList.remove('open'); }
 
 // ── 案件番号 自動採番 ──
@@ -1156,6 +1233,30 @@ function calcPlMonths(start,end){
   if(isNaN(s)||isNaN(e)||e<s)return null;
   return(e.getFullYear()-s.getFullYear())*12+(e.getMonth()-s.getMonth())+1;
 }
+function calcPlPeriod(start,end,startProRate,endProRate){
+  if(!start||!end)return{months:0,days:0};
+  const s=new Date(start+'T00:00:00'),e=new Date(end+'T00:00:00');
+  if(isNaN(s)||isNaN(e)||e<s)return{months:0,days:0};
+  let y=s.getFullYear(),m=s.getMonth();
+  const ey=e.getFullYear(),em=e.getMonth();
+  let fullMonths=0,proDays=0;
+  while(y<ey||(y===ey&&m<=em)){
+    const dim=new Date(y,m+1,0).getDate();
+    const isF=(y===s.getFullYear()&&m===s.getMonth());
+    const isL=(y===ey&&m===em);
+    if(isF&&s.getDate()>1&&startProRate){proDays+=dim-s.getDate()+1;}
+    else if(isL&&e.getDate()<dim&&endProRate){proDays+=e.getDate();}
+    else{fullMonths++;}
+    m++; if(m>11){m=0;y++;}
+  }
+  return{months:fullMonths,days:proDays};
+}
+function fmtPlPeriod(months,days){
+  if(!months&&!days)return'';
+  if(!days)return months+'ヶ月';
+  if(!months)return days+'日';
+  return months+'ヶ月'+days+'日';
+}
 function calcPlPurchase(el){
   const card=el.closest('.parking-card');
   const g=n=>card.querySelector('[name="'+n+'"]');
@@ -1166,15 +1267,27 @@ function calcPlPurchase(el){
   const adminFee=parseFloat(g('pl_adminFee')?g('pl_adminFee').value:0)||0;
   const keyMoney=parseFloat(g('pl_keyMoney')?g('pl_keyMoney').value:0)||0;
   const adjustment=parseFloat(g('pl_adjustmentAmount')?g('pl_adjustmentAmount').value:0)||0;
-  const months=calcPlMonths(start,end);
+  const startProRate=(g('pl_startProRate')?g('pl_startProRate').value:'')==='true';
+  const endProRate  =(g('pl_endProRate')?g('pl_endProRate').value:'')==='true';
+  const quoteKeyMoney=parseFloat(g('pl_quoteKeyMoney')?g('pl_quoteKeyMoney').value:0)||0;
   const deposit=parseFloat(g('pl_deposit')?g('pl_deposit').value:0)||0;
   const pa=g('pl_purchaseAmount');
   const ia=g('pl_invoiceAmount');
   if(pa){
-    if(months&&units){
-      const purchase=monthlyRent*units*months+adminFee*units+keyMoney*units+adjustment;
+    let rentPart=null;
+    if(start&&end&&units){
+      const period=calcPlPeriod(start,end,startProRate,endProRate);
+      const dailyRate=Math.floor(monthlyRent/30);
+      if(period.months||period.days){
+        rentPart=monthlyRent*units*period.months+dailyRate*units*period.days;
+      }
+    }
+    if(rentPart!=null){
+      const purchase=rentPart+adminFee*units+keyMoney*units+adjustment;
       pa.value=fmt(purchase);
-      if(ia)ia.value=fmt(purchase+deposit*units);
+      const effectiveKey=quoteKeyMoney||keyMoney;
+      const invoice=purchase-keyMoney*units+effectiveKey*units+deposit*units;
+      if(ia)ia.value=fmt(invoice);
     }else{pa.value='';if(ia)ia.value='';}
   }
   updateCaseFixedPurchase();
@@ -1189,18 +1302,39 @@ function updateCaseFixedPurchase(){
     const months=calcPlMonths(start,end);
     // 確定仕入・確定売上・確定台数（契約期間＋台数がある駐車場のみ集計）
     if(months&&units){
-      const pa=g('pl_purchaseAmount');
-      if(pa&&pa.value){const v=parseFloat(pa.value.replace(/,/g,''));if(!isNaN(v))totalP+=v;}
       const rt=g('pl_rateType')?g('pl_rateType').value:'monthly';
-      const quoteMonthly=(parseFloat(g('pl_quoteMonthlyRent')?.value)||0)||(parseFloat(g('pl_monthlyRent')?.value)||0);
-      const quoteDailyRent=(parseFloat(g('pl_quoteDailyRent')?.value)||0)||(parseFloat(g('pl_dailyRent')?.value)||0);
-      const quoteKey=(parseFloat(g('pl_quoteKeyMoney')?.value)||0)||(parseFloat(g('pl_keyMoney')?.value)||0);
-      const quoteAdmin=(parseFloat(g('pl_quoteAdminFee')?.value)||0)||(parseFloat(g('pl_adminFee')?.value)||0);
+      const startProRate=(g('pl_startProRate')?g('pl_startProRate').value:'')==='true';
+      const endProRate  =(g('pl_endProRate')?g('pl_endProRate').value:'')==='true';
+      // 仕入価格（コスト側）
+      const monthlyRent=parseFloat(g('pl_monthlyRent')?.value)||0;
+      const dailyRent  =parseFloat(g('pl_dailyRent')?.value)||0;
+      const adminFee   =parseFloat(g('pl_adminFee')?.value)||0;
+      const keyMoney   =parseFloat(g('pl_keyMoney')?.value)||0;
+      const adjustment =parseFloat(g('pl_adjustmentAmount')?.value)||0;
+      // 見積価格（売上側）
+      const quoteMonthly=(parseFloat(g('pl_quoteMonthlyRent')?.value)||0)||monthlyRent;
+      const quoteDailyRent=(parseFloat(g('pl_quoteDailyRent')?.value)||0)||dailyRent;
+      const quoteKey=(parseFloat(g('pl_quoteKeyMoney')?.value)||0)||keyMoney;
+      const quoteAdmin=(parseFloat(g('pl_quoteAdminFee')?.value)||0)||adminFee;
+      // 仕入合計（税込）をライブ計算（pl_purchaseAmountの保存値ではなく、現行ロジックで再計算）
+      let purchaseTaxInc=0;
       if(rt==='daily'){
         const days=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
-        totalS+=quoteDailyRent*units*days+(quoteKey+quoteAdmin)*units;
+        purchaseTaxInc=dailyRent*units*days+(adminFee+keyMoney)*units+adjustment;
       }else{
-        totalS+=quoteMonthly*units*months+(quoteKey+quoteAdmin)*units;
+        const period=calcPlPeriod(start,end,startProRate,endProRate);
+        const dailyRate=Math.floor(monthlyRent/30);
+        purchaseTaxInc=monthlyRent*units*period.months+dailyRate*units*period.days+(adminFee+keyMoney)*units+adjustment;
+      }
+      totalP+=purchaseTaxInc;
+      // 売上合計（税別）も同じロジックで
+      if(rt==='daily'){
+        const totDays=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
+        totalS+=quoteDailyRent*units*totDays+(quoteKey+quoteAdmin)*units;
+      }else{
+        const period=calcPlPeriod(start,end,startProRate,endProRate);
+        const quoteDailyRate=Math.floor(quoteMonthly/30);
+        totalS+=quoteMonthly*units*period.months+quoteDailyRate*units*period.days+(quoteKey+quoteAdmin)*units;
       }
       totalU+=units;
       hasAny=true;
@@ -1400,6 +1534,9 @@ async function saveCase() {
 function openDetail(id) {
   detailId=id;
   const c=cases.find(x=>x.id===id);if(!c)return;
+  // 請求書出力ボタンの表示制御（未請求・請求済・入金済のみ）
+  const invoiceBtn = document.getElementById('invoiceBtn');
+  if (invoiceBtn) invoiceBtn.style.display = ['未請求','請求済','入金済'].includes(c.status) ? '' : 'none';
   document.getElementById('detail_caseNo').textContent=c.caseNo;
   document.getElementById('detail_status').innerHTML='<span class="status-badge s-'+c.status+'">'+c.status+'</span>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+(c.parentCaseNo?'<span style="font-size:12px;color:var(--gray-500);margin-left:10px">元案件：'+esc(c.parentCaseNo)+'</span>':'');
   const cust=getCustomerByName(c.customerName);
@@ -1820,7 +1957,7 @@ function getParkingLotsFromForm(){
   }).filter(p=>p.name||p.supplierName||p.monthlyRent||p.dailyRent);
 }
 function renderParkingLotsDetail(c){
-  let h='<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center"><div class="detail-section-title" style="margin-bottom:0">駐車場情報 ('+c.parkingLots.length+'件)</div><button style="background:#16a34a;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer" onclick="generateProposalDocument(\''+c.id+'\')">📥 提案資料</button>'+(c.status==='\u5951\u7d04\u4e2d'?'<button style="background:#0369a1;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateKakuteiDocument(\''+c.id+'\')">📋 確定資料</button>':'')+'</div>';
+  let h='<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center"><div class="detail-section-title" style="margin-bottom:0">駐車場情報 ('+c.parkingLots.length+'件)</div><button style="background:#16a34a;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer" onclick="generateProposalDocument(\''+c.id+'\')">📥 提案資料</button>'+(['\u5951\u7d04\u4e2d','\u672a\u8acb\u6c42','\u8acb\u6c42\u6e08','\u5165\u91d1\u6e08'].includes(c.status)?'<button style="background:#0369a1;color:white;font-size:11px;padding:3px 10px;border-radius:4px;border:none;cursor:pointer;margin-left:4px" onclick="generateKakuteiDocument(\''+c.id+'\')">📋 確定資料</button>':'')+'</div>';
   c.parkingLots.forEach((pl,i)=>{
     h+='<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
@@ -1902,7 +2039,7 @@ function renderParkingLotsDetail(c){
     const tP=tQ-tC,tM=tQ>0?Math.round(tP/tQ*1000)/10:0;
     const pc=tP>=0?'#86efac':'#fca5a5';
     h+='<div style="background:#1e3a5f;color:white;border-radius:8px;padding:12px;margin-top:4px">';
-    h+='<div style="font-size:11px;font-weight:700;margin-bottom:8px">🏁 全駐車場 合計粗利試算</div>';
+    h+='<div style="font-size:11px;font-weight:700;margin-bottom:8px">🏁 全駐車場 見積売上合計</div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center">';
     h+='<div><div style="font-size:9px;opacity:.7">見積売上</div><div style="font-weight:700;font-size:13px">¥'+fmt(tQ)+'</div></div>';
     h+='<div><div style="font-size:9px;opacity:.7">仕入合計</div><div style="font-weight:700;font-size:13px">¥'+fmt(tC)+'</div></div>';
@@ -3896,6 +4033,166 @@ async function deleteFile(caseId,fileName){
 }
 
 // ═══════════════════════════════════════════════
+// ── 請求書出力 ──
+// ═══════════════════════════════════════════════
+function generateInvoiceExcel(c) {
+  if (!c) { showToast('案件データが見つかりません'); return; }
+  if (!window.XLSX) { showToast('Excelライブラリ読み込み中です。しばらくしてお試しください。'); return; }
+  try { _genInvoiceHardcoded(c); }
+  catch(e) { console.error(e); showToast('請求書の生成に失敗しました: ' + e.message); }
+}
+
+function _genInvoiceHardcoded(c) {
+  if (!window.ExcelJS) {
+    showToast('Excelテンプレートライブラリ読み込み中です。しばらくしてお試しください。');
+    return;
+  }
+  _genInvoiceFromTemplate(c).catch(e => {
+    console.error(e);
+    showToast('請求書の生成に失敗しました: ' + e.message);
+  });
+}
+
+// テンプレートxlsxをBase64で埋め込み（請求書_現場名.xlsx）
+const _INVOICE_TEMPLATE_B64 = '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';
+
+async function _genInvoiceFromTemplate(c) {
+  const bank = masterData.bankInfo || {};
+
+  const fmtD = d => {
+    if (!d) return '';
+    const dt = new Date(d + 'T00:00:00');
+    return `${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日`;
+  };
+
+  // Base64 → ArrayBuffer
+  const bin = atob(_INVOICE_TEMPLATE_B64);
+  const buf = new ArrayBuffer(bin.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const ws = wb.getWorksheet('請求書');
+  if (!ws) throw new Error('テンプレートに「請求書」シートが見つかりません');
+
+  const setV = (addr, val) => { ws.getCell(addr).value = val; };
+
+  // ─── ヘッダー情報 ───
+  setV('A5',  (c.customerName || '') + ' 御中');
+  setV('Y5',  fmtD(c.invoiceDate || new Date().toISOString().slice(0,10)));
+  setV('Y6',  c.caseNo || '');
+  setV('E8',  c.staffName ? (c.staffName + ' 様') : '');
+  setV('E9',  c.siteName || '');
+  setV('E10', c.siteAddress || '');
+
+  // ─── 振込先（プレースホルダ置換） ───
+  if (bank.bankName || bank.branchName) {
+    setV('U13', [bank.bankName, bank.branchName].filter(Boolean).join('　'));
+  }
+  if (bank.accountType || bank.accountNo) {
+    setV('U14', [bank.accountType, bank.accountNo].filter(Boolean).join('　'));
+  }
+  if (bank.accountName) {
+    setV('U15', '名義　' + bank.accountName);
+  }
+
+  setV('Y16', fmtD(c.paymentDue || ''));
+
+  // ─── 明細行の準備 ───
+  let subtotalExTax = 0;
+  const dataRows = [];
+  const CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+
+  (c.parkingLots || []).forEach((pl, idx) => {
+    const units  = pl.units || pl.estimateUnits || 0;
+    const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
+    let months = period.months, days = period.days;
+    if (!months && !days) { months = 1; days = 0; }
+    const unitPrice = pl.quoteMonthlyRent != null ? pl.quoteMonthlyRent
+                    : (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0);
+    const adminFee  = pl.quoteAdminFee  != null ? pl.quoteAdminFee
+                    : (pl.adminFee ? Math.round(pl.adminFee / 1.1) : 0);
+    const keyMoney  = pl.quoteKeyMoney  != null ? pl.quoteKeyMoney
+                    : (pl.keyMoney ? Math.round(pl.keyMoney / 1.1) : 0);
+    const dailyRate = Math.floor(unitPrice / 30);
+    const rentAmt  = Math.round(unitPrice * units * months + dailyRate * units * days);
+    const adminAmt = Math.round(adminFee * units);
+    const keyAmt   = Math.round(keyMoney * units);
+    subtotalExTax += rentAmt + adminAmt + keyAmt;
+
+    const num = CIRC[idx] || '(' + (idx+1) + ')';
+    dataRows.push({ kind:'name', item: num + '　' + (pl.name || '') });
+    const periodTxt = (pl.contractStart && pl.contractEnd)
+      ? fmtD(pl.contractStart) + '〜' + fmtD(pl.contractEnd) + '　賃料'
+      : '賃料';
+    const periodCell = fmtPlPeriod(months, days) || (months + 'ヶ月');
+    dataRows.push({ kind:'data', item: periodTxt, qty: units, per: periodCell, up: unitPrice, amt: rentAmt });
+    if (keyMoney > 0) {
+      dataRows.push({ kind:'data', item: '礼金', qty: units, per: '-', up: keyMoney, amt: keyAmt });
+    }
+    if (adminFee > 0) {
+      dataRows.push({ kind:'data', item: '事務手数料', qty: units, per: '-', up: adminFee, amt: adminAmt });
+    }
+  });
+  const taxAmt   = Math.round(subtotalExTax * 0.1);
+  const totalAmt = subtotalExTax + taxAmt;
+
+  // ─── 行数調整：22行を超える場合は行を挿入 ───
+  const TEMPLATE_DATA_ROWS = 22;       // 行19〜40
+  const TEMPLATE_DATA_START = 19;
+  const TEMPLATE_SUBTOTAL_ROW = 41;
+  let subtotalRow = TEMPLATE_SUBTOTAL_ROW;
+  if (dataRows.length > TEMPLATE_DATA_ROWS) {
+    const extra = dataRows.length - TEMPLATE_DATA_ROWS;
+    // テンプレートの行40をextra回複製してTEMPLATE_SUBTOTAL_ROWの直前に挿入（罫線・スタイル保持）
+    ws.duplicateRow(TEMPLATE_SUBTOTAL_ROW - 1, extra, true);
+    subtotalRow += extra;
+  }
+
+  // ─── 明細行へ書き込み ───
+  dataRows.forEach((r, idx) => {
+    const row = TEMPLATE_DATA_START + idx;
+    ws.getCell('A' + row).value = r.item;
+    if (r.kind === 'data') {
+      ws.getCell('M' + row).value = r.qty;
+      ws.getCell('P' + row).value = r.per;
+      ws.getCell('S' + row).value = r.up;
+      ws.getCell('Y' + row).value = r.amt;
+    }
+  });
+
+  // 残りの空行のサンプルデータをクリア（テンプレートには①まると砂利駐車場の例が入っている）
+  for (let row = TEMPLATE_DATA_START + dataRows.length; row < subtotalRow; row++) {
+    ['A','M','P','S','Y'].forEach(col => {
+      ws.getCell(col + row).value = null;
+    });
+  }
+
+  // ─── 合計欄 ───
+  setV('Y' + subtotalRow,       subtotalExTax);
+  setV('Y' + (subtotalRow + 1), taxAmt);
+  setV('Y' + (subtotalRow + 2), totalAmt);
+  setV('H14',                   totalAmt);
+
+  // ─── ファイル出力（ブラウザダウンロード） ───
+  const out = await wb.xlsx.writeBuffer();
+  const safeName = (c.siteName || c.caseNo || '案件').replace(/[/\\:*?"<>|]/g, '_');
+  const dateStr  = (c.invoiceDate || new Date().toISOString().slice(0,10)).replace(/-/g, '');
+  const filename = '請求書_' + safeName + '_' + dateStr + '.xlsx';
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+
+// ═══════════════════════════════════════════════
 // ── ⑤ 売上集計ビュー ──
 // ═══════════════════════════════════════════════
 let _svTab = 'customer';
@@ -4894,5 +5191,69 @@ window.addEventListener('DOMContentLoaded', initApp);
   </div>
 </div>
 
+<!-- ═══ 🔧 DEBUGパネル（Ctrl+Shift+D で開閉） ═══ -->
+<div id="dbgPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
+     background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:11px;padding:12px;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <strong style="color:#4ec9b0">📊 XLSXアナライザー</strong>
+    <label style="background:#0078d4;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer">
+      ファイル選択
+      <input type="file" id="dbgFileIn" accept=".xlsx" style="display:none">
+    </label>
+    <button onclick="dbgCopy()" style="padding:4px 10px;border-radius:4px;cursor:pointer">📋 コピー</button>
+    <button onclick="document.getElementById('dbgPanel').style.display='none'"
+            style="padding:4px 10px;border-radius:4px;cursor:pointer;margin-left:auto">✕ 閉じる</button>
+  </div>
+  <pre id="dbgOut" style="max-height:50vh;overflow:auto;margin:0;white-space:pre-wrap"></pre>
+</div>
+<script>
+(function(){
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      const p = document.getElementById('dbgPanel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+  document.getElementById('dbgFileIn').addEventListener('change', function(){
+    const file = this.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      if (!window.XLSX) { document.getElementById('dbgOut').textContent = 'XLSXライブラリ未ロード'; return; }
+      const wb = XLSX.read(e.target.result, {type:'binary', cellStyles:true});
+      const wsName = wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const out = {
+        sheetName: wsName,
+        ref: ws['!ref'],
+        cols: ws['!cols'] || [],
+        rows: ws['!rows'] || [],
+        merges: (ws['!merges']||[]).map(m => XLSX.utils.encode_cell(m.s)+':'+XLSX.utils.encode_cell(m.e)),
+        cells: {}
+      };
+      Object.keys(ws).forEach(k => {
+        if (k.startsWith('!')) return;
+        const cell = ws[k];
+        const info = {v: cell.v, t: cell.t};
+        if (cell.s) {
+          info.s = {};
+          if (cell.s.font)      info.s.font      = cell.s.font;
+          if (cell.s.fill)      info.s.fill      = cell.s.fill;
+          if (cell.s.alignment) info.s.alignment = cell.s.alignment;
+          if (cell.s.border)    info.s.border    = '(has border)';
+          if (cell.s.numFmt)    info.s.numFmt    = cell.s.numFmt;
+        }
+        out.cells[k] = info;
+      });
+      document.getElementById('dbgOut').textContent = JSON.stringify(out, null, 2);
+    };
+    reader.readAsBinaryString(file);
+  });
+  function dbgCopy(){
+    const txt = document.getElementById('dbgOut').textContent;
+    navigator.clipboard.writeText(txt).then(()=>showToast('コピーしました'));
+  }
+  window.dbgCopy = dbgCopy;
+})();
+</script>
 </body>
 </html>
