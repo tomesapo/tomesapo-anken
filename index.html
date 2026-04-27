@@ -1300,8 +1300,13 @@ function populateBranchSelector(selectedId) {
   if (!sel) return;
   const branches = masterData.companyBranches || [];
   const defaultBranch = branches.find(b => b.isDefault);
-  sel.innerHTML = '<option value="">（主拠点：' + (defaultBranch ? defaultBranch.name : '未設定') + '）</option>' +
-    branches.map(b => '<option value="'+b.id+'"'+(selectedId===b.id?' selected':'')+'>'+
+  // selectedIdが未設定または存在しない拠点を指している場合、主拠点を選択
+  let activeId = selectedId;
+  if (!activeId || !branches.some(b => b.id === activeId)) {
+    activeId = defaultBranch ? defaultBranch.id : (branches[0] ? branches[0].id : '');
+  }
+  sel.innerHTML = branches.map(b =>
+    '<option value="'+b.id+'"'+(activeId===b.id?' selected':'')+'>'+
       (b.name || '無題') + (b.isDefault ? '（主拠点）' : '') +
     '</option>').join('');
 }
