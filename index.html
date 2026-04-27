@@ -391,6 +391,21 @@
   .pldb-empty{text-align:center;color:#9ca3af;padding:32px;font-size:14px}
   .pm-popup-meta{font-size:12px;color:#4b5563;line-height:1.6}
 
+/* ── 自社拠点 ── */
+.branch-card { background:white; border:1px solid var(--gray-200); border-radius:6px; padding:10px; margin-bottom:8px; }
+.branch-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.branch-default-badge { display:inline-block; background:#fef3c7; color:#92400e; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; }
+.branch-actions { display:flex; gap:6px; }
+.branch-set-default { background:#fff; border:1px solid #d97706; color:#d97706; font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
+.branch-set-default:hover { background:#fef3c7; }
+.branch-delete { background:#fff; border:1px solid #b91c1c; color:#b91c1c; font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
+.branch-delete:hover { background:#fef2f2; }
+.branch-fields { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+.branch-field { display:flex; flex-direction:column; }
+.branch-field label { font-size:10px; color:#6b7280; margin-bottom:2px; }
+.branch-field input { padding:5px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:4px; outline:none; }
+.branch-field input:focus { border-color:#1e3a5f; }
+
 /* ── Authentication ── */
 .auth-overlay { position:fixed; inset:0; z-index:99999; background:linear-gradient(135deg,#1e3a5f,#1e40af); display:flex; align-items:center; justify-content:center; padding:20px; }
 .auth-overlay.hidden { display:none; }
@@ -623,6 +638,7 @@
             <select id="f_status"><option>未調査</option><option>調査中</option><option>再調査</option><option>提案済</option><option>未申込</option><option>契約中</option><option>未請求</option><option>請求済</option><option>入金済</option><option>失注</option></select>
           </div>
           <div class="form-group"><label>案件種別</label><select id="f_caseType" onchange="onCaseTypeChange()"><option value="通常">通常</option><option value="追加">追加</option><option value="延長">延長</option></select></div>
+          <div class="form-group" id="branchSelectGroup"><label>担当拠点 <span class="auto-tag">マスタから選択</span></label><select id="f_branchId"><option value="">（主拠点）</option></select></div>
           <div class="form-group"><label>案件番号 <span class="auto-tag">自動採番</span></label><input type="text" id="f_caseNo" class="auto-gen" readonly placeholder="顧客または元案件番号を入力後に自動生成"><div class="case-num-hint" id="caseNoHint">YYYY-顧客番号-連番</div></div>
           <div class="form-group span-3" id="parentCaseNoGroup" style="display:none"><label>元案件番号 <span class="required">*</span></label><input type="text" id="f_parentCaseNo" placeholder="例：2026-001-001" oninput="onParentCaseNoChange()"><div class="case-num-hint">追加はT1・T2…、延長はE1・E2…が自動付与されます</div></div>
           <div class="form-group span-2"><label>現場名<span class="required">*</span></label><input type="text" id="f_siteName" placeholder="現場名を入力"></div>
@@ -740,6 +756,12 @@
           <div class="master-field-group"><div class="master-field-label">口座番号</div><input class="master-field-input" id="bankAccountNo" placeholder="0000000" oninput="updateBankInfo()"></div>
           <div class="master-field-group"><div class="master-field-label">口座名義（カナ）</div><input class="master-field-input" id="bankAccountName" placeholder="カ）トメサポ" oninput="updateBankInfo()"></div>
         </div>
+      </div>
+      <!-- 自社拠点 -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏢 自社拠点（請求書・提案資料・確定資料に記載）</div>
+        <div id="branchList"></div>
+        <button class="btn btn-primary btn-sm" onclick="addBranch()" style="margin-top:6px">＋ 拠点を追加</button>
       </div>
       <div id="masterCustomerList"></div>
       <div class="master-add-customer">
@@ -1139,6 +1161,7 @@ function openMasterModal() {
   const tmplName = localStorage.getItem('invoiceTemplateName');
   const tmplStatus = document.getElementById('invoiceTmplStatus');
   if (tmplStatus) tmplStatus.textContent = tmplName ? '設定済み: ' + tmplName : '未設定';
+  renderBranches();
   document.getElementById('masterOverlay').classList.add('open');
 }
 function loadInvoiceTemplate(input) {
@@ -1176,6 +1199,111 @@ function updateBankInfo() {
     accountName:  document.getElementById('bankAccountName').value.trim(),
   };
   saveMasterToFS();
+}
+
+// ── 自社拠点 ──
+function ensureDefaultBranch() {
+  if (!masterData.companyBranches || !masterData.companyBranches.length) {
+    masterData.companyBranches = [{
+      id: 'br-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+      name: '株式会社 TomeSapo',
+      postalCode: '487-0024',
+      address: '愛知県春日井市大留町6-5-9',
+      email: 'info@tomesapo.co.jp',
+      tel: '',
+      isDefault: true
+    }];
+    saveMasterToFS();
+  }
+  const branches = masterData.companyBranches;
+  if (!branches.some(b => b.isDefault) && branches.length) {
+    branches[0].isDefault = true;
+    saveMasterToFS();
+  }
+}
+function getCaseBranch(c) {
+  ensureDefaultBranch();
+  const branches = masterData.companyBranches || [];
+  if (c && c.branchId) {
+    const found = branches.find(b => b.id === c.branchId);
+    if (found) return found;
+  }
+  return branches.find(b => b.isDefault) || branches[0] || {
+    name:'', postalCode:'', address:'', email:'', tel:''
+  };
+}
+function renderBranches() {
+  ensureDefaultBranch();
+  const list = document.getElementById('branchList');
+  if (!list) return;
+  const branches = masterData.companyBranches || [];
+  list.innerHTML = branches.map(b => {
+    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return '<div class="branch-card">' +
+      '<div class="branch-card-header">' +
+        '<div style="font-size:13px;font-weight:600">' + esc(b.name || '（未入力）') +
+          (b.isDefault ? '<span class="branch-default-badge">主拠点</span>' : '') +
+        '</div>' +
+        '<div class="branch-actions">' +
+          (!b.isDefault ? '<button class="branch-set-default" onclick="setBranchDefault(\''+b.id+'\')">主拠点に設定</button>' : '') +
+          (branches.length > 1 ? '<button class="branch-delete" onclick="deleteBranch(\''+b.id+'\')">削除</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="branch-fields">' +
+        '<div class="branch-field"><label>拠点名・会社名</label><input type="text" value="'+esc(b.name)+'" placeholder="株式会社 TomeSapo（本店）" oninput="updateBranchField(\''+b.id+'\',\'name\',this.value)"></div>' +
+        '<div class="branch-field"><label>郵便番号</label><input type="text" value="'+esc(b.postalCode)+'" placeholder="487-0024" oninput="updateBranchField(\''+b.id+'\',\'postalCode\',this.value)"></div>' +
+        '<div class="branch-field" style="grid-column:1/-1"><label>住所</label><input type="text" value="'+esc(b.address)+'" placeholder="愛知県春日井市..." oninput="updateBranchField(\''+b.id+'\',\'address\',this.value)"></div>' +
+        '<div class="branch-field"><label>メールアドレス</label><input type="text" value="'+esc(b.email)+'" placeholder="info@example.com" oninput="updateBranchField(\''+b.id+'\',\'email\',this.value)"></div>' +
+        '<div class="branch-field"><label>電話番号</label><input type="text" value="'+esc(b.tel)+'" placeholder="0568-XX-XXXX" oninput="updateBranchField(\''+b.id+'\',\'tel\',this.value)"></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+function addBranch() {
+  ensureDefaultBranch();
+  masterData.companyBranches.push({
+    id: 'br-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+    name: '', postalCode: '', address: '', email: '', tel: '',
+    isDefault: false
+  });
+  saveMasterToFS();
+  renderBranches();
+}
+function updateBranchField(id, field, value) {
+  const b = (masterData.companyBranches||[]).find(x => x.id === id);
+  if (!b) return;
+  b[field] = (value||'').trim();
+  saveMasterToFS();
+}
+function setBranchDefault(id) {
+  (masterData.companyBranches||[]).forEach(b => { b.isDefault = (b.id === id); });
+  saveMasterToFS();
+  renderBranches();
+}
+function deleteBranch(id) {
+  const branches = masterData.companyBranches || [];
+  if (branches.length <= 1) { showToast('最後の拠点は削除できません'); return; }
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  if (!confirm('「' + (b.name || '無題') + '」を削除しますか？')) return;
+  const wasDefault = b.isDefault;
+  masterData.companyBranches = branches.filter(x => x.id !== id);
+  if (wasDefault && masterData.companyBranches.length) {
+    masterData.companyBranches[0].isDefault = true;
+  }
+  saveMasterToFS();
+  renderBranches();
+}
+function populateBranchSelector(selectedId) {
+  ensureDefaultBranch();
+  const sel = document.getElementById('f_branchId');
+  if (!sel) return;
+  const branches = masterData.companyBranches || [];
+  const defaultBranch = branches.find(b => b.isDefault);
+  sel.innerHTML = '<option value="">（主拠点：' + (defaultBranch ? defaultBranch.name : '未設定') + '）</option>' +
+    branches.map(b => '<option value="'+b.id+'"'+(selectedId===b.id?' selected':'')+'>'+
+      (b.name || '無題') + (b.isDefault ? '（主拠点）' : '') +
+    '</option>').join('');
 }
 function closeMasterModal() { document.getElementById('masterOverlay').classList.remove('open'); }
 
@@ -1560,6 +1688,7 @@ function clearForm() {
     document.getElementById(id).innerHTML='<option value="">── '+lbl+'を選択 ──</option>';
   });
   document.getElementById('parkingLotCards').innerHTML='';
+  populateBranchSelector('');
 }
 // 駐車場の契約日から案件契約期間を自動集計
 function autoCalcContractDates(parkingLots){
@@ -1603,6 +1732,7 @@ function populateForm(c) {
   document.getElementById('f_paymentAmount').value=c.paymentAmount!=null?c.paymentAmount:'';
   document.getElementById('f_caseNote').value=c.caseNote||'';
   const ctEl2=document.getElementById('f_caseType');if(ctEl2)ctEl2.value=c.caseType||'通常';
+  populateBranchSelector(c.branchId||'');
   const pnEl2=document.getElementById('f_parentCaseNo');if(pnEl2)pnEl2.value=c.parentCaseNo||'';
   const pnGrp2=document.getElementById('parentCaseNoGroup');
   if(pnGrp2)pnGrp2.style.display=(c.caseType==='追加'||c.caseType==='延長')?'':'none';
@@ -1663,6 +1793,7 @@ async function saveCase() {
     paymentAmount:parseFloat(document.getElementById('f_paymentAmount').value)||null,
     caseNote:document.getElementById('f_caseNote').value.trim(),
     caseType:document.getElementById('f_caseType')?.value||'通常',
+    branchId:document.getElementById('f_branchId')?.value||'',
     parentCaseNo:document.getElementById('f_parentCaseNo')?.value.trim()||null,
     parkingLots:getParkingLotsFromForm(),
     statusHistory,
