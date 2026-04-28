@@ -4904,7 +4904,7 @@ function generateCustomerContract(caseId, plIdx) {
     totalAmountInTax: _fmtN(totalInTax),
     totalTaxAmount: _fmtN(totalTax),
     keyMoneyText: quoteKey > 0 ? ('金 ' + _fmtN(quoteKey * units) + ' 円') : 'なし',
-    paymentDue: _fmtDateJ(c.paymentDue || pl.contractStart),
+    paymentDue: '請求書発行月の翌月末日',
     contractDate: _fmtDateJ(c.orderDate || new Date().toISOString().slice(0,10)),
     ourAddress: branch.address || '',
     ourName: branch.name || '',
