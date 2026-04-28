@@ -4896,8 +4896,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       if (ab) {
         const imageId = wb.addImage({ buffer: ab, extension: 'png' });
         ws.addImage(imageId, {
-          tl: { col: 25.2, row: 6.7 },
-          ext: { width: 90, height: 90 }
+          tl: { col: 26.5, row: 6.7 },
+          ext: { width: 95, height: 95 }
         });
         console.log('[seal] 画像挿入完了, imageId:', imageId);
         showToast('✓ 印鑑を挿入しました');
