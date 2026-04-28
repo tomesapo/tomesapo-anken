@@ -1282,33 +1282,39 @@ async function uploadBranchSeal(branchId, fileInput) {
     fileInput.value = '';
     return;
   }
-  if (file.size > 1024 * 1024) {
-    showToast('ファイルサイズは1MB以下にしてください');
+  if (file.size > 700 * 1024) {
+    showToast('ファイルサイズは700KB以下にしてください（圧縮してください）');
     fileInput.value = '';
     return;
   }
-  showToast('印鑑画像をアップロード中…');
+  showToast('印鑑画像を保存中…');
   try {
-    const sdkOk = await loadStorageSDK();
-    if (!sdkOk || !storage) {
-      showToast('Firebase Storage が利用できません');
-      return;
-    }
-    const path = 'seals/' + branchId + '_' + Date.now() + '.png';
-    const ref = storage.ref(path);
-    await ref.put(file);
-    const url = await ref.getDownloadURL();
+    // FileをBase64に変換してFirestoreのmasterDataに直接保存（CORS問題回避）
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('読み込み失敗'));
+      reader.readAsDataURL(file);
+    });
+    const m = /^data:[^;]+;base64,(.+)$/.exec(dataUrl);
+    if (!m) throw new Error('Base64変換失敗');
+    const b64 = m[1];
     const b = (masterData.companyBranches || []).find(x => x.id === branchId);
     if (b) {
-      b.sealUrl = url;
-      b.sealPath = path;
+      // 旧 Storage 参照があれば削除を試行（エラー無視）
+      if (b.sealPath && storage) {
+        try { await storage.ref(b.sealPath).delete(); } catch(_) {}
+      }
+      b.sealBase64 = b64;
+      b.sealUrl = dataUrl;  // 表示用 data URL
+      delete b.sealPath;
       await saveMasterToFS();
-      showToast('✓ 印鑑画像をアップロードしました');
+      showToast('✓ 印鑑画像を保存しました');
       renderBranches();
     }
   } catch(e) {
     console.error(e);
-    showToast('アップロードエラー: ' + e.message);
+    showToast('保存エラー: ' + e.message);
   } finally {
     fileInput.value = '';
   }
@@ -1323,6 +1329,7 @@ async function removeBranchSeal(branchId) {
     }
     delete b.sealUrl;
     delete b.sealPath;
+    delete b.sealBase64;
     await saveMasterToFS();
     showToast('印鑑画像を削除しました');
     renderBranches();
@@ -1330,28 +1337,51 @@ async function removeBranchSeal(branchId) {
     showToast('削除エラー: ' + e.message);
   }
 }
-async function _fetchImageAsBase64(url) {
+async function _fetchImageAsArrayBuffer(url) {
+  console.log('[seal] 印鑑画像取得開始:', url);
+  // 方法1: fetch
   try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result;
-        const m = /^data:[^;]+;base64,(.+)$/.exec(result);
-        resolve(m ? m[1] : result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ab = await res.arrayBuffer();
+    console.log('[seal] fetch成功:', ab.byteLength, 'bytes');
+    return ab;
   } catch(e) {
-    console.error('印鑑画像取得失敗:', e);
+    console.warn('[seal] fetch失敗、XHRで再試行:', e.message);
+  }
+  // 方法2: XHR（CORS問題回避）
+  try {
+    const ab = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
+        else reject(new Error('XHR HTTP ' + xhr.status));
+      };
+      xhr.onerror = () => reject(new Error('XHR network error'));
+      xhr.send();
+    });
+    console.log('[seal] XHR成功:', ab.byteLength, 'bytes');
+    return ab;
+  } catch(e) {
+    console.error('[seal] XHR失敗:', e);
+    showToast('印鑑画像取得エラー: ' + e.message);
     return null;
   }
 }
+async function _fetchImageAsBase64(url) {
+  const ab = await _fetchImageAsArrayBuffer(url);
+  if (!ab) return null;
+  // ArrayBuffer → base64
+  const bytes = new Uint8Array(ab);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
 function chooseSealMode(branch) {
   return new Promise(resolve => {
-    if (!branch || !branch.sealUrl) { resolve('none'); return; }
+    if (!branch || (!branch.sealBase64 && !branch.sealUrl)) { resolve('none'); return; }
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML = '<div style="background:white;border-radius:12px;padding:24px;max-width:400px;width:100%">' +
@@ -4850,17 +4880,34 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   setV('H14',                   totalAmt);
 
   // ─── 電子印挿入（指定時のみ） ───
-  if (sealMode === 'seal' && branch.sealUrl) {
+  if (sealMode === 'seal') {
     try {
-      const b64 = await _fetchImageAsBase64(branch.sealUrl);
-      if (b64) {
-        const imageId = wb.addImage({ base64: 'data:image/png;base64,' + b64, extension: 'png' });
+      let ab = null;
+      if (branch.sealBase64) {
+        // Firestore保存のBase64から直接生成
+        const bytes = Uint8Array.from(atob(branch.sealBase64), c => c.charCodeAt(0));
+        ab = bytes.buffer;
+        console.log('[seal] Base64から取得:', bytes.length, 'bytes');
+      } else if (branch.sealUrl && !branch.sealUrl.startsWith('data:')) {
+        // 旧Storage URL の場合はfetch（CORS失敗の可能性あり）
+        showToast('印鑑画像を取得中…');
+        ab = await _fetchImageAsArrayBuffer(branch.sealUrl);
+      }
+      if (ab) {
+        const imageId = wb.addImage({ buffer: ab, extension: 'png' });
         ws.addImage(imageId, {
           tl: { col: 25.2, row: 6.7 },
           ext: { width: 90, height: 90 }
         });
+        console.log('[seal] 画像挿入完了, imageId:', imageId);
+        showToast('✓ 印鑑を挿入しました');
+      } else {
+        showToast('⚠ 印鑑画像が取得できませんでした');
       }
-    } catch(e) { console.error('印鑑挿入エラー:', e); }
+    } catch(e) {
+      console.error('[seal] 印鑑挿入エラー:', e);
+      showToast('印鑑挿入エラー: ' + e.message);
+    }
   }
 
   // ─── ファイル出力（ブラウザダウンロード） ───
