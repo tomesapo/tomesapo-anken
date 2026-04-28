@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1e3a5f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="案件管理">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
 <title>案件管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -456,6 +462,80 @@
 .user-info-email { font-weight:500; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .user-info-logout { background:transparent; border:1px solid rgba(255,255,255,.4); color:white; font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
 .user-info-logout:hover { background:rgba(255,255,255,.15); }
+
+  /* ─── モバイル対応 拡張（Lv1〜3） ─── */
+  /* スクロール可能テーブルラッパー（Lv1） */
+  .mobile-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;position:relative}
+  .mobile-scroll-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:18px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.08));pointer-events:none;opacity:0;transition:opacity .2s}
+  .mobile-scroll-wrap.has-scroll::after{opacity:1}
+
+  @media (max-width: 768px){
+    /* タッチターゲット拡大（Lv2） */
+    .header-btns .btn,.btn-ghost{min-height:44px}
+    .drawer-btn{min-height:48px;font-size:15px;padding:14px 16px}
+    .table-wrap td .icon-btn,td button,.case-card button{min-height:38px;min-width:38px}
+
+    /* フォーム入力 タッチ最適化（Lv2） */
+    input[type=text],input[type=number],input[type=date],input[type=email],input[type=tel],select,textarea{
+      font-size:16px !important; padding:12px 14px !important; min-height:46px;
+    }
+    .form-group label{font-size:14px;margin-bottom:6px;font-weight:600}
+    /* 駐車場カード内のフォームを縦並びに（Lv2） */
+    .parking-form-grid{grid-template-columns:1fr !important}
+    .parking-form-grid .form-group.span-2{grid-column:span 1}
+
+    /* 売上集計・保証金・未入金リストの sv-modal をフルスクリーン化（Lv3） */
+    .sv-overlay{padding:0}
+    .sv-modal{width:100vw !important;max-width:100vw !important;height:100vh;max-height:100vh;border-radius:0;display:flex;flex-direction:column}
+    .sv-header{border-radius:0;padding:14px 16px;flex-wrap:wrap}
+    .sv-header h2{font-size:16px;flex-basis:100%}
+    .sv-close-btn{padding:9px 14px;font-size:13px;min-height:40px}
+
+    /* 保証金/未入金/売上 のテーブルをカード化（Lv3） */
+    .mobile-card-table{display:block !important;width:100%;border:none}
+    .mobile-card-table thead{display:none}
+    .mobile-card-table tbody{display:block}
+    .mobile-card-table tbody tr{
+      display:block;background:white;border:1px solid #e5e7eb;border-radius:10px;
+      padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.04);
+    }
+    .mobile-card-table tbody tr:hover td{background:transparent}
+    .mobile-card-table tbody tr.sv-total{background:#f0fdf4 !important;border:2px solid #16a34a;font-weight:700}
+    .mobile-card-table td{
+      display:flex !important;justify-content:space-between;align-items:center;gap:10px;
+      padding:6px 0 !important;border:none !important;text-align:right !important;font-size:13.5px;
+    }
+    .mobile-card-table td:first-child{
+      font-size:15px;color:#1e3a5f;font-weight:700;
+      padding-bottom:8px !important;margin-bottom:6px;border-bottom:1px solid #f3f4f6 !important;
+      justify-content:flex-start;text-align:left !important;
+    }
+    .mobile-card-table td::before{
+      content:attr(data-label);font-size:11.5px;color:#6b7280;font-weight:500;
+      text-align:left;flex-shrink:0;
+    }
+    .mobile-card-table td:first-child::before{display:none}
+    .mobile-card-table td.no-label::before{display:none}
+    .mobile-card-table td.no-label{justify-content:flex-end}
+
+    /* sv-filter-row レスポンシブ */
+    .sv-filter-row{flex-direction:column;align-items:stretch;gap:6px}
+    .sv-filter-row select,.sv-filter-row input{width:100%}
+
+    /* 月次レポートのモバイル対応強化 */
+    .monthly-panel{width:100vw !important}
+    .monthly-header{flex-wrap:wrap;padding:12px 14px}
+    .monthly-header h2{font-size:16px;flex-basis:100%}
+  }
+
+  @media (max-width: 480px){
+    main{padding:8px}
+    .stats-bar{font-size:12px;padding:8px 10px}
+    .filter-row{flex-direction:column}
+    .filter-row select{width:100%}
+    /* freee CSV と他ボタンを drawer に集約済みなのでヘッダーは hamburger のみ */
+  }
+
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -542,19 +622,29 @@
     <button class="drawer-btn" onclick="openMasterModal();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM2 20a10 10 0 0 1 20 0"/></svg>マスタ管理
     </button>
+    <button class="drawer-btn" onclick="openPMModal();closeDrawer()">
+      🅿 駐車場DB
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openSalesView();closeDrawer()">
+      📊 売上集計
+    </button>
+    <button class="drawer-btn" onclick="openMonthlyReport();closeDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>月次レポート
+    </button>
+    <button class="drawer-btn" onclick="openDepositView();closeDrawer()">
+      💰 保証金管理
+    </button>
     <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="exportCSV();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
-
+    <button class="drawer-btn" onclick="exportFreeeCSV();closeDrawer()">
+      📤 freee CSV
+    </button>
     <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="openTrash();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>ゴミ箱
-    </button>
-
-    <div class="drawer-divider"></div>
-    <button class="drawer-btn" onclick="openMonthlyReport();closeDrawer()">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>月次レポート
     </button>
   </div>
 </div>
@@ -2537,7 +2627,7 @@ function addParkingLotCard(pl={}) {
       '</div>' +
     '</div>' +
     '<div class="parking-card-body">' +
-      '<div class="form-grid">' +
+      '<div class="form-grid parking-form-grid">' +
         '<div class="form-group"><label>駐車場名</label><input type="text" name="pl_name" placeholder="○○駐車場" value="'+esc(pl.name||'')+'" oninput="updateParkingCardTitle(this)"></div>' +
         '<div class="form-group span-2"><label>駐車場住所</label><input type="text" name="pl_address" value="'+esc(pl.address||'')+'" placeholder="住所を入力"></div>' +
         '<div class="form-group"><label>徒歩</label><div style="display:flex;align-items:center;gap:6px"><input type="number" name="pl_walkMinutes" min="0" placeholder="0" value="'+(pl.walkMinutes!=null?pl.walkMinutes:'')+'" style="width:70px"><span style="font-size:12px;color:var(--gray-500)">分</span></div></div>' +
@@ -5550,7 +5640,7 @@ function renderDepositView() {
   }
 
   let html = '<div class="sv-filter-row"><span style="font-size:12px;color:#6b7280">対象：未請求・請求済・入金済の案件で保証金が発生しているもの（契約中は仕入先請求書待ちのため除外）</span></div>';
-  html += '<table class="sv-table" style="font-size:12.5px">';
+  html += '<div class="mobile-scroll-wrap"><table class="sv-table mobile-card-table" style="font-size:12.5px">';
   html += '<thead><tr>';
   html += sortHeader('案件番号','caseNo','left');
   html += sortHeader('駐車場名','plName','left');
@@ -5566,24 +5656,24 @@ function renderDepositView() {
 
   rows.forEach(r => {
     html += '<tr style="cursor:pointer" onclick="closeDepositView();openDetail(\''+r.caseId+'\')">';
-    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(r.caseNo) + '</td>';
-    html += '<td style="text-align:left">' + esc(r.plName) + '</td>';
-    html += '<td style="text-align:left;color:#6b7280;font-size:11.5px">' + esc(r.plAddress) + '</td>';
-    html += '<td style="text-align:left">' + esc(r.supplierName) + '</td>';
-    html += '<td style="text-align:left;color:#6b7280">' + esc(r.supplierPhone) + '</td>';
-    html += '<td style="text-align:left;color:#6b7280">' + esc(r.supplierFax) + '</td>';
-    html += '<td style="text-align:left;color:#6b7280;white-space:nowrap">' + fmtD(r.contractStart) + ' 〜 ' + fmtD(r.contractEnd) + '</td>';
-    html += '<td>' + r.units + '</td>';
-    html += '<td>¥' + fmtN(r.depositPerUnit) + '</td>';
-    html += '<td style="font-weight:600;color:#16a34a">¥' + fmtN(r.depositTotal) + '</td>';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(r.caseNo) + ' ／ ' + esc(r.plName) + '</td>';
+    html += '<td data-label="駐車場名" style="text-align:left">' + esc(r.plName) + '</td>';
+    html += '<td data-label="住所" style="text-align:left;color:#6b7280;font-size:11.5px">' + esc(r.plAddress) + '</td>';
+    html += '<td data-label="仕入先" style="text-align:left">' + esc(r.supplierName) + '</td>';
+    html += '<td data-label="TEL" style="text-align:left;color:#6b7280">' + esc(r.supplierPhone) + '</td>';
+    html += '<td data-label="FAX" style="text-align:left;color:#6b7280">' + esc(r.supplierFax) + '</td>';
+    html += '<td data-label="契約期間" style="text-align:left;color:#6b7280;white-space:nowrap">' + fmtD(r.contractStart) + ' 〜 ' + fmtD(r.contractEnd) + '</td>';
+    html += '<td data-label="台数">' + r.units + '</td>';
+    html += '<td data-label="保証金/台">¥' + fmtN(r.depositPerUnit) + '</td>';
+    html += '<td data-label="保証金合計" style="font-weight:600;color:#16a34a">¥' + fmtN(r.depositTotal) + '</td>';
     html += '</tr>';
   });
 
   html += '<tr class="sv-total"><td colspan="7" style="text-align:right;padding-right:12px">合計（'+rows.length+'件）</td>';
-  html += '<td>' + totalUnits + '</td>';
-  html += '<td>－</td>';
-  html += '<td>¥' + fmtN(totalDeposit) + '</td></tr>';
-  html += '</tbody></table>';
+  html += '<td data-label="台数合計">' + totalUnits + '</td>';
+  html += '<td class="no-label">－</td>';
+  html += '<td data-label="保証金合計">¥' + fmtN(totalDeposit) + '</td></tr>';
+  html += '</tbody></table></div>';
 
   body.innerHTML = html;
 }
@@ -5687,7 +5777,7 @@ function renderOverdueView() {
   const total = list.reduce((s,x) => s + (parseFloat(x.c.taxIncludedSales||0)||0), 0);
 
   let html = '<div class="sv-filter-row" style="margin-bottom:12px"><span style="font-size:12px;color:#dc2626;font-weight:600">未回収額合計：¥' + fmt(total) + '（税込）／' + list.length + '件</span></div>';
-  html += '<table class="sv-table" style="font-size:13px">';
+  html += '<div class="mobile-scroll-wrap"><table class="sv-table mobile-card-table" style="font-size:13px">';
   html += '<thead><tr>';
   html += '<th style="text-align:left">案件番号</th>';
   html += '<th style="text-align:left">顧客名</th>';
@@ -5702,17 +5792,17 @@ function renderOverdueView() {
   list.forEach(({c, daysOverdue}) => {
     const urgent = daysOverdue >= 30;
     html += '<tr' + (urgent ? ' style="background:#fef2f2"' : '') + '>';
-    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(c.caseNo||'') + '</td>';
-    html += '<td style="text-align:left">' + esc(c.customerName||'') + '</td>';
-    html += '<td style="text-align:left;color:#6b7280">' + esc(c.siteName||'') + '</td>';
-    html += '<td style="text-align:left;color:#6b7280">' + fmtD(c.invoiceDate) + '</td>';
-    html += '<td style="text-align:left;color:#6b7280">' + fmtD(c.paymentDue) + '</td>';
-    html += '<td style="font-weight:700;color:' + (urgent ? '#dc2626' : '#ea580c') + '">' + daysOverdue + '日</td>';
-    html += '<td style="font-weight:600">¥' + fmt(c.taxIncludedSales||0) + '</td>';
-    html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:4px 10px;border:none;border-radius:4px;cursor:pointer" onclick="closeOverdueView();openDetail(\''+c.id+'\')">詳細</button></td>';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(c.caseNo||'') + ' ／ ' + esc(c.customerName||'') + '</td>';
+    html += '<td data-label="顧客" style="text-align:left">' + esc(c.customerName||'') + '</td>';
+    html += '<td data-label="現場" style="text-align:left;color:#6b7280">' + esc(c.siteName||'') + '</td>';
+    html += '<td data-label="請求日" style="text-align:left;color:#6b7280">' + fmtD(c.invoiceDate) + '</td>';
+    html += '<td data-label="入金期日" style="text-align:left;color:#6b7280">' + fmtD(c.paymentDue) + '</td>';
+    html += '<td data-label="超過日数" style="font-weight:700;color:' + (urgent ? '#dc2626' : '#ea580c') + '">' + daysOverdue + '日</td>';
+    html += '<td data-label="請求額(税込)" style="font-weight:600">¥' + fmt(c.taxIncludedSales||0) + '</td>';
+    html += '<td class="no-label"><button style="background:#1e3a5f;color:white;font-size:13px;padding:9px 16px;border:none;border-radius:6px;cursor:pointer;min-height:38px" onclick="closeOverdueView();openDetail(\''+c.id+'\')">詳細を見る</button></td>';
     html += '</tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
 }
 
@@ -6329,6 +6419,63 @@ function selectPlFromDb(pmId) {
   addParkingLotCard(pl);
   closePlDbModal();
   showToast('🅿 ' + esc(p.name) + ' を駐車場に追加しました');
+}
+
+
+// ═══════════════════════════════════════════════
+// モバイル最適化（Lv1, Lv2, Lv4） 共通初期化
+// ═══════════════════════════════════════════════
+function _applyMobileEnhancements() {
+  // type="number" 全般に inputmode を付与（iOS / Android で適切なキーパッド表示）
+  document.querySelectorAll('input[type=number]').forEach(el => {
+    if (!el.hasAttribute('inputmode')) el.setAttribute('inputmode', 'decimal');
+  });
+  // インボイス登録番号 / 郵便番号 / 案件番号 などは数字のみ
+  document.querySelectorAll('input[name="pl_invoiceRegNo"],#pmf_invoiceRegNo,input[name=postalCode],input[name=pl_walkMinutes],input[name=pl_units]').forEach(el => {
+    el.setAttribute('inputmode', 'numeric');
+  });
+  // メール
+  document.querySelectorAll('input[type=email]').forEach(el => el.setAttribute('inputmode', 'email'));
+
+  // スクロール可能テーブルにシャドウ検出
+  document.querySelectorAll('.mobile-scroll-wrap').forEach(wrap => {
+    function update() {
+      const canScroll = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 4;
+      wrap.classList.toggle('has-scroll', canScroll);
+    }
+    update();
+    wrap.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+  });
+}
+// MutationObserver で動的に追加された input にも inputmode を付与
+function _watchInputs() {
+  const obs = new MutationObserver(muts => {
+    let needs = false;
+    for (const m of muts) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType === 1 && (node.matches?.('input') || node.querySelector?.('input,.mobile-scroll-wrap'))) {
+          needs = true; break;
+        }
+      }
+      if (needs) break;
+    }
+    if (needs) _applyMobileEnhancements();
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+}
+window.addEventListener('DOMContentLoaded', () => {
+  _applyMobileEnhancements();
+  _watchInputs();
+});
+
+// ═══════════════════════════════════════════════
+// PWA Service Worker 登録（Lv4）
+// ═══════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW登録失敗:', err));
+  });
 }
 
 window.addEventListener('DOMContentLoaded', initApp);
