@@ -5346,7 +5346,7 @@ function closePMForm() {
 function clearPMForm() {
   ['pmf_name','pmf_address','pmf_rentMonthly','pmf_rentDaily',
    'pmf_fee','pmf_keyMoney','pmf_deposit',
-   'pmf_supplierName','pmf_tel','pmf_fax','pmf_email','pmf_memo'].forEach(id => {
+   'pmf_supplierName','pmf_tel','pmf_fax','pmf_email','pmf_memo','pmf_lessorAddress','pmf_invoiceRegNo'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
   ['pmf_startProRate','pmf_endProRate','pmf_vehicleType'].forEach(id => {
@@ -5371,6 +5371,10 @@ function populatePMForm(p) {
   set('pmf_fax', p.fax);
   set('pmf_email', p.email);
   set('pmf_memo', p.memo);
+  set('pmf_lessorAddress', p.lessorAddress);
+  set('pmf_invoiceRegNo', p.invoiceRegNo);
+  const isQI = document.getElementById('pmf_isQualifiedInvoicer');
+  if (isQI) isQI.value = p.isQualifiedInvoicer ? 'true' : 'false';
   set('pmf_startProRate', p.startProRate);
   set('pmf_endProRate', p.endProRate);
   set('pmf_vehicleType', p.vehicleType);
@@ -5541,6 +5545,9 @@ async function savePM() {
     tel: document.getElementById('pmf_tel').value.trim(),
     fax: document.getElementById('pmf_fax').value.trim(),
     email: document.getElementById('pmf_email').value.trim(),
+    lessorAddress: document.getElementById('pmf_lessorAddress').value.trim(),
+    isQualifiedInvoicer: document.getElementById('pmf_isQualifiedInvoicer').value === 'true',
+    invoiceRegNo: document.getElementById('pmf_invoiceRegNo').value.trim(),
     startProRate: document.getElementById('pmf_startProRate').value,
     endProRate: document.getElementById('pmf_endProRate').value,
     memo: document.getElementById('pmf_memo').value.trim(),
@@ -5725,6 +5732,9 @@ function selectPlFromDb(pmId) {
     endProRate: p.endProRate === '可',
     lotNote: p.memo || '',
     photo: (p.photoUrls && p.photoUrls[0]) ? p.photoUrls[0] : '',
+    lessorAddress: p.lessorAddress || '',
+    isQualifiedInvoicer: !!p.isQualifiedInvoicer,
+    invoiceRegNo: p.invoiceRegNo || '',
   };
 
   addParkingLotCard(pl);
@@ -5881,6 +5891,24 @@ window.addEventListener('DOMContentLoaded', initApp);
       <div class="pmf-group">
         <label>メールアドレス</label>
         <input type="email" id="pmf_email" placeholder="例：contact@example.com">
+      </div>
+      <div class="pmf-section-title">契約書記載情報</div>
+      <div class="pmf-group">
+        <label>貸主住所</label>
+        <input type="text" id="pmf_lessorAddress" placeholder="貸主の住所（押印欄に記載）">
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>適格請求書発行事業者</label>
+          <select id="pmf_isQualifiedInvoicer">
+            <option value="false">該当しない</option>
+            <option value="true">該当する</option>
+          </select>
+        </div>
+        <div class="pmf-group">
+          <label>インボイス登録番号 <span style="font-size:10px;color:#9ca3af">T以下</span></label>
+          <input type="text" id="pmf_invoiceRegNo" placeholder="1234567890123">
+        </div>
       </div>
       <div class="pmf-section-title">日割条件</div>
       <div class="pmf-row">
