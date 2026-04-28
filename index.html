@@ -497,6 +497,9 @@
     <button class="btn btn-ghost" onclick="exportCSV()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel出力
     </button>
+    <button class="btn btn-ghost" onclick="exportFreeeCSV()" title="freee 取引インポート用CSV">
+      📤 freee CSV
+    </button>
 
     <button class="btn btn-ghost" onclick="openMasterModal()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM2 20a10 10 0 0 1 20 0"/></svg>マスタ管理
@@ -509,6 +512,9 @@
     </button>
     <button class="btn btn-ghost" onclick="openMonthlyReport()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><rect x="12" y="13" width="3" height="5" fill="currentColor" stroke="none"/><rect x="16" y="11" width="3" height="7" fill="currentColor" stroke="none"/><rect x="8" y="15" width="3" height="3" fill="currentColor" stroke="none"/></svg>月次レポート
+    </button>
+    <button class="btn btn-ghost" onclick="openDepositView()">
+      💰 保証金
     </button>
     <button class="btn btn-ghost" onclick="openTrash()" title="ゴミ箱">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>ゴミ箱
@@ -590,6 +596,27 @@
   </div>
 </div>
 
+<div class="sv-overlay hidden" id="depositOverlay">
+  <div class="sv-modal" style="width:min(98vw,1100px)">
+    <div class="sv-header">
+      <h2>💰 保証金管理<span style="font-size:12px;font-weight:normal;color:rgba(255,255,255,.7);margin-left:10px">仕入先へ預けた保証金の見える化</span></h2>
+      <button class="sv-close-btn" onclick="exportDepositCSV()">📊 CSV出力</button>
+      <button class="sv-close-btn" onclick="closeDepositView()">✕ 閉じる</button>
+    </div>
+    <div class="sv-body" id="depositBody"></div>
+  </div>
+</div>
+
+<div class="sv-overlay hidden" id="overdueOverlay">
+  <div class="sv-modal" style="width:min(96vw,920px)">
+    <div class="sv-header" style="background:#dc2626">
+      <h2>🚨 入金期限超過 案件</h2>
+      <button class="sv-close-btn" onclick="closeOverdueView()">✕ 閉じる</button>
+    </div>
+    <div class="sv-body" id="overdueBody"></div>
+  </div>
+</div>
+
 <div class="monthly-overlay" id="monthlyOverlay">
   <div class="monthly-panel">
     <div class="monthly-header">
@@ -615,6 +642,7 @@
   </div>
 
   <div class="stats-bar" id="statsBar"></div>
+  <div id="overdueBadgeBar"></div>
   <div class="alert-bar" id="alertBar"></div>
 
   <div class="controls">
@@ -2304,7 +2332,7 @@ function getFiltered(){
   });
   return data;
 }
-function renderAll(){renderTable();renderCards();renderContractAlerts();}
+function renderAll(){renderTable();renderCards();renderContractAlerts();renderOverdueBadge();}
 
 // ── PC テーブル ──
 function renderTable(){
@@ -5371,6 +5399,321 @@ function exportSalesExcel() {
   XLSX.utils.book_append_sheet(wb, wsS, '現場別');
 
   XLSX.writeFile(wb, '売上集計' + (_svYear ? '_' + _svYear : '') + '.xlsx');
+}
+
+
+// ═══════════════════════════════════════════════
+// ── freee 取引一括登録CSV出力 ──
+// ═══════════════════════════════════════════════
+// freee「取引のCSVテンプレート」形式に合わせた収入CSV
+// 対象: 請求済 + 入金済 の案件のみ（請求書発行済みのもの）
+const FREEE_HEADERS = [
+  '収支区分','管理番号','発生日','決済期日','取引先','勘定科目','税区分',
+  '金額','税計算区分','税額','備考','品目','部門','メモタグ',
+  'セグメント1','セグメント2','セグメント3','決済日','決済口座','決済金額'
+];
+
+function _toFreeeDate(d) {
+  if (!d) return '';
+  const p = String(d).split('-');
+  if (p.length < 3) return String(d);
+  return p[0] + '/' + p[1].padStart(2,'0') + '/' + p[2].padStart(2,'0');
+}
+
+function exportFreeeCSV() {
+  const targets = (cases || []).filter(c => !c.deleted && (c.status === '請求済' || c.status === '入金済'));
+  if (!targets.length) {
+    showToast('対象案件（請求済・入金済）がありません');
+    return;
+  }
+  const lines = [FREEE_HEADERS.map(_csvCell).join(',')];
+  targets.forEach(c => {
+    const taxInc = parseFloat(c.taxIncludedSales || 0) || 0;
+    const sales = parseFloat(c.fixedSales || 0) || 0;
+    const tax = Math.max(0, taxInc - sales);
+    const memo = (c.siteName || '') + (c.caseNote ? '：' + c.caseNote : '');
+    const settled = (c.status === '入金済' || c.paymentDate) ? true : false;
+    const row = [
+      '収入',                        // 収支区分
+      c.caseNo || '',                // 管理番号
+      _toFreeeDate(c.invoiceDate),   // 発生日
+      _toFreeeDate(c.paymentDue),    // 決済期日
+      c.customerName || '',          // 取引先
+      '売上高',                      // 勘定科目
+      '課税売上10%',                  // 税区分
+      String(taxInc),                // 金額（税込）
+      '内税',                        // 税計算区分
+      String(tax),                   // 税額
+      memo,                          // 備考
+      '駐車場仲介料',                 // 品目
+      c.baseName || '',              // 部門
+      '',                            // メモタグ
+      '', '', '',                    // セグメント1-3
+      settled ? _toFreeeDate(c.paymentDate || c.paymentDue) : '',  // 決済日
+      settled ? '普通預金' : '',      // 決済口座
+      settled ? String(parseFloat(c.paymentAmount || c.taxIncludedSales || 0) || 0) : ''  // 決済金額
+    ];
+    lines.push(row.map(_csvCell).join(','));
+  });
+
+  const csv = '\ufeff' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = 'freee_取引_' + (new Date().toISOString().slice(0,10)) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast(targets.length + '件をfreee CSVで出力しました');
+}
+
+// ═══════════════════════════════════════════════
+// ── 保証金管理ビュー ──
+// ═══════════════════════════════════════════════
+const DEPOSIT_ACTIVE_STATUSES = ['未請求','請求済','入金済']; // 契約中は仕入先請求書待ちで保証金未確定のため除外
+
+function openDepositView() {
+  document.getElementById('depositOverlay').classList.remove('hidden');
+  renderDepositView();
+}
+function closeDepositView() {
+  document.getElementById('depositOverlay').classList.add('hidden');
+}
+
+// 保証金が発生している駐車場行を抽出
+function _depositRows() {
+  const rows = [];
+  cases.forEach(c => {
+    if (c.deleted) return;
+    if (!DEPOSIT_ACTIVE_STATUSES.includes(c.status)) return;
+    if (!c.parkingLots) return;
+    c.parkingLots.forEach((pl, idx) => {
+      const dep = parseFloat(pl.deposit || 0) || 0;
+      const units = parseInt(pl.units || 0, 10) || 0;
+      if (dep <= 0) return;
+      rows.push({
+        caseId: c.id,
+        caseNo: c.caseNo || '',
+        plIdx: idx,
+        plName: pl.name || '',
+        plAddress: pl.address || '',
+        supplierName: pl.supplierName || '',
+        supplierPhone: pl.supplierPhone || '',
+        supplierFax: pl.supplierFax || '',
+        contractStart: pl.contractStart || c.contractStart || '',
+        contractEnd: pl.contractEnd || c.contractEnd || '',
+        units: units,
+        depositPerUnit: dep,
+        depositTotal: dep * units,
+        customerName: c.customerName || '',
+        siteName: c.siteName || ''
+      });
+    });
+  });
+  return rows;
+}
+
+let _depositSort = { key: 'supplierName', dir: 'asc' };
+
+function renderDepositView() {
+  const body = document.getElementById('depositBody');
+  if (!body) return;
+  const rows = _depositRows();
+
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af">保証金が発生している駐車場はありません。</div>';
+    return;
+  }
+
+  // ソート
+  const k = _depositSort.key;
+  const dir = _depositSort.dir === 'asc' ? 1 : -1;
+  rows.sort((a,b) => {
+    const va = a[k], vb = b[k];
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    return String(va||'').localeCompare(String(vb||''), 'ja') * dir;
+  });
+
+  const totalDeposit = rows.reduce((s,r) => s + r.depositTotal, 0);
+  const totalUnits = rows.reduce((s,r) => s + r.units, 0);
+  const fmtN = n => (n||0).toLocaleString('ja-JP');
+  const fmtD = d => {
+    if (!d) return '';
+    const p = d.split('-');
+    if (p.length < 3) return d;
+    return p[0] + '/' + parseInt(p[1]) + '/' + parseInt(p[2]);
+  };
+
+  function sortHeader(label, key, align) {
+    const arrow = (_depositSort.key === key) ? (_depositSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    return '<th style="cursor:pointer;text-align:' + (align||'right') + '" onclick="_sortDepositBy(\''+key+'\')">' + label + arrow + '</th>';
+  }
+
+  let html = '<div class="sv-filter-row"><span style="font-size:12px;color:#6b7280">対象：未請求・請求済・入金済の案件で保証金が発生しているもの（契約中は仕入先請求書待ちのため除外）</span></div>';
+  html += '<table class="sv-table" style="font-size:12.5px">';
+  html += '<thead><tr>';
+  html += sortHeader('案件番号','caseNo','left');
+  html += sortHeader('駐車場名','plName','left');
+  html += sortHeader('住所','plAddress','left');
+  html += sortHeader('仕入先名','supplierName','left');
+  html += sortHeader('TEL','supplierPhone','left');
+  html += sortHeader('FAX','supplierFax','left');
+  html += sortHeader('契約期間','contractStart','left');
+  html += sortHeader('台数','units','right');
+  html += sortHeader('保証金/台','depositPerUnit','right');
+  html += sortHeader('保証金合計','depositTotal','right');
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(r => {
+    html += '<tr style="cursor:pointer" onclick="closeDepositView();openDetail(\''+r.caseId+'\')">';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(r.caseNo) + '</td>';
+    html += '<td style="text-align:left">' + esc(r.plName) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280;font-size:11.5px">' + esc(r.plAddress) + '</td>';
+    html += '<td style="text-align:left">' + esc(r.supplierName) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280">' + esc(r.supplierPhone) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280">' + esc(r.supplierFax) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280;white-space:nowrap">' + fmtD(r.contractStart) + ' 〜 ' + fmtD(r.contractEnd) + '</td>';
+    html += '<td>' + r.units + '</td>';
+    html += '<td>¥' + fmtN(r.depositPerUnit) + '</td>';
+    html += '<td style="font-weight:600;color:#16a34a">¥' + fmtN(r.depositTotal) + '</td>';
+    html += '</tr>';
+  });
+
+  html += '<tr class="sv-total"><td colspan="7" style="text-align:right;padding-right:12px">合計（'+rows.length+'件）</td>';
+  html += '<td>' + totalUnits + '</td>';
+  html += '<td>－</td>';
+  html += '<td>¥' + fmtN(totalDeposit) + '</td></tr>';
+  html += '</tbody></table>';
+
+  body.innerHTML = html;
+}
+
+function _sortDepositBy(key) {
+  if (_depositSort.key === key) _depositSort.dir = _depositSort.dir === 'asc' ? 'desc' : 'asc';
+  else { _depositSort.key = key; _depositSort.dir = 'asc'; }
+  renderDepositView();
+}
+
+function exportDepositCSV() {
+  const rows = _depositRows();
+  if (!rows.length) { showToast('出力対象がありません'); return; }
+  const headers = ['案件番号','駐車場名','駐車場住所','仕入先名','仕入先電話','仕入先FAX','契約開始日','契約終了日','台数','保証金(1台あたり)','保証金合計','顧客名','現場名'];
+  const lines = [headers.map(_csvCell).join(',')];
+  rows.forEach(r => {
+    lines.push([
+      r.caseNo, r.plName, r.plAddress, r.supplierName, r.supplierPhone, r.supplierFax,
+      r.contractStart, r.contractEnd, r.units, r.depositPerUnit, r.depositTotal,
+      r.customerName, r.siteName
+    ].map(_csvCell).join(','));
+  });
+  const csv = '\ufeff' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url; a.download = '保証金一覧_' + (new Date().toISOString().slice(0,10)) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function _csvCell(v) {
+  const s = String(v ?? '');
+  return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+// ═══════════════════════════════════════════════
+// ── 入金期限超過アラート ──
+// ═══════════════════════════════════════════════
+function _overdueCases() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  return cases.filter(c => {
+    if (c.deleted) return false;
+    if (c.status !== '請求済') return false;
+    if (c.paymentDate) return false;
+    if (!c.paymentDue) return false;
+    const due = new Date(c.paymentDue + 'T00:00:00');
+    if (isNaN(due)) return false;
+    due.setHours(0,0,0,0);
+    return due < today;
+  }).map(c => {
+    const due = new Date(c.paymentDue + 'T00:00:00'); due.setHours(0,0,0,0);
+    const days = Math.round((today - due) / 86400000);
+    return { c, daysOverdue: days };
+  }).sort((a,b) => b.daysOverdue - a.daysOverdue);
+}
+
+function renderOverdueBadge() {
+  const bar = document.getElementById('overdueBadgeBar');
+  if (!bar) return;
+  const list = _overdueCases();
+  if (!list.length) { bar.innerHTML = ''; return; }
+  const total = list.reduce((s,x) => s + (parseFloat(x.c.taxIncludedSales||0)||0), 0);
+  const fmt = n => (n||0).toLocaleString('ja-JP');
+  bar.innerHTML =
+    '<div onclick="openOverdueView()" style="cursor:pointer;background:linear-gradient(90deg,#dc2626,#ef4444);color:white;padding:12px 18px;border-radius:10px;margin:0 0 10px;display:flex;align-items:center;gap:14px;box-shadow:0 4px 10px rgba(220,38,38,.25);transition:transform .15s" onmouseover="this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.transform=\'translateY(0)\'">' +
+      '<span style="font-size:24px">🚨</span>' +
+      '<div style="flex:1">' +
+        '<div style="font-weight:700;font-size:15px">入金期限超過　' + list.length + '件</div>' +
+        '<div style="font-size:12px;opacity:.9">未回収額 合計：¥' + fmt(total) + '（税込）</div>' +
+      '</div>' +
+      '<span style="background:rgba(255,255,255,.2);padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600">詳細を見る →</span>' +
+    '</div>';
+}
+
+let _overdueDetail = null;
+
+function openOverdueView() {
+  document.getElementById('overdueOverlay').classList.remove('hidden');
+  renderOverdueView();
+}
+function closeOverdueView() {
+  document.getElementById('overdueOverlay').classList.add('hidden');
+}
+
+function renderOverdueView() {
+  const body = document.getElementById('overdueBody');
+  if (!body) return;
+  const list = _overdueCases();
+  if (!list.length) {
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af">入金期限を超過している案件はありません。</div>';
+    return;
+  }
+  const fmt = n => (n||0).toLocaleString('ja-JP');
+  const fmtD = d => {
+    if (!d) return '';
+    const p = d.split('-');
+    if (p.length < 3) return d;
+    return p[0] + '/' + parseInt(p[1]) + '/' + parseInt(p[2]);
+  };
+  const total = list.reduce((s,x) => s + (parseFloat(x.c.taxIncludedSales||0)||0), 0);
+
+  let html = '<div class="sv-filter-row" style="margin-bottom:12px"><span style="font-size:12px;color:#dc2626;font-weight:600">未回収額合計：¥' + fmt(total) + '（税込）／' + list.length + '件</span></div>';
+  html += '<table class="sv-table" style="font-size:13px">';
+  html += '<thead><tr>';
+  html += '<th style="text-align:left">案件番号</th>';
+  html += '<th style="text-align:left">顧客名</th>';
+  html += '<th style="text-align:left">現場名</th>';
+  html += '<th style="text-align:left">請求日</th>';
+  html += '<th style="text-align:left">入金期日</th>';
+  html += '<th>超過日数</th>';
+  html += '<th>請求額（税込）</th>';
+  html += '<th></th>';
+  html += '</tr></thead><tbody>';
+
+  list.forEach(({c, daysOverdue}) => {
+    const urgent = daysOverdue >= 30;
+    html += '<tr' + (urgent ? ' style="background:#fef2f2"' : '') + '>';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(c.caseNo||'') + '</td>';
+    html += '<td style="text-align:left">' + esc(c.customerName||'') + '</td>';
+    html += '<td style="text-align:left;color:#6b7280">' + esc(c.siteName||'') + '</td>';
+    html += '<td style="text-align:left;color:#6b7280">' + fmtD(c.invoiceDate) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280">' + fmtD(c.paymentDue) + '</td>';
+    html += '<td style="font-weight:700;color:' + (urgent ? '#dc2626' : '#ea580c') + '">' + daysOverdue + '日</td>';
+    html += '<td style="font-weight:600">¥' + fmt(c.taxIncludedSales||0) + '</td>';
+    html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:4px 10px;border:none;border-radius:4px;cursor:pointer" onclick="closeOverdueView();openDetail(\''+c.id+'\')">詳細</button></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════
