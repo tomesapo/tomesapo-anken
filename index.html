@@ -4410,6 +4410,9 @@ function showMailBanner(data,type){
   }else if(type==='kakutei'){
     span.textContent='\u{1f4e7} \u5951\u7d04\u78ba\u5b9a\u30e1\u30fc\u30eb\u3092\u4f5c\u6210\u3057\u307e\u3059\u304b\uff1f';
     _mailBannerCb=function(){openKakuteiMail(data);};
+  }else if(type==='application'){
+    span.textContent='\u{1f4e0} \u7533\u8fbc\u66f8\u306eFAX\u9001\u4fe1\u30e1\u30fc\u30eb\u3092\u4f5c\u6210\u3057\u307e\u3059\u304b\uff1f';
+    _mailBannerCb=function(){openApplicationFaxMail(data);};
   }
   btn.onclick=function(){if(_mailBannerCb)_mailBannerCb();closeMailBanner();};
   banner.classList.add('show');
@@ -4492,6 +4495,65 @@ function openKakuteiMail(data){
     '━━━━━━━━━━━━━━━━━━━━'
   );
   window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
+}
+
+// 国内FAX → eFax メールアドレスに変換（例: 052-831-5415 → 81528315415@efaxsend.com）
+function _jpFaxToEfaxAddr(fax) {
+  if (!fax) return '';
+  let digits = String(fax).replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  return '81' + digits + '@efaxsend.com';
+}
+
+// 申込書のFAX送信メール下書きを開く
+// data は { caseId, plIdx, useText, sealMode } の形で渡される
+function openApplicationFaxMail(data) {
+  const c = cases.find(x => x.id === data.caseId);
+  if (!c) { showToast('案件データが見つかりません'); return; }
+  const pl = (c.parkingLots || [])[data.plIdx];
+  if (!pl) { showToast('駐車場データが見つかりません'); return; }
+  const branch = getCaseBranch(c);
+
+  if (!pl.supplierFax) {
+    showToast('仕入先FAXが未登録のためFAX送信できません');
+    return;
+  }
+  const to = _jpFaxToEfaxAddr(pl.supplierFax);
+
+  const subject = '駐車場利用申込書｜' + (pl.name || '');
+
+  // FAX 表紙（eFax は本文を送信元データの一部として送ります）
+  const fmtJ = d => {
+    if (!d) return '';
+    const p = String(d).split('-');
+    if (p.length < 3) return String(d);
+    return p[0] + '年' + parseInt(p[1],10) + '月' + parseInt(p[2],10) + '日';
+  };
+  const body =
+    (pl.supplierName || '') + ' 御中\n\n' +
+    'いつもお世話になっております。\n' +
+    (branch.name || '株式会社 TomeSapo') + 'の' + (c.ourStaffName || '') + 'でございます。\n\n' +
+    '下記駐車場の利用申込書を添付にてお送りいたします。\n' +
+    'ご確認のほど、よろしくお願い申し上げます。\n\n' +
+    '【駐車場】' + (pl.name || '') + '\n' +
+    '【期間】' + fmtJ(pl.contractStart) + ' 〜 ' + fmtJ(pl.contractEnd) + '\n' +
+    '【台数】' + (pl.units || 0) + '台\n\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    (branch.name || '株式会社 TomeSapo') + '\n' +
+    (c.ourStaffName || '') + '\n' +
+    '－－－－－－－－－－－－－－－－－－－－\n' +
+    (branch.tel ? 'TEL: ' + branch.tel + '\n' : '') +
+    (branch.fax ? 'FAX: ' + branch.fax + '\n' : '') +
+    (c.ourStaffMobile ? '携帯: ' + c.ourStaffMobile + '\n' : '') +
+    (branch.email || 'info@tomesapo.co.jp') + '\n' +
+    '━━━━━━━━━━━━━━━━━━━━';
+
+  const url = 'https://mail.google.com/mail/?view=cm' +
+    '&to=' + encodeURIComponent(to) +
+    '&su=' + encodeURIComponent(subject) +
+    '&body=' + encodeURIComponent(body);
+  window.open(url, '_blank');
 }
 
 
@@ -5074,6 +5136,8 @@ async function generateApplicationDocument(caseId, plIdx) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast('申込書を出力しました');
+    // FAX送信メールの下書き作成バナーを表示
+    showMailBanner({ caseId: c.id, plIdx: plIdx, pl: pl }, 'application');
   } catch(e) {
     console.error(e);
     showToast('申込書の生成に失敗しました: ' + (e.message || e));
