@@ -5173,8 +5173,8 @@ async function generateApplicationDocument(caseId, plIdx) {
   // 用途を選択
   const useText = await chooseAppUse();
   if (useText === null) return;
-  // 電子印モードを選択（申込書 → 代表者印）
-  const sealMode = await chooseSealMode(branch, 'round');
+  // 電子印モードを選択（申込書 → 角印）
+  const sealMode = await chooseSealMode(branch, 'square');
   if (sealMode === null) return;
 
   if (!window.ExcelJS) { showToast('Excelテンプレートライブラリ読み込み中です。'); return; }
@@ -5207,8 +5207,8 @@ async function generateApplicationDocument(caseId, plIdx) {
     ws.getCell('C23').value = branch.email || '';
     ws.getCell('C27').value = useText;
 
-    // 電子印（H36）の挿入（代表者印）
-    const _appSealB64 = getBranchSealBase64(branch, 'round');
+    // 電子印（H36）の挿入（角印）
+    const _appSealB64 = getBranchSealBase64(branch, 'square');
     if (sealMode === 'seal' && _appSealB64) {
       const imgId = wb.addImage({
         base64: _appSealB64,
