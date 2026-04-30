@@ -2817,8 +2817,21 @@ function triggerPhotoInput(a){a.nextElementSibling.click();}
 async function handleParkingPhoto(input){
   const f=input.files[0];if(!f)return;
   const area=input.previousElementSibling;
-  const url=await compressImage(f,600,0.65);
-  area.dataset.photo=url;area.innerHTML='<img src="'+url+'">';
+  input.value='';
+  if (typeof Cropper === 'undefined') {
+    // フォールバック: Cropper未ロード時はそのまま圧縮
+    const url=await compressImage(f,600,0.65);
+    area.dataset.photo=url;area.innerHTML='<img src="'+url+'">';
+    return;
+  }
+  // クロップダイアログを開き、結果を圧縮して反映
+  _openCropDialog([f], async function(results) {
+    if (!results.length) return; // キャンセル/スキップ
+    const blob = results[0].blob;
+    const url = await compressImage(blob, 600, 0.65);
+    area.dataset.photo = url;
+    area.innerHTML = '<img src="' + url + '">';
+  });
 }
 function compressImage(file,maxW,q){
   return new Promise(r=>{
