@@ -1414,7 +1414,9 @@ function updateBankInfo() {
 }
 
 // ── 印鑑画像のアップロード ──
-async function uploadBranchSeal(branchId, fileInput) {
+async function uploadBranchSeal(branchId, fileInput, sealType) {
+  // sealType: 'round'（代表者印・丸印） | 'square'（角印） — 未指定なら 'round'（後方互換）
+  sealType = sealType || 'round';
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
   if (!/\.png$/i.test(file.name)) {
@@ -1429,7 +1431,6 @@ async function uploadBranchSeal(branchId, fileInput) {
   }
   showToast('印鑑画像を保存中…');
   try {
-    // FileをBase64に変換してFirestoreのmasterDataに直接保存（CORS問題回避）
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -1445,9 +1446,14 @@ async function uploadBranchSeal(branchId, fileInput) {
       if (b.sealPath && storage) {
         try { await storage.ref(b.sealPath).delete(); } catch(_) {}
       }
-      b.sealBase64 = b64;
-      b.sealUrl = dataUrl;  // 表示用 data URL
-      delete b.sealPath;
+      if (sealType === 'square') {
+        b.sealSquareBase64 = b64;
+        b.sealSquareUrl = dataUrl;
+      } else {
+        b.sealBase64 = b64;
+        b.sealUrl = dataUrl;
+        delete b.sealPath;
+      }
       await saveMasterToFS();
       showToast('✓ 印鑑画像を保存しました');
       renderBranches();
@@ -1459,23 +1465,47 @@ async function uploadBranchSeal(branchId, fileInput) {
     fileInput.value = '';
   }
 }
-async function removeBranchSeal(branchId) {
+async function removeBranchSeal(branchId, sealType) {
+  sealType = sealType || 'round';
   if (!confirm('印鑑画像を削除しますか？')) return;
   const b = (masterData.companyBranches || []).find(x => x.id === branchId);
   if (!b) return;
   try {
-    if (b.sealPath && storage) {
-      try { await storage.ref(b.sealPath).delete(); } catch(_) {}
+    if (sealType === 'square') {
+      delete b.sealSquareUrl;
+      delete b.sealSquareBase64;
+    } else {
+      if (b.sealPath && storage) {
+        try { await storage.ref(b.sealPath).delete(); } catch(_) {}
+      }
+      delete b.sealUrl;
+      delete b.sealPath;
+      delete b.sealBase64;
     }
-    delete b.sealUrl;
-    delete b.sealPath;
-    delete b.sealBase64;
     await saveMasterToFS();
     showToast('印鑑画像を削除しました');
     renderBranches();
   } catch(e) {
     showToast('削除エラー: ' + e.message);
   }
+}
+
+// 適切な印影画像を取得（指定タイプ → なければもう一方にフォールバック）
+function getBranchSealBase64(branch, preferredType) {
+  if (!branch) return '';
+  preferredType = preferredType || 'round';
+  if (preferredType === 'square') {
+    return branch.sealSquareBase64 || branch.sealBase64 || '';
+  }
+  return branch.sealBase64 || branch.sealSquareBase64 || '';
+}
+function getBranchSealUrl(branch, preferredType) {
+  if (!branch) return '';
+  preferredType = preferredType || 'round';
+  if (preferredType === 'square') {
+    return branch.sealSquareUrl || branch.sealUrl || '';
+  }
+  return branch.sealUrl || branch.sealSquareUrl || '';
 }
 async function _fetchImageAsArrayBuffer(url) {
   console.log('[seal] 印鑑画像取得開始:', url);
@@ -1519,13 +1549,27 @@ async function _fetchImageAsBase64(url) {
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
-function chooseSealMode(branch) {
+function chooseSealMode(branch, preferredType) {
+  preferredType = preferredType || 'round';
   return new Promise(resolve => {
-    if (!branch || (!branch.sealBase64 && !branch.sealUrl)) { resolve('none'); return; }
+    const sealUrl = getBranchSealUrl(branch, preferredType);
+    if (!sealUrl) { resolve('none'); return; }
+    // 実際に使用される印鑑タイプを判定（フォールバック後）
+    const usedType = (preferredType === 'square' && branch.sealSquareBase64) ? 'square'
+                   : (preferredType === 'round' && branch.sealBase64) ? 'round'
+                   : (branch.sealSquareBase64 ? 'square' : 'round');
+    const typeLabel = usedType === 'square' ? '角印' : '代表者印';
+    const fallbackNote = (preferredType !== usedType) ? '<div style="font-size:11px;color:#ea580c;margin-top:4px">⚠ '+(preferredType==='square'?'角印':'代表者印')+'が未登録のため、'+typeLabel+'を代用します</div>' : '';
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML = '<div style="background:white;border-radius:12px;padding:24px;max-width:400px;width:100%">' +
-      '<h3 style="margin:0 0 16px;font-size:16px">📝 出力方法を選択</h3>' +
+      '<h3 style="margin:0 0 12px;font-size:16px">📝 出力方法を選択</h3>' +
+      '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+        '<img src="'+esc(sealUrl)+'" style="width:48px;height:48px;object-fit:contain;background:#fff;border:1px solid #e5e7eb;border-radius:4px">' +
+        '<div><div style="font-size:13px;font-weight:600;color:#1e3a5f">'+typeLabel+'を使用</div>' +
+        fallbackNote +
+        '</div>' +
+      '</div>' +
       '<p style="font-size:13px;color:#6b7280;margin:0 0 16px">押印欄の処理を選んでください。</p>' +
       '<button id="_sealBtn1" style="display:block;width:100%;padding:12px;margin-bottom:8px;background:#1e3a5f;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer">🖋 電子印で出力（即送付可）</button>' +
       '<button id="_sealBtn2" style="display:block;width:100%;padding:12px;margin-bottom:8px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-weight:600;cursor:pointer">空欄で出力（紙押印用）</button>' +
@@ -1605,11 +1649,30 @@ function renderBranches() {
         '<div class="branch-field"><label>FAX</label><input type="text" value="'+esc(b.fax||'')+'" placeholder="0568-XX-XXXX" oninput="updateBranchField(\''+b.id+'\',\'fax\',this.value)"></div>' +
 
         '<div class="branch-field" style="grid-column:1/-1"><label>インボイス登録番号 <span style="font-size:9px;color:#9ca3af">T以下を入力</span></label><input type="text" value="'+esc(b.invoiceRegNo||'')+'" placeholder="1234567890123" oninput="updateBranchField(\''+b.id+'\',\'invoiceRegNo\',this.value)"></div>' +
-        '<div class="branch-field" style="grid-column:1/-1"><label>🖋 印鑑画像 <span style="font-size:9px;color:#9ca3af">透過PNG推奨・請求書/契約書に挿入</span></label>' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">' +
-            (b.sealUrl ? '<img src="'+esc(b.sealUrl)+'" style="width:60px;height:60px;object-fit:contain;border:1px solid #e5e7eb;border-radius:4px;background:#fff">' : '<div style="width:60px;height:60px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af">未設定</div>') +
-            '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:5px 10px;cursor:pointer;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;font-weight:500">📷 アップロード<input type="file" accept="image/png" style="display:none" onchange="uploadBranchSeal(\''+b.id+'\',this)"></label>' +
-            (b.sealUrl ? '<button class="branch-delete" onclick="removeBranchSeal(\''+b.id+'\')">削除</button>' : '') +
+        '<div class="branch-field" style="grid-column:1/-1"><label>🖋 印鑑画像 <span style="font-size:9px;color:#9ca3af">透過PNG推奨・最大700KB</span></label>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px">' +
+            // 代表者印（丸印）
+            '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fafafa">' +
+              '<div style="font-size:11px;font-weight:600;color:#1e3a5f;margin-bottom:6px">代表者印（丸印）<span style="font-size:9px;font-weight:normal;color:#9ca3af;margin-left:4px">契約書・申込書</span></div>' +
+              '<div style="display:flex;align-items:center;gap:8px">' +
+                (b.sealUrl ? '<img src="'+esc(b.sealUrl)+'" style="width:60px;height:60px;object-fit:contain;border:1px solid #e5e7eb;border-radius:4px;background:#fff">' : '<div style="width:60px;height:60px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af">未設定</div>') +
+                '<div style="display:flex;flex-direction:column;gap:4px;flex:1">' +
+                  '<label style="display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:11px;padding:5px 10px;cursor:pointer;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;font-weight:500">📷 アップロード<input type="file" accept="image/png" style="display:none" onchange="uploadBranchSeal(\''+b.id+'\',this,\'round\')"></label>' +
+                  (b.sealUrl ? '<button class="branch-delete" style="font-size:11px" onclick="removeBranchSeal(\''+b.id+'\',\'round\')">削除</button>' : '') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            // 角印
+            '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fafafa">' +
+              '<div style="font-size:11px;font-weight:600;color:#1e3a5f;margin-bottom:6px">角印（社印）<span style="font-size:9px;font-weight:normal;color:#9ca3af;margin-left:4px">請求書</span></div>' +
+              '<div style="display:flex;align-items:center;gap:8px">' +
+                (b.sealSquareUrl ? '<img src="'+esc(b.sealSquareUrl)+'" style="width:60px;height:60px;object-fit:contain;border:1px solid #e5e7eb;border-radius:4px;background:#fff">' : '<div style="width:60px;height:60px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af">未設定</div>') +
+                '<div style="display:flex;flex-direction:column;gap:4px;flex:1">' +
+                  '<label style="display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:11px;padding:5px 10px;cursor:pointer;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;font-weight:500">📷 アップロード<input type="file" accept="image/png" style="display:none" onchange="uploadBranchSeal(\''+b.id+'\',this,\'square\')"></label>' +
+                  (b.sealSquareUrl ? '<button class="branch-delete" style="font-size:11px" onclick="removeBranchSeal(\''+b.id+'\',\'square\')">削除</button>' : '') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="branch-field" style="grid-column:1/-1"><label>👤 自社担当者 <span style="font-size:9px;color:#9ca3af">案件で選択 → 申込書C21に反映</span></label>' +
@@ -5048,7 +5111,7 @@ async function generateInvoiceExcel(c) {
   if (!c) { showToast('案件データが見つかりません'); return; }
   if (!window.XLSX) { showToast('Excelライブラリ読み込み中です。しばらくしてお試しください。'); return; }
   const branch = getCaseBranch(c);
-  const mode = await chooseSealMode(branch);
+  const mode = await chooseSealMode(branch, 'square'); // 請求書 → 角印
   if (mode === null) return;
   try { await _genInvoiceFromTemplate(c, mode); }
   catch(e) { console.error(e); showToast('請求書の生成に失敗しました: ' + e.message); }
@@ -5110,8 +5173,8 @@ async function generateApplicationDocument(caseId, plIdx) {
   // 用途を選択
   const useText = await chooseAppUse();
   if (useText === null) return;
-  // 電子印モードを選択
-  const sealMode = await chooseSealMode(branch);
+  // 電子印モードを選択（申込書 → 代表者印）
+  const sealMode = await chooseSealMode(branch, 'round');
   if (sealMode === null) return;
 
   if (!window.ExcelJS) { showToast('Excelテンプレートライブラリ読み込み中です。'); return; }
@@ -5144,10 +5207,11 @@ async function generateApplicationDocument(caseId, plIdx) {
     ws.getCell('C23').value = branch.email || '';
     ws.getCell('C27').value = useText;
 
-    // 電子印（H36）の挿入
-    if (sealMode === 'seal' && branch.sealBase64) {
+    // 電子印（H36）の挿入（代表者印）
+    const _appSealB64 = getBranchSealBase64(branch, 'round');
+    if (sealMode === 'seal' && _appSealB64) {
       const imgId = wb.addImage({
-        base64: branch.sealBase64,
+        base64: _appSealB64,
         extension: 'png',
       });
       // H列=8(0-indexed: 7), 36行=(0-indexed: 35)
@@ -5312,15 +5376,17 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   if (sealMode === 'seal') {
     try {
       let ab = null;
-      if (branch.sealBase64) {
+      const _invSealB64 = getBranchSealBase64(branch, 'square');
+      const _invSealUrl = getBranchSealUrl(branch, 'square');
+      if (_invSealB64) {
         // Firestore保存のBase64から直接生成
-        const bytes = Uint8Array.from(atob(branch.sealBase64), c => c.charCodeAt(0));
+        const bytes = Uint8Array.from(atob(_invSealB64), c => c.charCodeAt(0));
         ab = bytes.buffer;
         console.log('[seal] Base64から取得:', bytes.length, 'bytes');
-      } else if (branch.sealUrl && !branch.sealUrl.startsWith('data:')) {
+      } else if (_invSealUrl && !_invSealUrl.startsWith('data:')) {
         // 旧Storage URL の場合はfetch（CORS失敗の可能性あり）
         showToast('印鑑画像を取得中…');
-        ab = await _fetchImageAsArrayBuffer(branch.sealUrl);
+        ab = await _fetchImageAsArrayBuffer(_invSealUrl);
       }
       if (ab) {
         const imageId = wb.addImage({ buffer: ab, extension: 'png' });
@@ -5495,7 +5561,7 @@ async function generateLotContract(caseId, plIdx) {
   if (!pl) { showToast('駐車場データが見つかりません'); return; }
 
   const branch = getCaseBranch(c);
-  const sealMode = await chooseSealMode(branch);
+  const sealMode = await chooseSealMode(branch, 'round'); // 管理者契約書 → 代表者印
   if (sealMode === null) return; // キャンセル
   const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
   const months = (period.months || period.days) ? (period.months || 1) : 1;
@@ -5527,7 +5593,8 @@ async function generateLotContract(caseId, plIdx) {
 
   // 電子印データを付与
   data.useSeal = (sealMode === 'seal');
-  data.seal = (sealMode === 'seal' && branch.sealBase64) ? branch.sealBase64 : '';
+  const _lotSealB64 = getBranchSealBase64(branch, 'round');
+  data.seal = (sealMode === 'seal' && _lotSealB64) ? _lotSealB64 : '';
 
   const safeName = (pl.name || '駐車場').replace(/[/\\:*?"<>|]/g, '_');
   const sealSuffix = (sealMode === 'seal') ? '_押印済' : '';
@@ -5543,7 +5610,7 @@ async function generateCustomerContract(caseId, plIdx) {
   if (!pl) { showToast('駐車場データが見つかりません'); return; }
 
   const branch = getCaseBranch(c);
-  const sealMode = await chooseSealMode(branch);
+  const sealMode = await chooseSealMode(branch, 'round'); // 顧客契約書 → 代表者印
   if (sealMode === null) return; // キャンセル
   const cust = getCustomerByName(c.customerName) || {};
   const base = (cust.bases || []).find(b => b.name === c.baseName) || {};
@@ -5588,7 +5655,8 @@ async function generateCustomerContract(caseId, plIdx) {
 
   // 電子印データを付与
   data.useSeal = (sealMode === 'seal');
-  data.seal = (sealMode === 'seal' && branch.sealBase64) ? branch.sealBase64 : '';
+  const _custSealB64 = getBranchSealBase64(branch, 'round');
+  data.seal = (sealMode === 'seal' && _custSealB64) ? _custSealB64 : '';
 
   const safeName = (pl.name || '駐車場').replace(/[/\\:*?"<>|]/g, '_');
   const sealSuffix = (sealMode === 'seal') ? '_押印済' : '';
