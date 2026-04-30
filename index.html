@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="案件管理">
   <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.css">
+  <script src="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.js"></script>
   <link rel="apple-touch-icon" href="./icon-192.png">
 <title>案件管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -651,6 +653,25 @@
 
 
 <!-- ── ゴミ箱 ── -->
+<!-- 写真トリミング ダイアログ -->
+<div id="cropOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:white;border-radius:12px;padding:18px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;width:600px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid #e5e7eb">
+      <h3 style="margin:0;font-size:16px;flex:1">📷 写真の範囲を選択 <span id="cropCounter" style="font-size:12px;color:#6b7280;font-weight:normal"></span></h3>
+      <button onclick="cropDialogCancel()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 10px;cursor:pointer">✕</button>
+    </div>
+    <div style="margin:10px 0;flex:1;min-height:300px;max-height:60vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center">
+      <img id="cropImage" style="max-width:100%;display:block">
+    </div>
+    <p style="font-size:12px;color:#6b7280;margin:6px 0 12px">枠の四隅・辺をドラッグして範囲を調整できます。範囲外はカットされます。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="cropDialogSkipFile()" style="flex:1;background:#f3f4f6;color:#6b7280;border:none;border-radius:6px;padding:10px;font-size:13px;cursor:pointer">スキップ</button>
+      <button onclick="cropDialogUseOriginal()" style="flex:1;background:#fff;color:#1e3a5f;border:1px solid #d1d5db;border-radius:6px;padding:10px;font-size:13px;cursor:pointer">そのまま使用</button>
+      <button onclick="cropDialogConfirm()" style="flex:2;background:#1e3a5f;color:white;border:none;border-radius:6px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">範囲を確定</button>
+    </div>
+  </div>
+</div>
+
 <div class="trash-overlay hidden" id="trashOverlay">
   <div class="trash-modal">
     <div class="trash-header">
@@ -6359,47 +6380,149 @@ function removePMPhoto(idx) {
   renderPMPhotoList(pm.photoUrls);
 }
 
+// ═══════════════════════════════════════════════
+// 写真トリミング ダイアログ（Cropper.js）
+// ═══════════════════════════════════════════════
+let _cropperInstance = null;
+let _cropQueue = [];          // 処理待ちファイル配列
+let _cropCurIndex = 0;        // 現在処理中のインデックス
+let _cropResults = [];        // {name, blob} の配列（アップロード対象）
+let _cropDoneCallback = null; // 全ファイル処理完了後のコールバック
+
+function _openCropDialog(files, onDone) {
+  _cropQueue = files;
+  _cropCurIndex = 0;
+  _cropResults = [];
+  _cropDoneCallback = onDone;
+  _cropShowNext();
+}
+
+function _cropShowNext() {
+  if (_cropCurIndex >= _cropQueue.length) {
+    // すべて完了
+    document.getElementById('cropOverlay').style.display = 'none';
+    if (_cropperInstance) { _cropperInstance.destroy(); _cropperInstance = null; }
+    if (_cropDoneCallback) _cropDoneCallback(_cropResults);
+    return;
+  }
+  const file = _cropQueue[_cropCurIndex];
+  const ov = document.getElementById('cropOverlay');
+  const img = document.getElementById('cropImage');
+  document.getElementById('cropCounter').textContent = '(' + (_cropCurIndex+1) + '/' + _cropQueue.length + ')';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    img.src = e.target.result;
+    ov.style.display = 'flex';
+    if (_cropperInstance) { _cropperInstance.destroy(); _cropperInstance = null; }
+    img.onload = function() {
+      _cropperInstance = new Cropper(img, {
+        viewMode: 1,
+        autoCropArea: 0.85,
+        responsive: true,
+        background: false,
+        zoomable: true,
+        movable: true,
+        scalable: false,
+        rotatable: false
+      });
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+function cropDialogConfirm() {
+  if (!_cropperInstance) return;
+  const file = _cropQueue[_cropCurIndex];
+  const canvas = _cropperInstance.getCroppedCanvas({
+    maxWidth: 2000,
+    maxHeight: 2000,
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'high'
+  });
+  if (!canvas) { showToast('クロップに失敗しました'); return; }
+  const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const ext = mime === 'image/png' ? '.png' : '.jpg';
+  canvas.toBlob(function(blob) {
+    if (blob) {
+      // 元のファイル名（拡張子置換）
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      _cropResults.push({ name: baseName + '_cropped' + ext, blob: blob });
+    }
+    _cropCurIndex++;
+    _cropShowNext();
+  }, mime, 0.9);
+}
+
+function cropDialogUseOriginal() {
+  const file = _cropQueue[_cropCurIndex];
+  _cropResults.push({ name: file.name, blob: file });
+  _cropCurIndex++;
+  _cropShowNext();
+}
+
+function cropDialogSkipFile() {
+  _cropCurIndex++;
+  _cropShowNext();
+}
+
+function cropDialogCancel() {
+  document.getElementById('cropOverlay').style.display = 'none';
+  if (_cropperInstance) { _cropperInstance.destroy(); _cropperInstance = null; }
+  _cropQueue = [];
+  _cropResults = [];
+  _cropDoneCallback = null;
+}
+
 async function uploadPMPhotos() {
   const input = document.getElementById('pmf_photos');
   const prog = document.getElementById('pmf_photoProgress');
   if (!input || !input.files.length) return;
-  // Storage SDK を先にロード
-  if (prog) prog.textContent = '準備中…';
-  const sdkOk = await loadStorageSDK();
-  if (!sdkOk || !storage) {
-    showToast('写真保存にはFirebase Storageが必要です（Firebaseコンソールで Storage を有効化してください）');
-    input.value = '';
-    if (prog) prog.textContent = '';
+  if (typeof Cropper === 'undefined') {
+    showToast('クロップライブラリ読み込み中です。再度お試しください');
     return;
   }
-  const pmId = pmEditingId || uid();
-  if (!pmEditingId) pmEditingId = pmId;
   const files = Array.from(input.files);
-  let done = 0;
-  if (prog) prog.textContent = 'アップロード中... (0/' + files.length + ')';
-  const newUrls = [];
-  for (const file of files) {
-    try {
-      const ok = true; // already loaded above
-      const ref = storage.ref('parkingMasters/' + pmId + '/' + Date.now() + '_' + file.name);
-      await ref.put(file);
-      const url = await ref.getDownloadURL();
-      newUrls.push(url);
-      done++;
-      if (prog) prog.textContent = 'アップロード中... (' + done + '/' + files.length + ')';
-    } catch(e) { showToast('写真アップロード失敗: ' + file.name); }
-  }
-  if (prog) { prog.textContent = done + '枚アップロード完了'; setTimeout(()=>{if(prog)prog.textContent='';},3000); }
-  // 既存のphotoUrlsに追記
-  const pm = parkingMasters.find(p => p.id === pmEditingId);
-  const existing = pm ? (pm.photoUrls || []) : [];
-  const merged = [...existing, ...newUrls];
-  // UIに反映
-  renderPMPhotoList(merged);
-  // parkingMasters配列に仮反映（save時に正式保存）
-  if (pm) pm.photoUrls = merged;
-  else parkingMasters.push({ id: pmEditingId, photoUrls: merged });
-  input.value = '';
+  input.value = ''; // クリアしてから処理（同じファイルを連続選択できるように）
+  // クロップダイアログを開き、完了後にアップロード
+  _openCropDialog(files, async function(results) {
+    if (!results.length) {
+      if (prog) prog.textContent = '';
+      return;
+    }
+    if (prog) prog.textContent = '準備中…';
+    const sdkOk = await loadStorageSDK();
+    if (!sdkOk || !storage) {
+      showToast('写真保存にはFirebase Storageが必要です（Firebaseコンソールで Storage を有効化してください）');
+      if (prog) prog.textContent = '';
+      return;
+    }
+    const pmId = pmEditingId || uid();
+    if (!pmEditingId) pmEditingId = pmId;
+    let done = 0;
+    if (prog) prog.textContent = 'アップロード中... (0/' + results.length + ')';
+    const newUrls = [];
+    for (const item of results) {
+      try {
+        const ref = storage.ref('parkingMasters/' + pmId + '/' + Date.now() + '_' + item.name);
+        await ref.put(item.blob);
+        const url = await ref.getDownloadURL();
+        newUrls.push(url);
+        done++;
+        if (prog) prog.textContent = 'アップロード中... (' + done + '/' + results.length + ')';
+      } catch(e) { showToast('写真アップロード失敗: ' + item.name); }
+    }
+      if (prog) { prog.textContent = done + '枚アップロード完了'; setTimeout(()=>{if(prog)prog.textContent='';},3000); }
+    // 既存のphotoUrlsに追記
+    const pm = parkingMasters.find(p => p.id === pmEditingId);
+    const existing = pm ? (pm.photoUrls || []) : [];
+    const merged = [...existing, ...newUrls];
+    // UIに反映
+    renderPMPhotoList(merged);
+    // parkingMasters配列に仮反映（save時に正式保存）
+    if (pm) pm.photoUrls = merged;
+    else parkingMasters.push({ id: pmEditingId, photoUrls: merged });
+  });
 }
 
 
