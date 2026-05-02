@@ -7474,14 +7474,14 @@ window.addEventListener('DOMContentLoaded', initApp);
       <div class="pmf-row">
         <div class="pmf-group">
           <label>地主税区分 <span style="font-size:10px;color:#9ca3af">賃料・礼金</span></label>
-          <select id="pmf_ownerTaxable">
+          <select id="pmf_ownerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_ownerInvoiceRegNo')">
             <option value="false">免税事業者</option>
             <option value="true">課税事業者</option>
           </select>
         </div>
         <div class="pmf-group">
           <label>管理会社税区分 <span style="font-size:10px;color:#9ca3af">手数料</span></label>
-          <select id="pmf_managerTaxable">
+          <select id="pmf_managerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_managerInvoiceRegNo')">
             <option value="false">免税/該当なし</option>
             <option value="true">課税事業者</option>
           </select>
