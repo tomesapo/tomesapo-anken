@@ -2356,7 +2356,14 @@ function openModal(id=null) {
   document.getElementById('modalTitle').textContent=id?'案件を編集':'新規案件登録';
   clearForm();
   if(id){const c=cases.find(x=>x.id===id);if(c)populateForm(c);}
-  else{populateCustomerSelectOnly();}
+  else{
+    populateCustomerSelectOnly();
+    // 新規案件は依頼受付日に今日をセット
+    const _today = new Date();
+    const _ymd = _today.getFullYear() + '-' + String(_today.getMonth()+1).padStart(2,'0') + '-' + String(_today.getDate()).padStart(2,'0');
+    const _rd = document.getElementById('f_receptionDate');
+    if (_rd) _rd.value = _ymd;
+  }
   document.getElementById('modalOverlay').classList.add('open');
   renderFileSection(id);
 }
