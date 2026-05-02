@@ -2125,10 +2125,10 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   const estEnd=pl.estimateEnd||contractEnd||'';
   if(!estStart||!estEnd)return null;
   const units=(pl.estimateUnits||pl.units)||1;
-  const quoteRate=pl.rateType==='daily'?(pl.quoteDailyRent??pl.dailyRent):(pl.quoteMonthlyRent??pl.monthlyRent);
+  const quoteRate=pl.rateType==='daily'?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
   const costRate=pl.rateType==='daily'?pl.dailyRent:pl.monthlyRent;
-  const quoteAdminFee=pl.quoteAdminFee??pl.adminFee??0;
-  const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney??0;
+  const quoteAdminFee=pl.quoteAdminFee||0;
+  const quoteKeyMoney=pl.quoteKeyMoney||0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
   // 仕入は税込で入力されており、税抜換算は税区分次第（課税のみ /1.1）
@@ -2152,10 +2152,10 @@ function calcParkingLotFixed(pl) {
   const end=pl.contractEnd||'';
   if(!start||!end||!pl.units)return null;
   const units=pl.units;
-  const quoteRate=pl.rateType==='daily'?(pl.quoteDailyRent??pl.dailyRent):(pl.quoteMonthlyRent??pl.monthlyRent);
+  const quoteRate=pl.rateType==='daily'?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
   const costRate=pl.rateType==='daily'?pl.dailyRent:pl.monthlyRent;
-  const quoteAdminFee=pl.quoteAdminFee??pl.adminFee??0;
-  const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney??0;
+  const quoteAdminFee=pl.quoteAdminFee||0;
+  const quoteKeyMoney=pl.quoteKeyMoney||0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
   // 税区分（地主/管理会社）に基づき税抜換算を分岐
@@ -3333,10 +3333,10 @@ function generateEstimate(caseId,plId){
   const plIdx=(c.parkingLots||[]).findIndex(p=>p.id===plId);
   const pl=(c.parkingLots||[])[plIdx];if(!pl)return;
   const units=pl.estimateUnits||pl.units||1;
-  // 見積価格を優先、未入力なら仕入価格にフォールバック
-  const quoteRent=pl.rateType==='daily'?(pl.quoteDailyRent??pl.dailyRent):(pl.quoteMonthlyRent??pl.monthlyRent);
-  const quoteAdminFee=pl.quoteAdminFee??pl.adminFee;
-  const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney;
+  // 見積価格を使用（未入力なら 0）
+  const quoteRent=pl.rateType==='daily'?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
+  const quoteAdminFee=pl.quoteAdminFee||0;
+  const quoteKeyMoney=pl.quoteKeyMoney||0;
   const estStart=pl.estimateStart||c.contractStart||'';
   const estEnd=pl.estimateEnd||c.contractEnd||'';
   const rentRows=calcMonthlyRentRows(pl.rateType,quoteRent,estStart,estEnd,units,pl.startProRate,pl.endProRate);
@@ -3509,7 +3509,7 @@ function generateProposal(caseId){
     inf+='</table>';
     pageLots.forEach((pl,j)=>{
       const rm=pl.rateType!=='daily';
-      const rent=rm?(pl.quoteMonthlyRent??pl.monthlyRent):(pl.quoteDailyRent??pl.dailyRent);
+      const rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
       const tu=pl.vacancyUnits;
       const estStart=pl.estimateStart||c.contractStart;
       const estEnd=pl.estimateEnd||c.contractEnd;
@@ -3625,7 +3625,7 @@ function generateProposal(caseId){
     createdAt:todayStr,
     lots:(c.parkingLots||[]).map(function(pl,idx){
       const rm=pl.rateType!=='daily';
-      const rent=rm?(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent):(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent);
+      const rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
       return{
         num:idx+1,
         name:pl.name||'',
@@ -3634,8 +3634,8 @@ function generateProposal(caseId){
         rateType:rm?'月払':'日払',
         rent:rent!=null?rent:'',
         rentUnit:rm?'/月':'/日',
-        adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee!=null?pl.adminFee:''),
-        keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
+        adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
+        keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
         units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
@@ -3674,7 +3674,7 @@ async function generateParkingMapExcelDirect(caseId){
     createdAt:todayStr,
     lots:(c.parkingLots||[]).map(function(pl,idx){
       var rm=pl.rateType!=='daily';
-      var rent=rm?(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent):(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent);
+      var rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
       return{
         num:idx+1,
         name:pl.name||'',
@@ -3683,8 +3683,8 @@ async function generateParkingMapExcelDirect(caseId){
         rateType:rm?'月払':'日払',
         rent:rent!=null?rent:'',
         rentUnit:rm?'/月':'/日',
-        adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee!=null?pl.adminFee:''),
-        keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
+        adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
+        keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
         units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
@@ -4182,9 +4182,9 @@ async function generateEstimateExcel(caseId){
       // 業者費用 別建て表示モードのとき、表示には仕入額を使う
       var feeMode=!!c.feeBreakdownMode;
       var feeLabel=c.feeBreakdownLabel||'業者費用';
-      var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent):(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent);
-      var quoteAdminFee=pl.quoteAdminFee!=null?pl.quoteAdminFee:pl.adminFee;
-      var quoteKeyMoney=pl.quoteKeyMoney!=null?pl.quoteKeyMoney:pl.keyMoney;
+      var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
+      var quoteAdminFee=pl.quoteAdminFee||0;
+      var quoteKeyMoney=pl.quoteKeyMoney||0;
       // 仕入は税込入力。地主税区分/管理会社税区分で課税のときだけ税抜換算
       var ownerT = !!pl.ownerTaxable;
       var managerT = !!pl.managerTaxable;
@@ -4304,11 +4304,11 @@ async function generateProposalDocument(caseId){
       requestUnits:c.requestUnits!=null?c.requestUnits:'',createdAt:todayStr,
       lots:lots.map(function(pl,idx){
         var rm=pl.rateType!=='daily';
-        var rent=rm?(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent):(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent);
+        var rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
         return{num:idx+1,name:pl.name||'',address:pl.address||'',walkMinutes:pl.walkMinutes!=null?pl.walkMinutes:'',
           rateType:rm?'\u6708\u6255':'\u65e5\u6255',rent:rent!=null?rent:'',rentUnit:rm?'/\u6708':'/\u65e5',
-          adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee!=null?pl.adminFee:''),
-          keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney!=null?pl.keyMoney:''),
+          adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
+          keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
           units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
           estStart:pl.estimateStart||c.contractStart||'',vehicleType:pl.vehicleType||'',
           vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
@@ -4606,9 +4606,9 @@ async function generateKakuteiMeisai(caseId,plId){
     // 業者費用 別建て表示モード
     var feeMode=!!c.feeBreakdownMode;
     var feeLabel=c.feeBreakdownLabel||'業者費用';
-    var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent!=null?pl.quoteDailyRent:pl.dailyRent):(pl.quoteMonthlyRent!=null?pl.quoteMonthlyRent:pl.monthlyRent)||0;
-    var quoteAdminFee=pl.quoteAdminFee!=null?pl.quoteAdminFee:(pl.adminFee||0);
-    var quoteKeyMoney=pl.quoteKeyMoney!=null?pl.quoteKeyMoney:(pl.keyMoney||0);
+    var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
+    var quoteAdminFee=pl.quoteAdminFee||0;
+    var quoteKeyMoney=pl.quoteKeyMoney||0;
     // 仕入は税込入力。地主税区分/管理会社税区分で課税のときだけ税抜換算
     var ownerT = !!pl.ownerTaxable;
     var managerT = !!pl.managerTaxable;
@@ -5006,8 +5006,8 @@ function buildMonthlyData(period) {
       if (!startStr || !endStr) return;
       var units = pl.units || 1;
       var quoteRate = pl.rateType === 'daily'
-        ? (pl.quoteDailyRent  != null ? pl.quoteDailyRent  : (pl.dailyRent  || 0))
-        : (pl.quoteMonthlyRent != null ? pl.quoteMonthlyRent : (pl.monthlyRent || 0));
+        ? (pl.quoteDailyRent || 0)
+        : (pl.quoteMonthlyRent || 0);
       var costRateInc = pl.rateType === 'daily' ? (pl.dailyRent || 0) : (pl.monthlyRent || 0);
       if (!quoteRate && !costRateInc) return;
 
@@ -5052,8 +5052,8 @@ function buildMonthlyData(period) {
 
           // 契約開始月に一時金（礼金・事務手数料・調整金）を加算
           if (isF) {
-            var quoteAdmin = pl.quoteAdminFee != null ? pl.quoteAdminFee : (pl.adminFee || 0);
-            var quoteKey   = pl.quoteKeyMoney != null ? pl.quoteKeyMoney : (pl.keyMoney  || 0);
+            var quoteAdmin = pl.quoteAdminFee || 0;
+            var quoteKey   = pl.quoteKeyMoney || 0;
             var costAdmin  = pl.adminFee || 0;
             var costKey    = pl.keyMoney || 0;
             salesAmt += units * (quoteAdmin + quoteKey);
@@ -5616,12 +5616,9 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     let months = period.months, days = period.days;
     if (!months && !days) { months = 1; days = 0; }
     // 見積額（税抜）
-    const quoteUnitPrice = pl.quoteMonthlyRent != null ? pl.quoteMonthlyRent
-                    : (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0);
-    const quoteAdminFee  = pl.quoteAdminFee  != null ? pl.quoteAdminFee
-                    : (pl.adminFee ? Math.round(pl.adminFee / 1.1) : 0);
-    const quoteKeyMoney  = pl.quoteKeyMoney  != null ? pl.quoteKeyMoney
-                    : (pl.keyMoney ? Math.round(pl.keyMoney / 1.1) : 0);
+    const quoteUnitPrice = pl.quoteMonthlyRent || 0;
+    const quoteAdminFee  = pl.quoteAdminFee || 0;
+    const quoteKeyMoney  = pl.quoteKeyMoney || 0;
     // 仕入額（税抜）— 地主/管理会社の税区分で課税のときだけ税抜換算
     const ownerT = !!pl.ownerTaxable;
     const managerT = !!pl.managerTaxable;
@@ -5959,7 +5956,7 @@ async function generateCustomerContract(caseId, plIdx) {
   const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
   const months = (period.months || period.days) ? (period.months || 1) : 1;
   const days = period.days || 0;
-  const quoteMonthly = pl.quoteMonthlyRent || (pl.monthlyRent ? Math.round(pl.monthlyRent/1.1) : 0);
+  const quoteMonthly = pl.quoteMonthlyRent || 0;
   const dailyRate = Math.floor(quoteMonthly / 30);
   const quoteAdmin = pl.quoteAdminFee || 0;
   const quoteKey = pl.quoteKeyMoney || 0;
