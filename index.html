@@ -2131,11 +2131,17 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney??0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
+  // 仕入は税込で入力されており、税抜換算は税区分次第（課税のみ /1.1）
+  const ownerT=!!pl.ownerTaxable;
+  const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
   const quoteSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney;
-  const costTotalTaxInc=cRows.reduce((s,r)=>s+r.amount,0)+units*costAdminFee+units*costKeyMoney;
-  const costTotal=Math.round(costTotalTaxInc/1.1);
+  const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
+  const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
+  const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
+  const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
+  const costTotal=costRentExTax+costAdminExTax+costKeyExTax;
   const profit=quoteSales-costTotal;
   const margin=quoteSales>0?Math.round(profit/quoteSales*1000)/10:0;
   return{quoteSales,costTotal,profit,margin};
@@ -2152,11 +2158,17 @@ function calcParkingLotFixed(pl) {
   const quoteKeyMoney=pl.quoteKeyMoney??pl.keyMoney??0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
+  // 税区分（地主/管理会社）に基づき税抜換算を分岐
+  const ownerT=!!pl.ownerTaxable;
+  const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,start,end,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,start,end,units,pl.startProRate,pl.endProRate);
   const fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney;
-  const costTotalTaxInc=cRows.reduce((s,r)=>s+r.amount,0)+units*costAdminFee+units*costKeyMoney;
-  const costTotal=Math.round(costTotalTaxInc/1.1);
+  const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
+  const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
+  const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
+  const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
+  const costTotal=costRentExTax+costAdminExTax+costKeyExTax;
   const profit=fixedSales-costTotal;
   const margin=fixedSales>0?Math.round(profit/fixedSales*1000)/10:0;
   return{fixedSales,costTotal,profit,margin};
@@ -2273,22 +2285,30 @@ function updateCaseFixedPurchase(){
       const adminFee   =parseFloat(g('pl_adminFee')?.value)||0;
       const keyMoney   =parseFloat(g('pl_keyMoney')?.value)||0;
       const adjustment =parseFloat(g('pl_adjustmentAmount')?.value)||0;
+      // 税区分（地主/管理会社）
+      const ownerT=(g('pl_ownerTaxable')?.value)==='true';
+      const managerT=(g('pl_managerTaxable')?.value)==='true';
       // 見積価格（売上側）
       const quoteMonthly=(parseFloat(g('pl_quoteMonthlyRent')?.value)||0)||monthlyRent;
       const quoteDailyRent=(parseFloat(g('pl_quoteDailyRent')?.value)||0)||dailyRent;
       const quoteKey=(parseFloat(g('pl_quoteKeyMoney')?.value)||0)||keyMoney;
       const quoteAdmin=(parseFloat(g('pl_quoteAdminFee')?.value)||0)||adminFee;
-      // 仕入合計（税込）をライブ計算（pl_purchaseAmountの保存値ではなく、現行ロジックで再計算）
-      let purchaseTaxInc=0;
+      // 仕入合計を税抜でライブ計算（賃料・礼金は地主税区分、手数料は管理会社税区分で /1.1 を適用）
+      let costRentTaxInc=0;
       if(rt==='daily'){
         const days=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
-        purchaseTaxInc=dailyRent*units*days+(adminFee+keyMoney)*units+adjustment;
+        costRentTaxInc=dailyRent*units*days;
       }else{
         const period=calcPlPeriod(start,end,startProRate,endProRate);
         const dailyRate=Math.floor(monthlyRent/30);
-        purchaseTaxInc=monthlyRent*units*period.months+dailyRate*units*period.days+(adminFee+keyMoney)*units+adjustment;
+        costRentTaxInc=monthlyRent*units*period.months+dailyRate*units*period.days;
       }
-      totalP+=purchaseTaxInc;
+      const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
+      const costAdminExTax=managerT?Math.round(adminFee*units/1.1):adminFee*units;
+      const costKeyExTax=ownerT?Math.round(keyMoney*units/1.1):keyMoney*units;
+      // adjustment はそのまま税抜扱い（手入力値）
+      const costExTax=costRentExTax+costAdminExTax+costKeyExTax+adjustment;
+      totalP+=costExTax;
       // 売上合計（税別）も同じロジックで
       if(rt==='daily'){
         const totDays=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
@@ -2306,7 +2326,7 @@ function updateCaseFixedPurchase(){
   const fp=document.getElementById('f_fixedPurchase');
   const fs=document.getElementById('f_fixedSales');
   const fu=document.getElementById('f_fixedUnits');
-  if(fp)fp.value=totalP?fmt(Math.round(totalP/1.1)):'';
+  if(fp)fp.value=totalP?fmt(Math.round(totalP)):'';
   if(fs)fs.value=totalS?fmt(totalS):'';
   if(fu)fu.value=totalU||'';
   calcFixedProfit();
