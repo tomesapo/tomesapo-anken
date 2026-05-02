@@ -7112,39 +7112,6 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// 住所→座標（GSI 国土地理院 API）
-async function _geocodeAddress(addr) {
-  if (!addr) return null;
-  try {
-    const res = await fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(addr));
-    const data = await res.json();
-    if (data && data.length) {
-      return { lat: parseFloat(data[0].geometry.coordinates[1]), lng: parseFloat(data[0].geometry.coordinates[0]) };
-    }
-  } catch(e) { console.warn('[geocode] failed', e); }
-  return null;
-}
-
-// 駐車場→現場の徒歩分数を計算（OSRM徒歩経路 → 80m/分）。失敗時は直線距離×1.3で代替
-async function _calcWalkMinutes(plLat, plLng, siteLat, siteLng) {
-  if (plLat == null || plLng == null || siteLat == null || siteLng == null) return null;
-  // 1) OSRM 徒歩経路
-  try {
-    const url = 'https://router.project-osrm.org/route/v1/foot/' +
-      plLng + ',' + plLat + ';' + siteLng + ',' + siteLat + '?overview=false';
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.routes && data.routes.length) {
-        const meters = data.routes[0].distance;
-        return Math.ceil(meters / 80);
-      }
-    }
-  } catch(e) { console.warn('[OSRM] failed, fallback to haversine', e); }
-  // 2) 直線距離 × 1.3 で代替
-  const km = haversineKm(plLat, plLng, siteLat, siteLng);
-  return Math.ceil(km * 1000 * 1.3 / 80);
-}
 
 async function openPlDbModal() {
   _pldbLat = null; _pldbLng = null;
@@ -7283,18 +7250,6 @@ async function selectPlFromDb(pmId) {
     }
   }
 
-  // 徒歩分数を自動計算（現場住所が入力されていてDBに座標があれば）
-  let walkMinutes = null;
-  const siteAddrEl = document.getElementById('f_siteAddress');
-  const siteAddr = siteAddrEl ? siteAddrEl.value.trim() : '';
-  if (siteAddr && p.lat && p.lng) {
-    showToast('徒歩分数を計算中…');
-    const siteCoord = await _geocodeAddress(siteAddr);
-    if (siteCoord) {
-      walkMinutes = await _calcWalkMinutes(p.lat, p.lng, siteCoord.lat, siteCoord.lng);
-    }
-  }
-
   // 駐車場DBデータを案件の駐車場カードへ転記
   const pl = {
     name: p.name || '',
@@ -7303,7 +7258,6 @@ async function selectPlFromDb(pmId) {
     supplierName: p.supplierName || '',
     supplierPhone: p.tel || '',
     supplierFax: p.fax || '',
-    walkMinutes: walkMinutes,
     rateType: p.rentMonthly ? 'monthly' : (p.rentDaily ? 'daily' : 'monthly'),
     monthlyRent: p.rentMonthly ? parseFloat(p.rentMonthly) : null,
     dailyRent: p.rentDaily ? parseFloat(p.rentDaily) : null,
@@ -7323,8 +7277,7 @@ async function selectPlFromDb(pmId) {
 
   addParkingLotCard(pl);
   closePlDbModal();
-  const walkInfo = walkMinutes != null ? '（徒歩' + walkMinutes + '分）' : '';
-  showToast('🅿 ' + esc(p.name) + ' を駐車場に追加しました' + walkInfo);
+  showToast('🅿 ' + esc(p.name) + ' を駐車場に追加しました');
 }
 
 
