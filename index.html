@@ -2814,6 +2814,15 @@ function autoCalcPaymentDue() {
 // ── 駐車場テーブル ──
 let _plIdx = 0;
 function addParkingLotCard(pl={}) {
+  // 見積期間のデフォルト：未設定なら案件の依頼開始日/終了日を引き継ぐ
+  if (!pl.estimateStart) {
+    const reqStart = document.getElementById('f_requestStart')?.value || '';
+    if (reqStart) pl.estimateStart = reqStart;
+  }
+  if (!pl.estimateEnd) {
+    const reqEnd = document.getElementById('f_requestEnd')?.value || '';
+    if (reqEnd) pl.estimateEnd = reqEnd;
+  }
   const container = document.getElementById('parkingLotCards');
   const card = document.createElement('div');
   card.className = 'parking-card';
