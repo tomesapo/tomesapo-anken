@@ -1734,14 +1734,37 @@ function addSupplier() {
   saveMasterToFS();
   renderSuppliers();
 }
+// 名前と電話番号の組み合わせで重複チェック
+function findDuplicateSupplier(name, tel, excludeId) {
+  const n = (name||'').trim();
+  const t = (tel||'').replace(/\D/g, '');
+  if (!n) return null; // 名前なしは重複扱いしない
+  return activeSuppliers().find(s => {
+    if (s.id === excludeId) return false;
+    const sn = (s.name||'').trim();
+    const st = (s.tel||'').replace(/\D/g, '');
+    return sn === n && st === t;
+  });
+}
+
 function updateSupplierField(id, field, value) {
   const s = (masterData.suppliers || []).find(x => x.id === id);
   if (!s) return;
   if (typeof value === 'string') value = value.trim();
+  // 名前または電話番号の変更時、重複チェック
+  if (field === 'name' || field === 'tel') {
+    const newName = field === 'name' ? value : s.name;
+    const newTel  = field === 'tel'  ? value : s.tel;
+    const dup = findDuplicateSupplier(newName, newTel, id);
+    if (dup) {
+      showToast('⚠ 同じ名前と電話番号の仕入先が既に登録されています：' + (dup.name||''));
+      renderSuppliers(); // 元の値に戻す
+      return;
+    }
+  }
   s[field] = value;
   s.updatedAt = new Date().toISOString();
   saveMasterToFS();
-  // 課税フラグ変更でインボイス番号入力欄の活性が変わるので再描画
   if (field === 'taxable') renderSuppliers();
 }
 function deleteSupplier(id) {
@@ -1759,12 +1782,16 @@ function deleteSupplier(id) {
 async function bulkGenerateSuppliersFromPM() {
   if (!confirm('既存の駐車場マスタの仕入先名をスキャンして、未登録の仕入先を仕入先マスタに一括登録しますか？\n（既に同名の仕入先が登録されている場合はスキップされます）')) return;
   if (!masterData.suppliers) masterData.suppliers = [];
-  const existingNames = new Set(activeSuppliers().map(s => (s.name||'').trim()).filter(Boolean));
+  const keyOf = (n, t) => (n||'').trim() + '|' + (t||'').replace(/\D/g, '');
+  const existingKeys = new Set(activeSuppliers().map(s => keyOf(s.name, s.tel)).filter(k => !k.startsWith('|')));
   let added = 0;
   (parkingMasters || []).forEach(p => {
     if (p.deleted) return;
     const name = (p.supplierName||'').trim();
-    if (!name || existingNames.has(name)) return;
+    const tel = (p.tel||'').trim();
+    if (!name) return;
+    const key = keyOf(name, tel);
+    if (existingKeys.has(key)) return;
     // 推定: 仕入手数料 (fee) があれば管理会社、なければ地主
     const fee = parseFloat(p.fee||0)||0;
     const type = fee > 0 ? '管理会社' : '地主';
@@ -1775,7 +1802,7 @@ async function bulkGenerateSuppliersFromPM() {
       id: 'sp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7) + '-' + added,
       name: name,
       type: type,
-      tel: p.tel||'',
+      tel: tel,
       fax: p.fax||'',
       email: '',
       taxable: taxable,
@@ -1784,7 +1811,7 @@ async function bulkGenerateSuppliersFromPM() {
       deleted: false,
       createdAt: new Date().toISOString()
     });
-    existingNames.add(name);
+    existingKeys.add(key);
     added++;
   });
   if (added > 0) {
