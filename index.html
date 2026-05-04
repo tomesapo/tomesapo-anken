@@ -1010,10 +1010,13 @@
         <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
         <div id="supplierList"></div>
       </div>
-      <div id="masterCustomerList"></div>
-      <div class="master-add-customer">
-        <input type="text" id="newCustomerName" placeholder="新規顧客名を入力" onkeydown="if(event.key==='Enter')addCustomer()">
-        <button class="btn btn-primary btn-sm" onclick="addCustomer()">&#43; 顧客追加</button>
+      <!-- 顧客情報 -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">👥 顧客情報（顧客・拠点・担当者）</div>
+          <button class="btn btn-primary btn-xs" onclick="addCustomerFromHeader()">＋ 顧客を追加</button>
+        </div>
+        <div id="masterCustomerList"></div>
       </div>
     </div>
   </div>
@@ -1263,6 +1266,24 @@ const nextCode = () => String(Math.max(0, ...masterData.customers.map(c => parse
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
 // ── 顧客 CRUD ──
+function addCustomerFromHeader() {
+  const name = prompt('新規顧客名を入力してください');
+  if (!name || !name.trim()) return;
+  // 既存の addCustomer を再利用するため、一時的にinputを使う構造を残し、ここでは直接処理する
+  const trimmed = name.trim();
+  if (!masterData.customers) masterData.customers = [];
+  // 顧客番号採番
+  const codes = masterData.customers.map(c => parseInt(c.code, 10)).filter(n => !isNaN(n));
+  const nextCode = codes.length ? String(Math.max(...codes) + 1).padStart(3, '0') : '001';
+  masterData.customers.push({
+    id: 'cu-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+    code: nextCode,
+    name: trimmed,
+    bases: []
+  });
+  renderMaster(); syncCustomerFilter(); saveMasterToFS(); showToast('顧客を追加しました');
+}
+
 function addCustomer() {
   const inp = document.getElementById('newCustomerName');
   const name = inp.value.trim(); if (!name) return;
