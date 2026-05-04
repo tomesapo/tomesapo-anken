@@ -995,19 +995,20 @@
       </div>
       <!-- 自社拠点 -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏢 自社拠点（請求書・提案資料・確定資料に記載）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 自社拠点（請求書・提案資料・確定資料に記載）</div>
+          <button class="btn btn-primary btn-xs" onclick="addBranch()">＋ 拠点を追加</button>
+        </div>
         <div id="branchList"></div>
-        <button class="btn btn-primary btn-sm" onclick="addBranch()" style="margin-top:6px">＋ 拠点を追加</button>
       </div>
       <!-- 仕入先マスタ -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 仕入先マスタ（管理会社・地主）</div>
-          <button class="btn btn-outline btn-xs" onclick="bulkGenerateSuppliersFromPM()" title="既存駐車場の仕入先名から一括登録">📥 既存駐車場から一括生成</button>
+          <button class="btn btn-primary btn-xs" onclick="addSupplier()">＋ 仕入先を追加</button>
         </div>
         <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
         <div id="supplierList"></div>
-        <button class="btn btn-primary btn-sm" onclick="addSupplier()" style="margin-top:6px">＋ 仕入先を追加</button>
       </div>
       <div id="masterCustomerList"></div>
       <div class="master-add-customer">
@@ -1776,51 +1777,6 @@ function deleteSupplier(id) {
   saveMasterToFS();
   renderSuppliers();
   showToast('仕入先を削除しました');
-}
-
-// 既存の駐車場マスタから仕入先を一括生成
-async function bulkGenerateSuppliersFromPM() {
-  if (!confirm('既存の駐車場マスタの仕入先名をスキャンして、未登録の仕入先を仕入先マスタに一括登録しますか？\n（既に同名の仕入先が登録されている場合はスキップされます）')) return;
-  if (!masterData.suppliers) masterData.suppliers = [];
-  const keyOf = (n, t) => (n||'').trim() + '|' + (t||'').replace(/\D/g, '');
-  const existingKeys = new Set(activeSuppliers().map(s => keyOf(s.name, s.tel)).filter(k => !k.startsWith('|')));
-  let added = 0;
-  (parkingMasters || []).forEach(p => {
-    if (p.deleted) return;
-    const name = (p.supplierName||'').trim();
-    const tel = (p.tel||'').trim();
-    if (!name) return;
-    const key = keyOf(name, tel);
-    if (existingKeys.has(key)) return;
-    // 推定: 仕入手数料 (fee) があれば管理会社、なければ地主
-    const fee = parseFloat(p.fee||0)||0;
-    const type = fee > 0 ? '管理会社' : '地主';
-    // 税区分・インボイス番号: 該当する方の値を取得
-    const taxable = type==='管理会社' ? !!p.managerTaxable : !!p.ownerTaxable;
-    const invoice = type==='管理会社' ? (p.managerInvoiceRegNo||'') : (p.ownerInvoiceRegNo||p.invoiceRegNo||'');
-    masterData.suppliers.push({
-      id: 'sp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7) + '-' + added,
-      name: name,
-      type: type,
-      tel: tel,
-      fax: p.fax||'',
-      email: '',
-      taxable: taxable,
-      invoiceRegNo: invoice,
-      memo: '',
-      deleted: false,
-      createdAt: new Date().toISOString()
-    });
-    existingKeys.add(key);
-    added++;
-  });
-  if (added > 0) {
-    await saveMasterToFS();
-    renderSuppliers();
-    showToast('🏢 ' + added + '件の仕入先を仕入先マスタに登録しました');
-  } else {
-    showToast('新規登録対象の仕入先がありませんでした');
-  }
 }
 
 // 仕入先選択ピッカー（モーダル）
