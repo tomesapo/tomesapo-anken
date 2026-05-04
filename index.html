@@ -2579,6 +2579,37 @@ function openDetail(id) {
     }
     html+='</div>';
   }
+  // メール下書き履歴
+  if (c.mailQueue && c.mailQueue.length) {
+    html += '<div class="detail-section"><div class="detail-section-title">📬 メール下書き履歴</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px">';
+    const typeLabels = { proposal:'📝 提案', invoice:'💰 請求', kakutei:'📋 確定', application_fax:'📠 申込書FAX' };
+    [...c.mailQueue].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).forEach(m => {
+      const typeLabel = typeLabels[m.type] || m.type;
+      const cd = m.createdAt ? m.createdAt.slice(0,10).replace(/-/g,'/') + ' ' + m.createdAt.slice(11,16) : '';
+      const sd = m.sentAt ? m.sentAt.slice(0,10).replace(/-/g,'/') : '';
+      const sentBadge = m.sentAt
+        ? '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:2px 8px;border-radius:4px">✓ 送信済 ' + sd + '</span>'
+        : '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:2px 8px;border-radius:4px">下書き</span>';
+      html += '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fafafa">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">';
+      html += '<span style="font-size:12px;font-weight:600;color:#1e3a5f">' + typeLabel + '</span>';
+      html += sentBadge;
+      html += '<span style="font-size:11px;color:#6b7280">作成: ' + cd + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:#374151;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + esc(m.to||'') + '</div>';
+      html += '<div style="font-size:11px;color:#6b7280;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">件名: ' + esc(m.subject||'') + '</div>';
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+      html += '<button onclick="reopenMailFromQueue(\''+c.id+'\',\''+m.id+'\')" style="background:#1e3a5f;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">📧 Gmail で開く</button>';
+      if (!m.sentAt) {
+        html += '<button onclick="markMailAsSent(\''+c.id+'\',\''+m.id+'\')" style="background:#10b981;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">✓ 送信済みにする</button>';
+      }
+      html += '<button onclick="deleteMailFromQueue(\''+c.id+'\',\''+m.id+'\')" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">🗑 削除</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
   if(c.caseNote){html+='<div class="detail-section"><div class="detail-section-title">案件メモ</div><div style="font-size:13px;color:var(--gray-700);line-height:1.7;white-space:pre-wrap">'+esc(c.caseNote)+'</div></div>';}
   if(c.statusHistory&&c.statusHistory.length){
     html+='<div class="detail-section"><div class="detail-section-title">ステータス履歴</div><div class="status-timeline">';
@@ -4810,6 +4841,74 @@ function showToast(msg){
   t.textContent=msg;t.classList.add('show');
   setTimeout(function(){t.classList.remove('show');},2500);
 }
+// メール下書きキュー: 案件の mailQueue 配列に追加し Firestore に保存
+async function _saveMailToQueue(caseId, mailData) {
+  const c = cases.find(x => x.id === caseId);
+  if (!c) return null;
+  if (!c.mailQueue) c.mailQueue = [];
+  const id = 'mq-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+  c.mailQueue.push({
+    id: id,
+    type: mailData.type,
+    to: mailData.to || '',
+    subject: mailData.subject || '',
+    body: mailData.body || '',
+    plIdx: mailData.plIdx != null ? mailData.plIdx : null,
+    plName: mailData.plName || '',
+    createdAt: new Date().toISOString(),
+    sentAt: null
+  });
+  try { await saveCaseToFS(c); } catch(e) { console.warn('mailQueue save error', e); }
+  return id;
+}
+
+// Gmail compose URL を組み立てて新タブで開く（保存はせず開くだけ）
+function _openGmailCompose(to, subject, body) {
+  const url = 'https://mail.google.com/mail/?view=cm' +
+    '&to=' + encodeURIComponent(to || '') +
+    '&su=' + encodeURIComponent(subject || '') +
+    '&body=' + encodeURIComponent(body || '');
+  window.open(url, '_blank');
+}
+
+// メール下書きから Gmail を再オープン
+function reopenMailFromQueue(caseId, mailId) {
+  const c = cases.find(x => x.id === caseId);
+  if (!c || !c.mailQueue) return;
+  const m = c.mailQueue.find(x => x.id === mailId);
+  if (!m) return;
+  _openGmailCompose(m.to, m.subject, m.body);
+}
+
+// メールを送信済みにマーク
+async function markMailAsSent(caseId, mailId) {
+  const c = cases.find(x => x.id === caseId);
+  if (!c || !c.mailQueue) return;
+  const m = c.mailQueue.find(x => x.id === mailId);
+  if (!m) return;
+  m.sentAt = new Date().toISOString();
+  try { await saveCaseToFS(c); } catch(e) { console.warn(e); }
+  if (typeof renderDetail === 'function') {
+    const dEl = document.getElementById('detailOverlay');
+    if (dEl && dEl.classList.contains('open')) renderDetail(c);
+  }
+  showToast('メールを送信済みにマークしました');
+}
+
+// メール下書きを削除
+async function deleteMailFromQueue(caseId, mailId) {
+  if (!confirm('このメール下書きを削除しますか？')) return;
+  const c = cases.find(x => x.id === caseId);
+  if (!c || !c.mailQueue) return;
+  c.mailQueue = c.mailQueue.filter(x => x.id !== mailId);
+  try { await saveCaseToFS(c); } catch(e) { console.warn(e); }
+  if (typeof renderDetail === 'function') {
+    const dEl = document.getElementById('detailOverlay');
+    if (dEl && dEl.classList.contains('open')) renderDetail(c);
+  }
+  showToast('メール下書きを削除しました');
+}
+
 var _mailBannerCb=null;
 function showMailBanner(data,type){
   var banner=document.getElementById('mailBanner');
@@ -4834,20 +4933,21 @@ function showMailBanner(data,type){
 }
 function closeMailBanner(){document.getElementById('mailBanner').classList.remove('show');}
 
-function openProposalMail(data){
+async function openProposalMail(data){
   var cust=getCustomerByName(data.customerName);
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var su=encodeURIComponent('【ご提案内容のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||''));
+  var subject = '【ご提案内容のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||'');
   var staffName=staff&&staff.name?staff.name:'担当者';
   var custName=data.customerName||'';
   var siteName=data.siteName||'';
-  var body=encodeURIComponent(
+  var br = getCaseBranch(data);
+  var body =
     custName+'\n'+
     staffName+' 様\n\n'+
     'いつも大変お世話になっております。\n'+
-    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n';})()+
+    (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n'+
     '【'+siteName+'】につきまして、下記の通りご提案資料をお送りいたします。\n'+
     '・駐車場案内図\n'+
     '・見積書兼発注書\n\n'+
@@ -4855,45 +4955,46 @@ function openProposalMail(data){
     '何かご不明点等ございましたら、お気軽にお知らせください。\n\n'+
     '引き続き、何卒よろしくお願いいたします。\n\n'+
     '━━━━━━━━━━━━━━━━━━━━\n'+
-    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'\n'+
+    (br.name||'株式会社 TomeSapo')+'\n'+
     '古田 知也（TOMOYA FURUTA）\n'+
     '－－－－－－－－－－－－－－－－－－－－\n'+
     (br.tel?br.tel+'\n':'090-6335-5765\n')+
-    (br.email||'info@tomesapo.co.jp')+'\n';})()+
-    '━━━━━━━━━━━━━━━━━━━━'
-  );
-  window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
+    (br.email||'info@tomesapo.co.jp')+'\n'+
+    '━━━━━━━━━━━━━━━━━━━━';
+  await _saveMailToQueue(data.id, { type:'proposal', to:to, subject:subject, body:body });
+  _openGmailCompose(to, subject, body);
 }
 
-function openInvoiceMail(data){
+async function openInvoiceMail(data){
   var cust=getCustomerByName(data.customerName);
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var su=encodeURIComponent('\u300c'+data.siteName+'\u300d\u9a3a\u8eca\u5834 \u8acb\u6c42\u66f8\u306e\u3054\u9001\u4ed8');
-  var body=encodeURIComponent(
-    (staff&&staff.name?staff.name+' \u69d8':'\u62c5\u5f53\u8005 \u69d8')+'\n\n'+
-    '\u304a\u4e16\u8a71\u306b\u306a\u3063\u3066\u304a\u308a\u307e\u3059\u3002\n\n'+
-    '\u300c'+data.siteName+'\u300d\u306e\u9a3a\u8eca\u5834\u306b\u3064\u304d\u307e\u3057\u3066\u3001\u8acb\u6c42\u66f8\u3092\u9001\u4ed8\u3044\u305f\u3057\u307e\u3059\u3002\n\n'+
-    '\u3054\u78ba\u8a8d\u306e\u307b\u3069\u3001\u3069\u3046\u305e\u3088\u308d\u3057\u304f\u304a\u9858\u3044\u3044\u305f\u3057\u307e\u3059\u3002'
-  );
-  window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
+  var subject='「'+data.siteName+'」駐車場 請求書のご送付';
+  var body =
+    (staff&&staff.name?staff.name+' 様':'担当者 様')+'\n\n'+
+    'お世話になっております。\n\n'+
+    '「'+data.siteName+'」の駐車場につきまして、請求書を送付いたします。\n\n'+
+    'ご確認のほど、どうぞよろしくお願いいたします。';
+  await _saveMailToQueue(data.id, { type:'invoice', to:to, subject:subject, body:body });
+  _openGmailCompose(to, subject, body);
 }
 
-function openKakuteiMail(data){
+async function openKakuteiMail(data){
   var cust=getCustomerByName(data.customerName);
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var su=encodeURIComponent('【契約内容確定のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||''));
+  var subject='【契約内容確定のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||'');
   var staffName=staff&&staff.name?staff.name:'担当者';
   var custName=data.customerName||'';
   var siteName=data.siteName||'';
-  var body=encodeURIComponent(
+  var br = getCaseBranch(data);
+  var body =
     custName+'\n'+
     staffName+' 様\n\n'+
     'いつも大変お世話になっております。\n'+
-    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n';})()+
+    (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n'+
     '【'+siteName+'】につきまして、契約内容が確定いたしましたので、下記資料をお送りいたします。\n'+
     '・駐車場区画図\n'+
     '・確定明細書\n\n'+
@@ -4901,14 +5002,14 @@ function openKakuteiMail(data){
     '問題ございませんでしたら、本資料内容にてご利用開始をお願いいたします。\n\n'+
     '引き続き、何卒よろしくお願いいたします。\n\n'+
     '━━━━━━━━━━━━━━━━━━━━\n'+
-    (function(){var br=getCaseBranch(data); return (br.name||'株式会社 TomeSapo')+'\n'+
+    (br.name||'株式会社 TomeSapo')+'\n'+
     '古田 知也（TOMOYA FURUTA）\n'+
     '－－－－－－－－－－－－－－－－－－－－\n'+
     (br.tel?br.tel+'\n':'090-6335-5765\n')+
-    (br.email||'info@tomesapo.co.jp')+'\n';})()+
-    '━━━━━━━━━━━━━━━━━━━━'
-  );
-  window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(to)+'&su='+su+'&body='+body,'_blank');
+    (br.email||'info@tomesapo.co.jp')+'\n'+
+    '━━━━━━━━━━━━━━━━━━━━';
+  await _saveMailToQueue(data.id, { type:'kakutei', to:to, subject:subject, body:body });
+  _openGmailCompose(to, subject, body);
 }
 
 // 国内FAX → eFax メールアドレスに変換（例: 052-831-5415 → 81528315415@efaxsend.com）
@@ -4922,7 +5023,7 @@ function _jpFaxToEfaxAddr(fax) {
 
 // 申込書のFAX送信メール下書きを開く
 // data は { caseId, plIdx, useText, sealMode } の形で渡される
-function openApplicationFaxMail(data) {
+async function openApplicationFaxMail(data) {
   const c = cases.find(x => x.id === data.caseId);
   if (!c) { showToast('案件データが見つかりません'); return; }
   const pl = (c.parkingLots || [])[data.plIdx];
@@ -4937,7 +5038,6 @@ function openApplicationFaxMail(data) {
 
   const subject = '駐車場利用申込書｜' + (pl.name || '');
 
-  // FAX 表紙（eFax は本文を送信元データの一部として送ります）
   const fmtJ = d => {
     if (!d) return '';
     const p = String(d).split('-');
@@ -4963,11 +5063,8 @@ function openApplicationFaxMail(data) {
     (branch.email || 'info@tomesapo.co.jp') + '\n' +
     '━━━━━━━━━━━━━━━━━━━━';
 
-  const url = 'https://mail.google.com/mail/?view=cm' +
-    '&to=' + encodeURIComponent(to) +
-    '&su=' + encodeURIComponent(subject) +
-    '&body=' + encodeURIComponent(body);
-  window.open(url, '_blank');
+  await _saveMailToQueue(c.id, { type:'application_fax', to:to, subject:subject, body:body, plIdx:data.plIdx, plName:pl.name||'' });
+  _openGmailCompose(to, subject, body);
 }
 
 
