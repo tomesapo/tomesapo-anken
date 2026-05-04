@@ -658,7 +658,7 @@
 
 <!-- ── ゴミ箱 ── -->
 <!-- 仕入先選択ピッカー -->
-<div id="supplierPickerOverlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px">
+<div id="supplierPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px">
   <div style="background:white;border-radius:12px;width:min(96vw,640px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;background:var(--primary);color:white;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:12px">
       <h3 style="margin:0;font-size:16px;flex:1">🏢 仕入先マスタから選択</h3>
@@ -1802,12 +1802,15 @@ let _supplierPickerType = null;
 function openSupplierPicker(typeFilter, callback) {
   _supplierPickerCallback = callback;
   _supplierPickerType = typeFilter || '';
-  document.getElementById('supplierPickerOverlay').classList.remove('hidden');
-  document.getElementById('supplierPickerSearch').value = '';
+  const ov = document.getElementById('supplierPickerOverlay');
+  if (ov) ov.style.display = 'flex';
+  const sb = document.getElementById('supplierPickerSearch');
+  if (sb) sb.value = '';
   renderSupplierPicker();
 }
 function closeSupplierPicker() {
-  document.getElementById('supplierPickerOverlay').classList.add('hidden');
+  const ov = document.getElementById('supplierPickerOverlay');
+  if (ov) ov.style.display = 'none';
   _supplierPickerCallback = null;
 }
 function renderSupplierPicker() {
