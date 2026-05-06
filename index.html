@@ -594,6 +594,9 @@
     <button class="btn btn-ghost" onclick="openPMModal()">
       🅿 駐車場DB
     </button>
+    <button class="btn btn-ghost" onclick="openCalendarView()">
+      📅 カレンダー
+    </button>
     <button class="btn btn-ghost" onclick="openAnalyticsView()">
       📈 取引分析
     </button>
@@ -636,6 +639,9 @@
       🅿 駐車場DB
     </button>
     <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openCalendarView();closeDrawer()">
+      📅 カレンダー
+    </button>
     <button class="drawer-btn" onclick="openAnalyticsView();closeDrawer()">
       📈 取引分析
     </button>
@@ -729,6 +735,37 @@
       <button class="sv-tab" id="svTabSite" onclick="switchSalesTab('site')">📍 現場別</button>
     </div>
     <div class="sv-body" id="svBody"></div>
+  </div>
+</div>
+
+<!-- 📅 案件カレンダー（ガントチャート）-->
+<div class="sv-overlay hidden" id="calendarOverlay">
+  <div class="sv-modal" style="width:min(98vw,1400px);height:92vh;max-height:92vh">
+    <div class="sv-header">
+      <h2>📅 案件カレンダー<span style="font-size:12px;font-weight:normal;color:rgba(255,255,255,.7);margin-left:10px">駐車場ごとの契約期間ガントチャート</span></h2>
+      <button class="sv-close-btn" onclick="closeCalendarView()">✕ 閉じる</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;background:#f9fafb;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <label style="font-size:13px;color:#374151">期間:</label>
+      <select id="calRange" onchange="_calRange=this.value;renderCalendarView()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <option value="3m">3ヶ月（過去1〜未来2ヶ月）</option>
+        <option value="6m">6ヶ月（過去2〜未来4ヶ月）</option>
+        <option value="1y" selected>1年（過去3〜未来9ヶ月）</option>
+        <option value="2y">2年（過去6〜未来18ヶ月）</option>
+      </select>
+      <label style="font-size:13px;color:#374151;margin-left:6px">ステータス:</label>
+      <select id="calStatusFilter" onchange="_calStatusFilter=this.value;renderCalendarView()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <option value="">すべて</option>
+        <option value="提案済">提案済</option>
+        <option value="未申込">未申込</option>
+        <option value="契約中">契約中</option>
+        <option value="未請求">未請求</option>
+        <option value="請求済">請求済</option>
+        <option value="入金済">入金済</option>
+      </select>
+      <span id="calLegend" style="font-size:11px;margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center"></span>
+    </div>
+    <div style="flex:1;overflow:auto;padding:0;background:white" id="calBody"></div>
   </div>
 </div>
 
@@ -6843,6 +6880,193 @@ function exportDepositCSV() {
 function _csvCell(v) {
   const s = String(v ?? '');
   return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+// ═══════════════════════════════════════════════
+// 📅 案件カレンダー（ガントチャート）
+// ═══════════════════════════════════════════════
+let _calRange = '1y';
+let _calStatusFilter = '';
+
+const STATUS_COLORS = {
+  '未調査': '#9ca3af',
+  '調査中': '#9ca3af',
+  '再調査': '#9ca3af',
+  '提案済': '#fbbf24',
+  '未申込': '#fb923c',
+  '契約中': '#3b82f6',
+  '未請求': '#a78bfa',
+  '請求済': '#10b981',
+  '入金済': '#16a34a',
+  '失注': '#ef4444',
+  '失効': '#6b7280'
+};
+function _statusColor(s) { return STATUS_COLORS[s] || '#94a3b8'; }
+
+function openCalendarView() {
+  _calRange = '1y';
+  _calStatusFilter = '';
+  document.getElementById('calendarOverlay').classList.remove('hidden');
+  document.getElementById('calRange').value = _calRange;
+  document.getElementById('calStatusFilter').value = _calStatusFilter;
+  renderCalendarView();
+}
+function closeCalendarView() {
+  document.getElementById('calendarOverlay').classList.add('hidden');
+}
+
+function _calRangeMonths(rangeKey) {
+  const today = new Date();
+  today.setDate(1); today.setHours(0,0,0,0);
+  let pastM, futureM;
+  switch (rangeKey) {
+    case '3m': pastM = 1; futureM = 2; break;
+    case '6m': pastM = 2; futureM = 4; break;
+    case '2y': pastM = 6; futureM = 18; break;
+    case '1y': default: pastM = 3; futureM = 9; break;
+  }
+  const start = new Date(today.getFullYear(), today.getMonth() - pastM, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + futureM + 1, 0); // 末日
+  return { start, end };
+}
+
+// 駐車場行データを抽出
+function _calRows() {
+  const rows = [];
+  cases.forEach(c => {
+    if (c.deleted) return;
+    if (_calStatusFilter && c.status !== _calStatusFilter) return;
+    (c.parkingLots || []).forEach((pl, idx) => {
+      const sStr = pl.contractStart || c.contractStart || '';
+      const eStr = pl.contractEnd || c.contractEnd || '';
+      if (!sStr || !eStr) return;
+      const s = new Date(sStr + 'T00:00:00');
+      const e = new Date(eStr + 'T00:00:00');
+      if (isNaN(s) || isNaN(e)) return;
+      rows.push({
+        caseId: c.id,
+        caseNo: c.caseNo || '',
+        plName: pl.name || '(駐車場名なし)',
+        customerName: c.customerName || '',
+        status: c.status,
+        units: pl.units || '',
+        start: s,
+        end: e,
+        startStr: sStr,
+        endStr: eStr
+      });
+    });
+  });
+  return rows;
+}
+
+function renderCalendarView() {
+  const body = document.getElementById('calBody');
+  if (!body) return;
+  const { start: rangeStart, end: rangeEnd } = _calRangeMonths(_calRange);
+  // 表示対象（範囲と重なるもの）にフィルタ
+  let rows = _calRows().filter(r => r.end >= rangeStart && r.start <= rangeEnd);
+  // 開始日順
+  rows.sort((a, b) => a.start - b.start || a.caseNo.localeCompare(b.caseNo));
+
+  // 凡例
+  const legendEl = document.getElementById('calLegend');
+  if (legendEl) {
+    const used = [...new Set(rows.map(r => r.status))];
+    legendEl.innerHTML = used.map(s => '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:' + _statusColor(s) + ';border-radius:2px;display:inline-block"></span>' + s + '</span>').join('');
+  }
+
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af">表示対象の案件がありません</div>';
+    return;
+  }
+
+  // 月リストを作る
+  const months = [];
+  let cur = new Date(rangeStart);
+  while (cur <= rangeEnd) {
+    months.push(new Date(cur));
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  const totalMonths = months.length;
+  const totalDays = Math.round((rangeEnd - rangeStart) / 86400000) + 1;
+
+  // ピクセル幅: 最低1ヶ月60px、月数が多いと自動拡大
+  const colWidthPx = Math.max(60, Math.min(120, Math.floor(1200 / totalMonths)));
+  const ganttWidth = colWidthPx * totalMonths;
+
+  const fmtMonth = d => (d.getMonth()+1) + '月';
+  const fmtYM = d => d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0');
+
+  // 日付→ピクセル位置
+  const dayMs = 86400000;
+  function xPos(date) {
+    const days = Math.max(0, Math.round((date - rangeStart) / dayMs));
+    return Math.min(ganttWidth, (days / totalDays) * ganttWidth);
+  }
+
+  let html = '<style>' +
+    '.cal-grid{display:grid;grid-template-columns:240px 1fr;font-size:12px}' +
+    '.cal-head{position:sticky;top:0;background:#f3f4f6;z-index:5;border-bottom:1px solid #e5e7eb}' +
+    '.cal-head-left{padding:10px 12px;font-weight:700;color:#1e3a5f;border-right:1px solid #e5e7eb}' +
+    '.cal-head-right{position:relative;height:36px}' +
+    '.cal-mon{position:absolute;top:0;height:100%;border-right:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6b7280}' +
+    '.cal-row-left{padding:8px 12px;border-bottom:1px solid #f3f4f6;border-right:1px solid #e5e7eb;background:white}' +
+    '.cal-row-right{position:relative;height:42px;border-bottom:1px solid #f3f4f6;background:repeating-linear-gradient(90deg,white 0,white ' + (colWidthPx-1) + 'px,#f3f4f6 ' + (colWidthPx-1) + 'px,#f3f4f6 ' + colWidthPx + 'px)}' +
+    '.cal-bar{position:absolute;top:6px;height:30px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 8px;color:white;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.15);transition:transform .1s}' +
+    '.cal-bar:hover{transform:translateY(-1px);box-shadow:0 4px 8px rgba(0,0,0,.2);z-index:2}' +
+    '.cal-today{position:absolute;top:0;bottom:0;width:2px;background:#dc2626;z-index:3;pointer-events:none}' +
+    '.cal-today-label{position:absolute;top:2px;background:#dc2626;color:white;font-size:9px;padding:1px 4px;border-radius:2px;transform:translateX(-50%)}' +
+  '</style>';
+
+  html += '<div class="cal-grid" style="min-width:' + (240 + ganttWidth) + 'px">';
+  // ヘッダー（月軸）
+  html += '<div class="cal-head cal-head-left">案件 / 駐車場</div>';
+  html += '<div class="cal-head cal-head-right" style="width:' + ganttWidth + 'px">';
+  months.forEach((m, i) => {
+    const isFirstOfYear = m.getMonth() === 0 || i === 0;
+    const label = isFirstOfYear ? m.getFullYear() + '年' + (m.getMonth()+1) + '月' : (m.getMonth()+1) + '月';
+    html += '<div class="cal-mon" style="left:' + (i*colWidthPx) + 'px;width:' + colWidthPx + 'px">' + label + '</div>';
+  });
+  // 今日ライン（ヘッダー部）
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (today >= rangeStart && today <= rangeEnd) {
+    const todayX = xPos(today);
+    html += '<div class="cal-today" style="left:' + todayX + 'px"></div>';
+    html += '<div class="cal-today-label" style="left:' + todayX + 'px">本日</div>';
+  }
+  html += '</div>';
+
+  // 行
+  rows.forEach((r) => {
+    const left = xPos(r.start);
+    const rightX = xPos(new Date(r.end.getTime() + dayMs)); // 終了日含めて+1日
+    const width = Math.max(4, rightX - left);
+    const color = _statusColor(r.status);
+    const labelInBar = (width > 80) ? (r.plName + (r.units?'（'+r.units+'台）':'')) : r.plName;
+
+    html += '<div class="cal-row-left">' +
+      '<div style="font-size:11px;color:#9ca3af">' + esc(r.caseNo) + '</div>' +
+      '<div style="font-weight:600;color:#1e3a5f">' + esc(r.plName) + '</div>' +
+      '<div style="font-size:10px;color:#6b7280">' + esc(r.customerName) + '</div>' +
+    '</div>';
+    html += '<div class="cal-row-right" style="width:' + ganttWidth + 'px">';
+    // 今日ライン
+    if (today >= rangeStart && today <= rangeEnd) {
+      const todayX = xPos(today);
+      html += '<div class="cal-today" style="left:' + todayX + 'px"></div>';
+    }
+    // バー
+    html += '<div class="cal-bar" style="left:' + left + 'px;width:' + width + 'px;background:' + color + '" ' +
+      'title="' + esc(r.plName + ' / ' + r.customerName + ' / ' + r.startStr + '〜' + r.endStr + ' / ' + r.status) + '" ' +
+      'onclick="closeCalendarView();openDetail(\'' + r.caseId + '\')">' +
+      esc(labelInBar) +
+    '</div>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+  body.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════
