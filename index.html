@@ -10,6 +10,7 @@
   <link rel="manifest" href="./manifest.json">
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.css">
   <script src="https://unpkg.com/cropperjs@1.6.1/dist/cropper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="apple-touch-icon" href="./icon-192.png">
 <title>案件管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -593,6 +594,9 @@
     <button class="btn btn-ghost" onclick="openPMModal()">
       🅿 駐車場DB
     </button>
+    <button class="btn btn-ghost" onclick="openAnalyticsView()">
+      📈 取引分析
+    </button>
     <button class="btn btn-ghost" onclick="openSalesView()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>売上集計
     </button>
@@ -632,6 +636,9 @@
       🅿 駐車場DB
     </button>
     <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openAnalyticsView();closeDrawer()">
+      📈 取引分析
+    </button>
     <button class="drawer-btn" onclick="openSalesView();closeDrawer()">
       📊 売上集計
     </button>
@@ -722,6 +729,22 @@
       <button class="sv-tab" id="svTabSite" onclick="switchSalesTab('site')">📍 現場別</button>
     </div>
     <div class="sv-body" id="svBody"></div>
+  </div>
+</div>
+
+<!-- 📈 取引分析 ビュー -->
+<div class="sv-overlay hidden" id="analyticsOverlay">
+  <div class="sv-modal" style="width:min(98vw,1100px)">
+    <div class="sv-header">
+      <h2>📈 取引分析<span style="font-size:12px;font-weight:normal;color:rgba(255,255,255,.7);margin-left:10px">顧客・駐車場・仕入先 別の取引履歴と収益分析</span></h2>
+      <button class="sv-close-btn" onclick="closeAnalyticsView()">✕ 閉じる</button>
+    </div>
+    <div class="sv-tabs">
+      <button class="sv-tab active" id="avTabCustomer" onclick="switchAnalyticsTab('customer')">👥 顧客別</button>
+      <button class="sv-tab" id="avTabPM" onclick="switchAnalyticsTab('pm')">🅿 駐車場別</button>
+      <button class="sv-tab" id="avTabSupplier" onclick="switchAnalyticsTab('supplier')">🏢 仕入先別</button>
+    </div>
+    <div class="sv-body" id="avBody"></div>
   </div>
 </div>
 
@@ -6386,10 +6409,10 @@ async function generateCustomerContract(caseId, plIdx) {
 // ── ⑤ 売上集計ビュー ──
 // ═══════════════════════════════════════════════
 let _svTab = 'customer';
-let _svYear = '';
+let _svPeriod = ''; // 期番号（'1','2',...） 空文字=全期間
 
 function openSalesView() {
-  _svYear = '';
+  _svPeriod = '';
   document.getElementById('svOverlay').classList.remove('hidden');
   switchSalesTab('customer');
 }
@@ -6413,27 +6436,42 @@ function baseCaseNo(c) {
 const SV_TARGET_STATUSES = ['未請求', '請求済', '入金済'];
 
 // 対象年度 × 対象ステータスで案件を絞り込む
+// 案件が属する期番号を返す（受付日 or 作成日 or 案件番号年から計算）
+function casePeriod(c) {
+  const dateStr = c.receptionDate || (c.createdAt ? c.createdAt.slice(0,10) : '');
+  if (dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (!isNaN(d)) return Math.max(1, calcPeriod(d.getFullYear(), d.getMonth()));
+  }
+  const yr = parseInt((c.caseNo||'').split('-')[0]) || FISCAL_BASE_YEAR;
+  return Math.max(1, yr - FISCAL_BASE_YEAR + 1);
+}
+
 function svFilteredCases() {
   let result = cases.filter(c => SV_TARGET_STATUSES.includes(c.status));
-  if (_svYear) result = result.filter(c => (c.receptionDate||c.createdAt||'').startsWith(_svYear));
+  if (_svPeriod) result = result.filter(c => String(casePeriod(c)) === String(_svPeriod));
   return result;
 }
 
-// 利用可能な年一覧（集計対象ステータスの案件のみ）
-function svYears() {
-  const ys = new Set();
+// 利用可能な期一覧（集計対象ステータスの案件のみ）
+function svPeriods() {
+  const ps = new Set();
   cases.filter(c => SV_TARGET_STATUSES.includes(c.status)).forEach(c => {
-    const y = (c.receptionDate||c.createdAt||'').slice(0,4);
-    if (y) ys.add(y);
+    ps.add(casePeriod(c));
   });
-  return [...ys].sort().reverse();
+  return [...ps].sort((a,b) => b - a);
+}
+
+function periodLabel(p) {
+  const yStart = periodStartYear(p);
+  return p + '期（' + yStart + '年8月〜' + (yStart+1) + '年7月）';
 }
 
 function renderSalesView() {
   const body = document.getElementById('svBody');
-  const years = svYears();
-  const yearOpts = '<option value="">全期間</option>' + years.map(y => `<option value="${y}" ${_svYear===y?'selected':''}>${y}年</option>`).join('');
-  const filterHtml = `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_svYear=this.value;renderSalesView()">${yearOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">受付日で絞り込み</span></div>`;
+  const periods = svPeriods();
+  const periodOpts = '<option value="">全期間</option>' + periods.map(p => `<option value="${p}" ${String(_svPeriod)===String(p)?'selected':''}>${periodLabel(p)}</option>`).join('');
+  const filterHtml = `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_svPeriod=this.value;renderSalesView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（8月〜翌7月）で絞り込み</span></div>`;
 
   if (_svTab === 'customer') body.innerHTML = filterHtml + renderSalesCustomer();
   else body.innerHTML = filterHtml + renderSalesSite();
@@ -6585,7 +6623,7 @@ function exportSalesExcel() {
   wsS['!cols'] = [14,28,20,10,10,18,18,14,10].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, wsS, '現場別');
 
-  XLSX.writeFile(wb, '売上集計' + (_svYear ? '_' + _svYear : '') + '.xlsx');
+  XLSX.writeFile(wb, '売上集計' + (_svPeriod ? '_' + _svPeriod + '期' : '') + '.xlsx');
 }
 
 
@@ -6805,6 +6843,296 @@ function exportDepositCSV() {
 function _csvCell(v) {
   const s = String(v ?? '');
   return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+// ═══════════════════════════════════════════════
+// 📈 取引分析ビュー
+// ═══════════════════════════════════════════════
+let _avTab = 'customer';      // customer / pm / supplier
+let _avPeriod = '';            // 期番号、空=全期間
+let _avDetailKey = null;       // ドリルダウン中の対象key（顧客名/駐車場名/仕入先名）
+let _avChartInstance = null;
+
+function openAnalyticsView() {
+  _avTab = 'customer';
+  _avPeriod = '';
+  _avDetailKey = null;
+  document.getElementById('analyticsOverlay').classList.remove('hidden');
+  switchAnalyticsTab('customer');
+}
+function closeAnalyticsView() {
+  if (_avChartInstance) { try { _avChartInstance.destroy(); } catch(_) {} _avChartInstance = null; }
+  document.getElementById('analyticsOverlay').classList.add('hidden');
+}
+function switchAnalyticsTab(tab) {
+  _avTab = tab;
+  _avDetailKey = null;
+  document.getElementById('avTabCustomer').classList.toggle('active', tab === 'customer');
+  document.getElementById('avTabPM').classList.toggle('active', tab === 'pm');
+  document.getElementById('avTabSupplier').classList.toggle('active', tab === 'supplier');
+  renderAnalyticsView();
+}
+
+// 案件1件の売上・仕入・粗利を計算（既存の confirmed sales/purchase/profit を利用、税抜）
+function _avCaseAmounts(c) {
+  return {
+    sales: parseFloat(c.fixedSales || 0) || 0,
+    purchase: parseFloat(c.fixedPurchase || 0) || 0,
+    profit: parseFloat(c.fixedProfit) != null ? parseFloat(c.fixedProfit) : ((parseFloat(c.fixedSales||0)||0) - (parseFloat(c.fixedPurchase||0)||0))
+  };
+}
+
+// 期フィルタを適用した分析対象案件
+function avFilteredCases() {
+  let res = cases.filter(c => !c.deleted && SV_TARGET_STATUSES.includes(c.status));
+  if (_avPeriod) res = res.filter(c => String(casePeriod(c)) === String(_avPeriod));
+  return res;
+}
+
+function avFilterBar() {
+  const periods = svPeriods();
+  const periodOpts = '<option value="">全期間</option>' + periods.map(p => `<option value="${p}" ${String(_avPeriod)===String(p)?'selected':''}>${periodLabel(p)}</option>`).join('');
+  return `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_avPeriod=this.value;_avDetailKey=null;renderAnalyticsView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（8月〜翌7月）で絞り込み</span></div>`;
+}
+
+function renderAnalyticsView() {
+  const body = document.getElementById('avBody');
+  if (!body) return;
+  if (_avChartInstance) { try { _avChartInstance.destroy(); } catch(_) {} _avChartInstance = null; }
+  if (_avDetailKey) {
+    body.innerHTML = avFilterBar() + _avRenderDetail();
+    setTimeout(_avRenderChart, 50);
+  } else {
+    if (_avTab === 'customer') body.innerHTML = avFilterBar() + _avRenderCustomerList();
+    else if (_avTab === 'pm') body.innerHTML = avFilterBar() + _avRenderPMList();
+    else body.innerHTML = avFilterBar() + _avRenderSupplierList();
+  }
+}
+
+const _fv = n => '¥' + Math.round(n||0).toLocaleString('ja-JP');
+const _fp = (s,p) => s>0 ? Math.round(p/s*1000)/10 + '%' : '0.0%';
+
+// === 顧客別 ===
+function _avRenderCustomerList() {
+  const src = avFilteredCases();
+  const map = {};
+  src.forEach(c => {
+    const key = c.customerName || '（顧客未設定）';
+    if (!map[key]) map[key] = { key, name: key, sales: 0, purchase: 0, profit: 0, count: 0 };
+    const a = _avCaseAmounts(c);
+    map[key].sales += a.sales; map[key].purchase += a.purchase; map[key].profit += a.profit; map[key].count++;
+  });
+  const rows = Object.values(map).sort((a,b) => b.sales - a.sales);
+  if (!rows.length) return '<div style="padding:32px;text-align:center;color:#9ca3af">対象データがありません</div>';
+  const tot = rows.reduce((s,r) => ({sales:s.sales+r.sales, purchase:s.purchase+r.purchase, profit:s.profit+r.profit, count:s.count+r.count}), {sales:0,purchase:0,profit:0,count:0});
+  let html = '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+  html += '<th style="text-align:left">順位</th><th style="text-align:left">顧客名</th><th>案件数</th><th>売上(税抜)</th><th>仕入(税抜)</th><th>粗利</th><th>粗利率</th><th></th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach((r,i) => {
+    html += '<tr style="cursor:pointer" onclick="_avDrilldown(\'' + esc(r.key).replace(/\\/g,'\\\\').replace(/\'/g,'\\\'') + '\')">';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + (i+1) + '位</td>';
+    html += '<td style="text-align:left">' + esc(r.name) + '</td>';
+    html += '<td>' + r.count + '</td>';
+    html += '<td>' + _fv(r.sales) + '</td>';
+    html += '<td>' + _fv(r.purchase) + '</td>';
+    html += '<td style="color:' + (r.profit>=0?'#16a34a':'#dc2626') + ';font-weight:600">' + _fv(r.profit) + '</td>';
+    html += '<td>' + _fp(r.sales, r.profit) + '</td>';
+    html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:5px 10px;border:none;border-radius:4px;cursor:pointer">詳細 →</button></td>';
+    html += '</tr>';
+  });
+  html += '<tr class="sv-total"><td colspan="2" style="text-align:right;padding-right:12px">合計</td>';
+  html += '<td>' + tot.count + '</td><td>' + _fv(tot.sales) + '</td><td>' + _fv(tot.purchase) + '</td>';
+  html += '<td>' + _fv(tot.profit) + '</td><td>' + _fp(tot.sales, tot.profit) + '</td><td></td></tr>';
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// === 駐車場別 ===
+function _avRenderPMList() {
+  const src = avFilteredCases();
+  const map = {};
+  src.forEach(c => {
+    (c.parkingLots || []).forEach(pl => {
+      const key = (pl.name || '（駐車場未設定）') + '||' + (pl.address || '');
+      if (!map[key]) map[key] = { key, name: pl.name || '（駐車場未設定）', address: pl.address || '', cases: [], salesSum: 0, purchaseSum: 0, count: 0 };
+      // 駐車場ごとの売上は案件按分（簡略：案件売上 / 駐車場数）
+      const lots = (c.parkingLots || []).length || 1;
+      const a = _avCaseAmounts(c);
+      map[key].salesSum += a.sales / lots;
+      map[key].purchaseSum += a.purchase / lots;
+      map[key].count++;
+      if (!map[key].cases.includes(c.id)) map[key].cases.push(c.id);
+    });
+  });
+  const rows = Object.values(map).map(r => ({...r, profit: r.salesSum - r.purchaseSum})).sort((a,b) => b.salesSum - a.salesSum);
+  if (!rows.length) return '<div style="padding:32px;text-align:center;color:#9ca3af">対象データがありません</div>';
+  let html = '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+  html += '<th style="text-align:left">順位</th><th style="text-align:left">駐車場名</th><th style="text-align:left">住所</th><th>案件数</th><th>売上(按分)</th><th>仕入(按分)</th><th>粗利</th><th></th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach((r,i) => {
+    html += '<tr style="cursor:pointer" onclick="_avDrilldown(' + JSON.stringify(r.key).replace(/"/g,'&quot;') + ')">';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + (i+1) + '位</td>';
+    html += '<td style="text-align:left">' + esc(r.name) + '</td>';
+    html += '<td style="text-align:left;color:#6b7280;font-size:11.5px">' + esc(r.address) + '</td>';
+    html += '<td>' + r.count + '</td>';
+    html += '<td>' + _fv(r.salesSum) + '</td>';
+    html += '<td>' + _fv(r.purchaseSum) + '</td>';
+    html += '<td style="color:' + (r.profit>=0?'#16a34a':'#dc2626') + ';font-weight:600">' + _fv(r.profit) + '</td>';
+    html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:5px 10px;border:none;border-radius:4px;cursor:pointer">詳細 →</button></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// === 仕入先別 ===
+function _avRenderSupplierList() {
+  const src = avFilteredCases();
+  const map = {};
+  src.forEach(c => {
+    (c.parkingLots || []).forEach(pl => {
+      const key = (pl.supplierName || '（仕入先未設定）');
+      if (!map[key]) map[key] = { key, name: key, cases: new Set(), pms: new Set(), purchaseSum: 0, count: 0 };
+      const lots = (c.parkingLots || []).length || 1;
+      const a = _avCaseAmounts(c);
+      map[key].purchaseSum += a.purchase / lots;
+      map[key].cases.add(c.id);
+      if (pl.name) map[key].pms.add(pl.name);
+      map[key].count++;
+    });
+  });
+  const rows = Object.values(map).map(r => ({...r, casesCount: r.cases.size, pmsCount: r.pms.size})).sort((a,b) => b.purchaseSum - a.purchaseSum);
+  if (!rows.length) return '<div style="padding:32px;text-align:center;color:#9ca3af">対象データがありません</div>';
+  let html = '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+  html += '<th style="text-align:left">順位</th><th style="text-align:left">仕入先名</th><th>取引案件数</th><th>取扱駐車場数</th><th>累計仕入(按分)</th><th></th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach((r,i) => {
+    html += '<tr style="cursor:pointer" onclick="_avDrilldown(' + JSON.stringify(r.key).replace(/"/g,'&quot;') + ')">';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + (i+1) + '位</td>';
+    html += '<td style="text-align:left">' + esc(r.name) + '</td>';
+    html += '<td>' + r.casesCount + '</td>';
+    html += '<td>' + r.pmsCount + '</td>';
+    html += '<td>' + _fv(r.purchaseSum) + '</td>';
+    html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:5px 10px;border:none;border-radius:4px;cursor:pointer">詳細 →</button></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function _avDrilldown(key) {
+  _avDetailKey = key;
+  renderAnalyticsView();
+}
+
+function _avRenderDetail() {
+  const back = '<button onclick="_avDetailKey=null;renderAnalyticsView()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;margin-bottom:14px">← 一覧に戻る</button>';
+  const src = avFilteredCases();
+  let title = '', relatedCases = [];
+  if (_avTab === 'customer') {
+    title = '👥 ' + _avDetailKey;
+    relatedCases = src.filter(c => (c.customerName || '（顧客未設定）') === _avDetailKey);
+  } else if (_avTab === 'pm') {
+    title = '🅿 ' + _avDetailKey.split('||')[0];
+    relatedCases = src.filter(c => (c.parkingLots||[]).some(pl => ((pl.name||'（駐車場未設定）')+'||'+(pl.address||'')) === _avDetailKey));
+  } else {
+    title = '🏢 ' + _avDetailKey;
+    relatedCases = src.filter(c => (c.parkingLots||[]).some(pl => (pl.supplierName||'（仕入先未設定）') === _avDetailKey));
+  }
+  const tot = relatedCases.reduce((s,c) => {
+    const a = _avCaseAmounts(c);
+    return { sales: s.sales+a.sales, purchase: s.purchase+a.purchase, profit: s.profit+a.profit };
+  }, {sales:0,purchase:0,profit:0});
+
+  let html = back;
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">';
+  html += '<h3 style="margin:0;font-size:18px">'+esc(title)+'</h3>';
+  html += '<span style="font-size:13px;color:#6b7280">案件数: '+relatedCases.length+'件</span>';
+  html += '</div>';
+
+  // KPIカード
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">';
+  html += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px"><div style="font-size:11px;color:#1e3a5f">累計売上(税抜)</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">'+_fv(tot.sales)+'</div></div>';
+  html += '<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px"><div style="font-size:11px;color:#92400e">累計仕入(税抜)</div><div style="font-size:18px;font-weight:700;color:#92400e">'+_fv(tot.purchase)+'</div></div>';
+  html += '<div style="background:'+(tot.profit>=0?'#d1fae5':'#fee2e2')+';border:1px solid '+(tot.profit>=0?'#a7f3d0':'#fecaca')+';border-radius:8px;padding:10px"><div style="font-size:11px;color:'+(tot.profit>=0?'#065f46':'#991b1b')+'">累計粗利</div><div style="font-size:18px;font-weight:700;color:'+(tot.profit>=0?'#065f46':'#991b1b')+'">'+_fv(tot.profit)+'</div></div>';
+  html += '<div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:10px"><div style="font-size:11px;color:#374151">粗利率</div><div style="font-size:18px;font-weight:700;color:#374151">'+_fp(tot.sales, tot.profit)+'</div></div>';
+  html += '</div>';
+
+  // 月次推移グラフ
+  html += '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:14px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">📊 月次推移</div><div style="height:280px"><canvas id="avChartCanvas"></canvas></div></div>';
+
+  // 関連案件一覧
+  html += '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">関連案件 (' + relatedCases.length + '件)</div>';
+  if (relatedCases.length) {
+    html += '<table class="sv-table"><thead><tr>';
+    html += '<th style="text-align:left">案件番号</th><th style="text-align:left">現場名</th><th style="text-align:left">受付日</th><th style="text-align:left">ステータス</th><th>売上(税抜)</th><th>粗利</th><th></th>';
+    html += '</tr></thead><tbody>';
+    relatedCases.sort((a,b) => (b.receptionDate||'').localeCompare(a.receptionDate||'')).forEach(c => {
+      const a = _avCaseAmounts(c);
+      html += '<tr>';
+      html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">'+esc(c.caseNo||'')+'</td>';
+      html += '<td style="text-align:left">'+esc(c.siteName||'')+'</td>';
+      html += '<td style="text-align:left;color:#6b7280">'+esc(c.receptionDate||'')+'</td>';
+      html += '<td style="text-align:left">'+esc(c.status||'')+'</td>';
+      html += '<td>'+_fv(a.sales)+'</td>';
+      html += '<td style="color:'+(a.profit>=0?'#16a34a':'#dc2626')+'">'+_fv(a.profit)+'</td>';
+      html += '<td><button style="background:#1e3a5f;color:white;font-size:11px;padding:4px 10px;border:none;border-radius:4px;cursor:pointer" onclick="closeAnalyticsView();openDetail(\''+c.id+'\')">案件を開く</button></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  // 詳細データを保持（チャート描画用）
+  window._avChartCases = relatedCases;
+  return html;
+}
+
+function _avRenderChart() {
+  const canvas = document.getElementById('avChartCanvas');
+  if (!canvas || !window.Chart) return;
+  const cases = window._avChartCases || [];
+  // 月次推移を集計（受付日の年月で）
+  const monthly = {};
+  cases.forEach(c => {
+    const ds = c.receptionDate || (c.createdAt ? c.createdAt.slice(0,10) : '');
+    if (!ds) return;
+    const ym = ds.slice(0, 7); // YYYY-MM
+    if (!monthly[ym]) monthly[ym] = { sales:0, purchase:0, profit:0 };
+    const a = _avCaseAmounts(c);
+    monthly[ym].sales += a.sales;
+    monthly[ym].purchase += a.purchase;
+    monthly[ym].profit += a.profit;
+  });
+  const labels = Object.keys(monthly).sort();
+  if (!labels.length) {
+    canvas.parentElement.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:60px 0;font-size:13px">月次データがありません</div>';
+    return;
+  }
+  const sales = labels.map(l => monthly[l].sales);
+  const purchase = labels.map(l => monthly[l].purchase);
+  const profit = labels.map(l => monthly[l].profit);
+
+  if (_avChartInstance) { try { _avChartInstance.destroy(); } catch(_) {} }
+  _avChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: '売上(税抜)', data: sales, backgroundColor: '#3b82f6' },
+        { label: '仕入(税抜)', data: purchase, backgroundColor: '#f59e0b' },
+        { label: '粗利', data: profit, type: 'line', borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.2)', tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { ticks: { callback: v => '¥' + (v/1000).toLocaleString() + 'k' } }
+      }
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════
