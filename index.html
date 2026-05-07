@@ -1080,6 +1080,36 @@
           <div style="display:flex;align-items:center;gap:6px"><label>最終督促 支払期限：本書発行から</label><input type="number" id="dunning_finalDeadline" min="1" max="60" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('finalDeadline',this.value)"><span>日後</span></div>
         </div>
       </div>
+      <!-- メールテンプレート -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px;flex-wrap:wrap">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">📧 メールテンプレート</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-xs" onclick="resetMailTemplate()">🔄 デフォルトに戻す</button>
+            <button class="btn btn-outline btn-xs" onclick="previewMailTemplate()">👁 プレビュー</button>
+            <button class="btn btn-primary btn-xs" onclick="saveMailTemplate()">💾 保存</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="mt-tab-btn active" data-mt="proposal" onclick="switchMailTab('proposal')">提案メール</button>
+          <button class="mt-tab-btn" data-mt="application_fax" onclick="switchMailTab('application_fax')">申込書FAXメール</button>
+          <button class="mt-tab-btn" data-mt="kakutei" onclick="switchMailTab('kakutei')">契約確定メール</button>
+          <button class="mt-tab-btn" data-mt="invoice" onclick="switchMailTab('invoice')">請求メール</button>
+        </div>
+        <div style="font-size:12px;color:#374151;margin-bottom:6px;font-weight:600">件名</div>
+        <input type="text" id="mtSubject" oninput="_mtMarkDirty()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
+        <div style="font-size:12px;color:#374151;margin-bottom:6px;font-weight:600">本文</div>
+        <textarea id="mtBody" oninput="_mtMarkDirty()" style="width:100%;min-height:280px;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical"></textarea>
+        <div style="margin-top:10px;padding:10px;background:white;border:1px solid #e5e7eb;border-radius:6px">
+          <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px">使用可能なプレースホルダ（クリックでコピー）</div>
+          <div id="mtPlaceholders" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+        </div>
+        <div id="mtSaveStatus" style="font-size:11px;color:#6b7280;margin-top:6px;min-height:14px"></div>
+      </div>
+      <style>
+        .mt-tab-btn{padding:6px 14px;border:1px solid #d1d5db;background:white;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;color:#6b7280;border-bottom:none}
+        .mt-tab-btn.active{background:var(--primary);color:white;border-color:var(--primary)}
+      </style>
       <!-- 顧客情報 -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
@@ -1496,6 +1526,8 @@ function openMasterModal() {
   renderMaster();
   renderSuppliers();
   _populateDunningSettings();
+  // メールテンプレートタブを初期化
+  switchMailTab('proposal');
   // 振込先フィールドを現在の値で埋める
   const bank = masterData.bankInfo || {};
   ['bankName','bankBranchName','bankAccountNo','bankAccountName'].forEach(id => {
@@ -5265,36 +5297,228 @@ function showMailBanner(data,type){
 }
 function closeMailBanner(){document.getElementById('mailBanner').classList.remove('show');}
 
+// ═══════════════════════════════════════════════
+// メールテンプレート（カスタマイズ可能）
+// ═══════════════════════════════════════════════
+const _DEFAULT_MAIL_TEMPLATES = {
+  proposal: {
+    subject: '【ご提案内容のご案内】{caseNo}｜{siteName}',
+    body:
+      '{customerName}\n' +
+      '{staffName} 様\n\n' +
+      'いつも大変お世話になっております。\n' +
+      '{branchName}の{ourStaffName}でございます。\n\n' +
+      '【{siteName}】につきまして、下記の通りご提案資料をお送りいたします。\n' +
+      '・駐車場案内図\n' +
+      '・見積書兼発注書\n\n' +
+      '内容をご確認のうえ、ご発注の際は本メールへご返信をお願いいたします。\n' +
+      '何かご不明点等ございましたら、お気軽にお知らせください。\n\n' +
+      '引き続き、何卒よろしくお願いいたします。\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━\n' +
+      '{branchName}\n' +
+      '{ourStaffName}\n' +
+      '－－－－－－－－－－－－－－－－－－－－\n' +
+      '{branchTel}\n' +
+      '{branchEmail}\n' +
+      '━━━━━━━━━━━━━━━━━━━━'
+  },
+  invoice: {
+    subject: '「{siteName}」駐車場 請求書のご送付',
+    body:
+      '{staffName} 様\n\n' +
+      'お世話になっております。\n\n' +
+      '「{siteName}」の駐車場につきまして、請求書を送付いたします。\n\n' +
+      'ご確認のほど、どうぞよろしくお願いいたします。'
+  },
+  kakutei: {
+    subject: '【契約内容確定のご案内】{caseNo}｜{siteName}',
+    body:
+      '{customerName}\n' +
+      '{staffName} 様\n\n' +
+      'いつも大変お世話になっております。\n' +
+      '{branchName}の{ourStaffName}でございます。\n\n' +
+      '【{siteName}】につきまして、契約内容が確定いたしましたので、下記資料をお送りいたします。\n' +
+      '・駐車場区画図\n' +
+      '・確定金額明細書\n\n' +
+      '内容をご確認のうえ、相違等がございましたらお手数ですがご連絡ください。\n' +
+      '問題ございませんでしたら、本資料内容にてご利用開始をお願いいたします。\n\n' +
+      '引き続き、何卒よろしくお願いいたします。\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━\n' +
+      '{branchName}\n' +
+      '{ourStaffName}\n' +
+      '－－－－－－－－－－－－－－－－－－－－\n' +
+      '{branchTel}\n' +
+      '{branchEmail}\n' +
+      '━━━━━━━━━━━━━━━━━━━━'
+  },
+  application_fax: {
+    subject: '駐車場利用申込書｜{plName}',
+    body:
+      '{supplierName} 御中\n\n' +
+      'いつもお世話になっております。\n' +
+      '{branchName}の{ourStaffName}でございます。\n\n' +
+      '下記駐車場の利用申込書を添付にてお送りいたします。\n' +
+      'ご確認のほど、よろしくお願い申し上げます。\n\n' +
+      '【駐車場】{plName}\n' +
+      '【期間】{contractStart} 〜 {contractEnd}\n' +
+      '【台数】{units}台\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━\n' +
+      '{branchName}\n' +
+      '{ourStaffName}\n' +
+      '－－－－－－－－－－－－－－－－－－－－\n' +
+      'TEL: {branchTel}\n' +
+      'FAX: {branchFax}\n' +
+      '携帯: {ourStaffMobile}\n' +
+      '{branchEmail}\n' +
+      '━━━━━━━━━━━━━━━━━━━━'
+  }
+};
+
+// テンプレート種類別の使用可能プレースホルダ
+const _MAIL_PLACEHOLDERS = {
+  proposal: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','branchAddress','branchFax'],
+  invoice: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','caseAmount','paymentDue'],
+  kakutei: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','contractStart','contractEnd'],
+  application_fax: ['supplierName','plName','units','contractStart','contractEnd','branchName','ourStaffName','branchTel','branchFax','branchEmail','ourStaffMobile']
+};
+
+let _mtCurrentType = 'proposal';
+let _mtDirty = false;
+
+function getMailTemplate(type) {
+  const saved = (masterData.mailTemplates || {})[type];
+  if (saved && (saved.subject || saved.body)) return saved;
+  return _DEFAULT_MAIL_TEMPLATES[type] || { subject: '', body: '' };
+}
+
+function applyMailTemplate(type, vars) {
+  const tmpl = getMailTemplate(type);
+  let subject = tmpl.subject || '';
+  let body = tmpl.body || '';
+  Object.keys(vars).forEach(k => {
+    const re = new RegExp('\\{' + k + '\\}', 'g');
+    subject = subject.replace(re, (vars[k] != null ? vars[k] : ''));
+    body = body.replace(re, (vars[k] != null ? vars[k] : ''));
+  });
+  return { subject, body };
+}
+
+function _mtMarkDirty() {
+  _mtDirty = true;
+  const st = document.getElementById('mtSaveStatus');
+  if (st) st.textContent = '※ 変更があります。「💾 保存」を押してください';
+}
+
+function switchMailTab(type) {
+  if (_mtDirty && !confirm('変更を保存していません。タブを切り替えると失われます。続行しますか？')) return;
+  _mtCurrentType = type;
+  _mtDirty = false;
+  document.querySelectorAll('.mt-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.mt === type));
+  const tmpl = getMailTemplate(type);
+  document.getElementById('mtSubject').value = tmpl.subject || '';
+  document.getElementById('mtBody').value = tmpl.body || '';
+  // プレースホルダ表示
+  const phEl = document.getElementById('mtPlaceholders');
+  if (phEl) {
+    phEl.innerHTML = (_MAIL_PLACEHOLDERS[type] || []).map(p =>
+      '<span onclick="navigator.clipboard.writeText(\'{' + p + '}\').then(()=>showToast(\'コピーしました：{' + p + '}\'))" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:3px 8px;border-radius:4px;font-size:11px;font-family:monospace;cursor:pointer">{' + p + '}</span>'
+    ).join('');
+  }
+  const st = document.getElementById('mtSaveStatus');
+  if (st) st.textContent = '';
+}
+
+function saveMailTemplate() {
+  if (!masterData.mailTemplates) masterData.mailTemplates = {};
+  masterData.mailTemplates[_mtCurrentType] = {
+    subject: document.getElementById('mtSubject').value,
+    body: document.getElementById('mtBody').value
+  };
+  saveMasterToFS();
+  _mtDirty = false;
+  const st = document.getElementById('mtSaveStatus');
+  if (st) st.textContent = '✓ 保存しました';
+  showToast('📧 メールテンプレートを保存しました');
+}
+
+function resetMailTemplate() {
+  if (!confirm('現在のテンプレートをデフォルトに戻しますか？\n（保存ボタンを押すまで確定されません）')) return;
+  const def = _DEFAULT_MAIL_TEMPLATES[_mtCurrentType];
+  if (!def) return;
+  document.getElementById('mtSubject').value = def.subject;
+  document.getElementById('mtBody').value = def.body;
+  _mtMarkDirty();
+}
+
+function previewMailTemplate() {
+  // 現在編集中の値で、ダミーデータでプレビュー
+  const subj = document.getElementById('mtSubject').value;
+  const body = document.getElementById('mtBody').value;
+  // ダミー値
+  const sampleVars = {
+    customerName: '株式会社オチアイ',
+    staffName: '大澤 保',
+    caseNo: '2026-001-002',
+    siteName: 'モアグレース一宮駅前',
+    branchName: '株式会社 TomeSapo',
+    ourStaffName: '古田 知也',
+    branchTel: '0568-XX-XXXX',
+    branchFax: '0568-YY-YYYY',
+    branchEmail: 'info@tomesapo.co.jp',
+    branchAddress: '愛知県春日井市大留町6-5-9',
+    caseAmount: '770,000',
+    paymentDue: '2026年5月31日',
+    contractStart: '2026年4月1日',
+    contractEnd: '2026年9月30日',
+    plName: 'まると砂利駐車場',
+    units: '5',
+    supplierName: '山田不動産',
+    ourStaffMobile: '080-XXXX-XXXX'
+  };
+  let renderedSubj = subj, renderedBody = body;
+  Object.keys(sampleVars).forEach(k => {
+    const re = new RegExp('\\{' + k + '\\}', 'g');
+    renderedSubj = renderedSubj.replace(re, sampleVars[k]);
+    renderedBody = renderedBody.replace(re, sampleVars[k]);
+  });
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = '<div style="background:white;border-radius:12px;width:min(96vw,640px);max-height:88vh;display:flex;flex-direction:column">' +
+    '<div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;background:var(--primary);color:white;border-radius:12px 12px 0 0">' +
+      '<h3 style="margin:0;font-size:15px">👁 メールプレビュー（ダミーデータ）</h3>' +
+      '<button onclick="this.closest(\'div[style*=position]\').remove()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:white;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px">✕</button>' +
+    '</div>' +
+    '<div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;background:#f9fafb">' +
+      '<div style="font-size:11px;color:#6b7280;margin-bottom:4px">件名</div>' +
+      '<div style="font-size:14px;font-weight:600">' + esc(renderedSubj) + '</div>' +
+    '</div>' +
+    '<div style="flex:1;overflow:auto;padding:18px;font-size:13px;line-height:1.7;white-space:pre-wrap">' + esc(renderedBody) + '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
 async function openProposalMail(data){
   var cust=getCustomerByName(data.customerName);
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var subject = '【ご提案内容のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||'');
-  var staffName=staff&&staff.name?staff.name:'担当者';
-  var custName=data.customerName||'';
-  var siteName=data.siteName||'';
   var br = getCaseBranch(data);
-  var body =
-    custName+'\n'+
-    staffName+' 様\n\n'+
-    'いつも大変お世話になっております。\n'+
-    (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n'+
-    '【'+siteName+'】につきまして、下記の通りご提案資料をお送りいたします。\n'+
-    '・駐車場案内図\n'+
-    '・見積書兼発注書\n\n'+
-    '内容をご確認のうえ、ご発注の際は本メールへご返信をお願いいたします。\n'+
-    '何かご不明点等ございましたら、お気軽にお知らせください。\n\n'+
-    '引き続き、何卒よろしくお願いいたします。\n\n'+
-    '━━━━━━━━━━━━━━━━━━━━\n'+
-    (br.name||'株式会社 TomeSapo')+'\n'+
-    '古田 知也（TOMOYA FURUTA）\n'+
-    '－－－－－－－－－－－－－－－－－－－－\n'+
-    (br.tel?br.tel+'\n':'090-6335-5765\n')+
-    (br.email||'info@tomesapo.co.jp')+'\n'+
-    '━━━━━━━━━━━━━━━━━━━━';
-  await _saveMailToQueue(data.id, { type:'proposal', to:to, subject:subject, body:body });
-  _openGmailCompose(to, subject, body);
+  var vars = {
+    customerName: data.customerName||'',
+    staffName: staff&&staff.name?staff.name:'担当者',
+    caseNo: data.caseNo||'',
+    siteName: data.siteName||'',
+    branchName: br.name||'株式会社 TomeSapo',
+    ourStaffName: data.ourStaffName||'',
+    branchTel: br.tel||'',
+    branchEmail: br.email||'info@tomesapo.co.jp',
+    branchAddress: br.address||'',
+    branchFax: br.fax||''
+  };
+  var rendered = applyMailTemplate('proposal', vars);
+  await _saveMailToQueue(data.id, { type:'proposal', to:to, subject:rendered.subject, body:rendered.body });
+  _openGmailCompose(to, rendered.subject, rendered.body);
 }
 
 async function openInvoiceMail(data){
@@ -5302,14 +5526,28 @@ async function openInvoiceMail(data){
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var subject='「'+data.siteName+'」駐車場 請求書のご送付';
-  var body =
-    (staff&&staff.name?staff.name+' 様':'担当者 様')+'\n\n'+
-    'お世話になっております。\n\n'+
-    '「'+data.siteName+'」の駐車場につきまして、請求書を送付いたします。\n\n'+
-    'ご確認のほど、どうぞよろしくお願いいたします。';
-  await _saveMailToQueue(data.id, { type:'invoice', to:to, subject:subject, body:body });
-  _openGmailCompose(to, subject, body);
+  var br = getCaseBranch(data);
+  var fmtJ = d => {
+    if (!d) return '';
+    const p = String(d).split('-');
+    if (p.length < 3) return String(d);
+    return p[0]+'年'+parseInt(p[1],10)+'月'+parseInt(p[2],10)+'日';
+  };
+  var vars = {
+    customerName: data.customerName||'',
+    staffName: staff&&staff.name?staff.name:'担当者',
+    caseNo: data.caseNo||'',
+    siteName: data.siteName||'',
+    branchName: br.name||'株式会社 TomeSapo',
+    ourStaffName: data.ourStaffName||'',
+    branchTel: br.tel||'',
+    branchEmail: br.email||'info@tomesapo.co.jp',
+    caseAmount: (data.taxIncludedSales||0).toLocaleString('ja-JP'),
+    paymentDue: fmtJ(data.paymentDue||'')
+  };
+  var rendered = applyMailTemplate('invoice', vars);
+  await _saveMailToQueue(data.id, { type:'invoice', to:to, subject:rendered.subject, body:rendered.body });
+  _openGmailCompose(to, rendered.subject, rendered.body);
 }
 
 async function openKakuteiMail(data){
@@ -5317,31 +5555,28 @@ async function openKakuteiMail(data){
   var base=cust&&cust.bases.find(b=>b.name===data.baseName);
   var staff=base&&base.staff.find(s=>s.name===data.staffName);
   var to=staff&&staff.email?staff.email:'';
-  var subject='【契約内容確定のご案内】'+(data.caseNo||'')+'｜'+(data.siteName||'');
-  var staffName=staff&&staff.name?staff.name:'担当者';
-  var custName=data.customerName||'';
-  var siteName=data.siteName||'';
   var br = getCaseBranch(data);
-  var body =
-    custName+'\n'+
-    staffName+' 様\n\n'+
-    'いつも大変お世話になっております。\n'+
-    (br.name||'株式会社 TomeSapo')+'の古田でございます。\n\n'+
-    '【'+siteName+'】につきまして、契約内容が確定いたしましたので、下記資料をお送りいたします。\n'+
-    '・駐車場区画図\n'+
-    '・確定金額明細書\n\n'+
-    '内容をご確認のうえ、相違等がございましたらお手数ですがご連絡ください。\n'+
-    '問題ございませんでしたら、本資料内容にてご利用開始をお願いいたします。\n\n'+
-    '引き続き、何卒よろしくお願いいたします。\n\n'+
-    '━━━━━━━━━━━━━━━━━━━━\n'+
-    (br.name||'株式会社 TomeSapo')+'\n'+
-    '古田 知也（TOMOYA FURUTA）\n'+
-    '－－－－－－－－－－－－－－－－－－－－\n'+
-    (br.tel?br.tel+'\n':'090-6335-5765\n')+
-    (br.email||'info@tomesapo.co.jp')+'\n'+
-    '━━━━━━━━━━━━━━━━━━━━';
-  await _saveMailToQueue(data.id, { type:'kakutei', to:to, subject:subject, body:body });
-  _openGmailCompose(to, subject, body);
+  var fmtJ = d => {
+    if (!d) return '';
+    const p = String(d).split('-');
+    if (p.length < 3) return String(d);
+    return p[0]+'年'+parseInt(p[1],10)+'月'+parseInt(p[2],10)+'日';
+  };
+  var vars = {
+    customerName: data.customerName||'',
+    staffName: staff&&staff.name?staff.name:'担当者',
+    caseNo: data.caseNo||'',
+    siteName: data.siteName||'',
+    branchName: br.name||'株式会社 TomeSapo',
+    ourStaffName: data.ourStaffName||'',
+    branchTel: br.tel||'',
+    branchEmail: br.email||'info@tomesapo.co.jp',
+    contractStart: fmtJ(data.contractStart||''),
+    contractEnd: fmtJ(data.contractEnd||'')
+  };
+  var rendered = applyMailTemplate('kakutei', vars);
+  await _saveMailToQueue(data.id, { type:'kakutei', to:to, subject:rendered.subject, body:rendered.body });
+  _openGmailCompose(to, rendered.subject, rendered.body);
 }
 
 // 国内FAX → eFax メールアドレスに変換（例: 052-831-5415 → 81528315415@efaxsend.com）
@@ -5368,35 +5603,28 @@ async function openApplicationFaxMail(data) {
   }
   const to = _jpFaxToEfaxAddr(pl.supplierFax);
 
-  const subject = '駐車場利用申込書｜' + (pl.name || '');
-
   const fmtJ = d => {
     if (!d) return '';
     const p = String(d).split('-');
     if (p.length < 3) return String(d);
     return p[0] + '年' + parseInt(p[1],10) + '月' + parseInt(p[2],10) + '日';
   };
-  const body =
-    (pl.supplierName || '') + ' 御中\n\n' +
-    'いつもお世話になっております。\n' +
-    (branch.name || '株式会社 TomeSapo') + 'の' + (c.ourStaffName || '') + 'でございます。\n\n' +
-    '下記駐車場の利用申込書を添付にてお送りいたします。\n' +
-    'ご確認のほど、よろしくお願い申し上げます。\n\n' +
-    '【駐車場】' + (pl.name || '') + '\n' +
-    '【期間】' + fmtJ(pl.contractStart) + ' 〜 ' + fmtJ(pl.contractEnd) + '\n' +
-    '【台数】' + (pl.units || 0) + '台\n\n' +
-    '━━━━━━━━━━━━━━━━━━━━\n' +
-    (branch.name || '株式会社 TomeSapo') + '\n' +
-    (c.ourStaffName || '') + '\n' +
-    '－－－－－－－－－－－－－－－－－－－－\n' +
-    (branch.tel ? 'TEL: ' + branch.tel + '\n' : '') +
-    (branch.fax ? 'FAX: ' + branch.fax + '\n' : '') +
-    (c.ourStaffMobile ? '携帯: ' + c.ourStaffMobile + '\n' : '') +
-    (branch.email || 'info@tomesapo.co.jp') + '\n' +
-    '━━━━━━━━━━━━━━━━━━━━';
-
-  await _saveMailToQueue(c.id, { type:'application_fax', to:to, subject:subject, body:body, plIdx:data.plIdx, plName:pl.name||'' });
-  _openGmailCompose(to, subject, body);
+  const vars = {
+    supplierName: pl.supplierName||'',
+    plName: pl.name||'',
+    units: pl.units||0,
+    contractStart: fmtJ(pl.contractStart),
+    contractEnd: fmtJ(pl.contractEnd),
+    branchName: branch.name||'株式会社 TomeSapo',
+    ourStaffName: c.ourStaffName||'',
+    branchTel: branch.tel||'',
+    branchFax: branch.fax||'',
+    branchEmail: branch.email||'info@tomesapo.co.jp',
+    ourStaffMobile: c.ourStaffMobile||''
+  };
+  const rendered = applyMailTemplate('application_fax', vars);
+  await _saveMailToQueue(c.id, { type:'application_fax', to:to, subject:rendered.subject, body:rendered.body, plIdx:data.plIdx, plName:pl.name||'' });
+  _openGmailCompose(to, rendered.subject, rendered.body);
 }
 
 
