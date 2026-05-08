@@ -5324,12 +5324,20 @@ async function _saveMailToQueue(caseId, mailData) {
 }
 
 // Gmail compose URL を組み立てて新タブで開く（保存はせず開くだけ）
-// fs=1 と /u/0/ を指定することで、リダイレクト時に view=cm が剥がれて宛先が反映されない問題を回避
+// 注意: Gmailのリダイレクト挙動で to= が反映されない場合があるため、
+// 保険として宛先メールアドレスをクリップボードにもコピーする
 function _openGmailCompose(to, subject, body) {
-  const url = 'https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1' +
-    '&to=' + encodeURIComponent(to || '') +
-    '&su=' + encodeURIComponent(subject || '') +
-    '&body=' + encodeURIComponent(body || '');
+  const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
+    (to ? '&to=' + encodeURIComponent(to) : '') +
+    (subject ? '&su=' + encodeURIComponent(subject) : '') +
+    (body ? '&body=' + encodeURIComponent(body) : '');
+  // 先にクリップボードコピー（user activationが新タブ遷移で消える前に）
+  if (to && navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      navigator.clipboard.writeText(to);
+      showToast('宛先「' + to + '」をクリップボードにコピー（Ctrl+Vで貼付可）');
+    } catch(e) {}
+  }
   window.open(url, '_blank');
 }
 
@@ -5615,8 +5623,8 @@ async function openProposalMail(data){
     branchFax: br.fax||''
   };
   var rendered = applyMailTemplate('proposal', vars);
-  await _saveMailToQueue(data.id, { type:'proposal', to:to, subject:rendered.subject, body:rendered.body });
   _openGmailCompose(to, rendered.subject, rendered.body);
+  _saveMailToQueue(data.id, { type:'proposal', to:to, subject:rendered.subject, body:rendered.body });
 }
 
 async function openInvoiceMail(data){
@@ -5644,8 +5652,8 @@ async function openInvoiceMail(data){
     paymentDue: fmtJ(data.paymentDue||'')
   };
   var rendered = applyMailTemplate('invoice', vars);
-  await _saveMailToQueue(data.id, { type:'invoice', to:to, subject:rendered.subject, body:rendered.body });
   _openGmailCompose(to, rendered.subject, rendered.body);
+  _saveMailToQueue(data.id, { type:'invoice', to:to, subject:rendered.subject, body:rendered.body });
 }
 
 async function openKakuteiMail(data){
@@ -5673,8 +5681,8 @@ async function openKakuteiMail(data){
     contractEnd: fmtJ(data.contractEnd||'')
   };
   var rendered = applyMailTemplate('kakutei', vars);
-  await _saveMailToQueue(data.id, { type:'kakutei', to:to, subject:rendered.subject, body:rendered.body });
   _openGmailCompose(to, rendered.subject, rendered.body);
+  _saveMailToQueue(data.id, { type:'kakutei', to:to, subject:rendered.subject, body:rendered.body });
 }
 
 // 国内FAX → eFax メールアドレスに変換（例: 052-831-5415 → 81528315415@efaxsend.com）
@@ -5721,8 +5729,8 @@ async function openApplicationFaxMail(data) {
     ourStaffMobile: c.ourStaffMobile||''
   };
   const rendered = applyMailTemplate('application_fax', vars);
-  await _saveMailToQueue(c.id, { type:'application_fax', to:to, subject:rendered.subject, body:rendered.body, plIdx:data.plIdx, plName:pl.name||'' });
   _openGmailCompose(to, rendered.subject, rendered.body);
+  _saveMailToQueue(c.id, { type:'application_fax', to:to, subject:rendered.subject, body:rendered.body, plIdx:data.plIdx, plName:pl.name||'' });
 }
 
 
