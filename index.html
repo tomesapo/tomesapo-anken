@@ -5324,8 +5324,9 @@ async function _saveMailToQueue(caseId, mailData) {
 }
 
 // Gmail compose URL を組み立てて新タブで開く（保存はせず開くだけ）
+// fs=1 と /u/0/ を指定することで、リダイレクト時に view=cm が剥がれて宛先が反映されない問題を回避
 function _openGmailCompose(to, subject, body) {
-  const url = 'https://mail.google.com/mail/?view=cm' +
+  const url = 'https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1' +
     '&to=' + encodeURIComponent(to || '') +
     '&su=' + encodeURIComponent(subject || '') +
     '&body=' + encodeURIComponent(body || '');
