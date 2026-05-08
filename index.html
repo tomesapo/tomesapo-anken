@@ -201,7 +201,7 @@
   }
   .master-add-customer{display:flex;gap:8px;margin-top:14px}
   .master-add-customer input{flex:1;padding:8px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:14px;outline:none}
-  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gray-800);color:white;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:all .3s;z-index:3100;pointer-events:none;white-space:nowrap}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gray-800);color:white;padding:12px 22px;border-radius:8px;font-size:14px;opacity:0;transition:all .3s;z-index:3100;pointer-events:none;max-width:90vw;text-align:center;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.25)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:2500;opacity:0;pointer-events:none;transition:opacity .15s}
   .confirm-overlay.open{opacity:1;pointer-events:all}
@@ -5297,10 +5297,10 @@ async function generateKakuteiDocument(caseId){
 }
 
 // \u2500\u2500 \u30c8\u30fc\u30b9\u30c8 / \u30e1\u30fc\u30eb\u30d0\u30ca\u30fc \u2500\u2500
-function showToast(msg){
+function showToast(msg, duration){
   var t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
-  setTimeout(function(){t.classList.remove('show');},2500);
+  setTimeout(function(){t.classList.remove('show');}, duration||2500);
 }
 // メール下書きキュー: 案件の mailQueue 配列に追加し Firestore に保存
 async function _saveMailToQueue(caseId, mailData) {
@@ -5335,7 +5335,7 @@ function _openGmailCompose(to, subject, body) {
   if (to && navigator.clipboard && navigator.clipboard.writeText) {
     try {
       navigator.clipboard.writeText(to);
-      showToast('宛先「' + to + '」をクリップボードにコピー（Ctrl+Vで貼付可）');
+      showToast('📋 宛先「' + to + '」をコピー済み！Gmailの宛先欄で Ctrl+V を押してください', 6000);
     } catch(e) {}
   }
   window.open(url, '_blank');
