@@ -2773,6 +2773,86 @@ function populateForm(c) {
 }
 
 // ── 保存（Firebase対応）──
+// ── 案件バリデーション (Phase 1) ──
+const _STATUS_ORDER = ['未調査','調査中','再調査','提案済','未申込','契約中','未請求','請求済','入金済'];
+const _STATUS_REQ = {
+  '提案済': [['proposalDate','提案日'],['estSales','見積売上'],['estPurchase','見積仕入']],
+  '未申込': [['orderDate','受注日']],
+  '契約中': [['contractStart','契約開始日'],['contractEnd','契約終了日'],['fixedUnits','確定台数']],
+  '未請求': [['fixedSales','確定売上'],['fixedPurchase','確定仕入']],
+  '請求済': [['invoiceDate','請求日']],
+  '入金済': [['paymentDate','入金日'],['paymentAmount','入金額']]
+};
+function validateCase(data) {
+  const errors = [];
+  const warnings = [];
+  const _hv = v => v != null && v !== '' && !(typeof v === 'number' && isNaN(v));
+  // A. ステータス別 必須項目（累積）
+  const sIdx = _STATUS_ORDER.indexOf(data.status);
+  if (sIdx >= 0) {
+    const seen = new Set();
+    for (let i = 0; i <= sIdx; i++) {
+      const fields = _STATUS_REQ[_STATUS_ORDER[i]] || [];
+      for (const [k, label] of fields) {
+        if (seen.has(k)) continue;
+        seen.add(k);
+        if (!_hv(data[k])) errors.push('「'+data.status+'」にするには「'+label+'」が必要です');
+      }
+    }
+    if (sIdx >= _STATUS_ORDER.indexOf('契約中')) {
+      if (!data.parkingLots || data.parkingLots.length === 0) {
+        errors.push('「'+data.status+'」にするには駐車場を1件以上登録してください');
+      }
+    }
+  }
+  // B. 金額整合性
+  if (_hv(data.fixedSales) && _hv(data.fixedPurchase) && (data.fixedSales - data.fixedPurchase) < 0) {
+    warnings.push('確定粗利がマイナスです（売上 ¥'+fmt(data.fixedSales)+' − 仕入 ¥'+fmt(data.fixedPurchase)+' = ¥'+fmt(data.fixedSales - data.fixedPurchase)+'）');
+  }
+  if (_hv(data.fixedSales) && _hv(data.taxIncludedSales)) {
+    const expected = Math.round(data.fixedSales * 1.1);
+    if (Math.abs(data.taxIncludedSales - expected) > 1) {
+      warnings.push('税込売上が確定売上×1.1と一致しません（税込 ¥'+fmt(data.taxIncludedSales)+' ≠ ¥'+fmt(expected)+'）');
+    }
+  }
+  if (_hv(data.paymentAmount) && _hv(data.taxIncludedSales) && data.paymentAmount !== data.taxIncludedSales) {
+    warnings.push('入金額が税込売上と一致しません（入金 ¥'+fmt(data.paymentAmount)+' ≠ 税込売上 ¥'+fmt(data.taxIncludedSales)+'）');
+  }
+  // C. 日付整合性
+  if (data.contractStart && data.contractEnd && data.contractStart >= data.contractEnd) {
+    errors.push('契約開始日が契約終了日と同じか後になっています（'+data.contractStart+' ≥ '+data.contractEnd+'）');
+  }
+  if (data.proposalDate && data.orderDate && data.proposalDate > data.orderDate) {
+    warnings.push('提案日が受注日より後になっています（'+data.proposalDate+' > '+data.orderDate+'）');
+  }
+  if (data.orderDate && data.contractStart && data.orderDate > data.contractStart) {
+    warnings.push('受注日が契約開始日より後になっています（'+data.orderDate+' > '+data.contractStart+'）');
+  }
+  if (data.invoiceDate && data.paymentDate && data.invoiceDate > data.paymentDate) {
+    errors.push('請求日が入金日より後になっています（'+data.invoiceDate+' > '+data.paymentDate+'）');
+  }
+  if (data.invoiceDate && data.paymentDue) {
+    const inv = new Date(data.invoiceDate);
+    const dueExp = new Date(inv.getFullYear(), inv.getMonth() + 2, 0);
+    const ds = dueExp.getFullYear()+'-'+String(dueExp.getMonth()+1).padStart(2,'0')+'-'+String(dueExp.getDate()).padStart(2,'0');
+    if (data.paymentDue !== ds) {
+      warnings.push('入金期日が請求日翌月末と異なります（期日 '+data.paymentDue+' ≠ 推奨 '+ds+'）');
+    }
+  }
+  if (data.contractStart && data.contractEnd && data.parkingLots) {
+    for (const p of data.parkingLots) {
+      const nm = p.name || '(名称未設定)';
+      if (p.contractStart && (p.contractStart < data.contractStart || p.contractStart > data.contractEnd)) {
+        warnings.push('駐車場「'+nm+'」の契約開始日が案件期間外です（'+p.contractStart+'）');
+      }
+      if (p.contractEnd && (p.contractEnd < data.contractStart || p.contractEnd > data.contractEnd)) {
+        warnings.push('駐車場「'+nm+'」の契約終了日が案件期間外です（'+p.contractEnd+'）');
+      }
+    }
+  }
+  return { errors, warnings };
+}
+
 async function saveCase() {
   const custId=document.getElementById('f_customer').value;
   const cust=getCustomer(custId);
@@ -2845,6 +2925,23 @@ async function saveCase() {
     statusHistory,
     updatedAt:new Date().toISOString(),
   };
+  // バリデーション (Phase 1)
+  const _vr = validateCase(data);
+  if (_vr.errors.length > 0) {
+    let m = '【エラー】以下の問題があるため保存できません：\n\n';
+    m += _vr.errors.map(e => '・' + e).join('\n');
+    if (_vr.warnings.length > 0) {
+      m += '\n\n【参考】以下の警告もあります：\n' + _vr.warnings.map(w => '・' + w).join('\n');
+    }
+    alert(m);
+    return;
+  }
+  if (_vr.warnings.length > 0) {
+    let m = '以下の点について確認してください：\n\n';
+    m += _vr.warnings.map(w => '・' + w).join('\n');
+    m += '\n\nこのまま保存しますか？';
+    if (!confirm(m)) return;
+  }
   const savedEditingId = editingId;
   closeModal();
   if(db){
