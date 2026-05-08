@@ -173,6 +173,13 @@
   .detail-val{font-weight:500;text-align:right;word-break:break-all}
   .detail-actions{padding:14px 20px;border-top:1px solid var(--gray-200);display:flex;gap:10px;position:sticky;bottom:0;background:white}
   .master-modal{max-width:760px}
+  .master-tabs{display:flex;gap:0;background:#f9fafb;border-bottom:2px solid var(--primary-light);padding:0 16px;overflow-x:auto;flex-wrap:nowrap}
+  .master-tab-btn{padding:12px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:#6b7280;border-bottom:3px solid transparent;transition:all .15s;margin-bottom:-2px;white-space:nowrap}
+  .master-tab-btn:hover{color:var(--primary);background:rgba(255,255,255,.6)}
+  .master-tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);background:white}
+  .master-tab-pane{display:none}
+  .master-tab-pane.active{display:block}
+  @media(max-width:600px){.master-tab-btn{padding:10px 12px;font-size:12px}}
   .master-customer-card{border:1px solid var(--gray-200);border-radius:10px;margin-bottom:12px;overflow:hidden}
   .master-customer-header{padding:12px 16px;background:var(--gray-50);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
   .master-customer-header:hover{background:var(--gray-100)}
@@ -1032,55 +1039,31 @@
 <div class="overlay" id="masterOverlay" onclick="closeOnOutside(event,'masterOverlay')">
   <div class="modal master-modal">
     <div class="modal-header">
-      <h2>&#9881; マスタ管理 &#8212; 顧客・拠点・担当者</h2>
+      <h2>&#9881; マスタ管理</h2>
       <button class="modal-close" onclick="closeMasterModal()"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
-    <div class="modal-body" style="max-height:80vh;overflow-y:auto">
-      <!-- 振込先設定 -->
-      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏦 振込先設定（請求書に記載）</div>
-        <div class="master-field-grid">
-          <div class="master-field-group"><div class="master-field-label">金融機関名</div><input class="master-field-input" id="bankName" placeholder="○○銀行" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">支店名</div><input class="master-field-input" id="bankBranchName" placeholder="○○支店" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">預金種目</div>
-            <select class="master-field-select" id="bankAccountType" onchange="updateBankInfo()">
-              <option value="">── 選択 ──</option>
-              <option value="普通預金">普通預金</option>
-              <option value="当座預金">当座預金</option>
-            </select>
-          </div>
-          <div class="master-field-group"><div class="master-field-label">口座番号</div><input class="master-field-input" id="bankAccountNo" placeholder="0000000" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">口座名義（カナ）</div><input class="master-field-input" id="bankAccountName" placeholder="カ）トメサポ" oninput="updateBankInfo()"></div>
-        </div>
-      </div>
-      <!-- 自社拠点 -->
+    <div class="master-tabs">
+      <button class="master-tab-btn active" data-mtab="customer" onclick="switchMasterTab('customer')">👥 顧客</button>
+      <button class="master-tab-btn" data-mtab="mail" onclick="switchMasterTab('mail')">📧 メール</button>
+      <button class="master-tab-btn" data-mtab="branch" onclick="switchMasterTab('branch')">🏢 自社拠点</button>
+      <button class="master-tab-btn" data-mtab="supplier" onclick="switchMasterTab('supplier')">🏢 仕入先</button>
+      <button class="master-tab-btn" data-mtab="settings" onclick="switchMasterTab('settings')">⚙ 設定</button>
+    </div>
+    <div class="modal-body" style="max-height:75vh;overflow-y:auto">
+      <!-- 顧客タブ -->
+      <div id="mtab-customer" class="master-tab-pane active">
+<!-- 顧客情報 -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 自社拠点（請求書・提案資料・確定資料に記載）</div>
-          <button class="btn btn-primary btn-xs" onclick="addBranch()">＋ 拠点を追加</button>
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">👥 顧客情報（顧客・拠点・担当者）</div>
+          <button class="btn btn-primary btn-xs" onclick="addCustomerFromHeader()">＋ 顧客を追加</button>
         </div>
-        <div id="branchList"></div>
+        <div id="masterCustomerList"></div>
       </div>
-      <!-- 仕入先マスタ -->
-      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 仕入先マスタ（管理会社・地主）</div>
-          <button class="btn btn-primary btn-xs" onclick="addSupplier()">＋ 仕入先を追加</button>
-        </div>
-        <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
-        <div id="supplierList"></div>
       </div>
-      <!-- 督促タイミング設定 -->
-      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">⏰ 督促タイミング設定</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
-          <div style="display:flex;align-items:center;gap:6px"><label>1次督促：入金期日から</label><input type="number" id="dunning_first" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('first',this.value)"><span>日経過後</span></div>
-          <div style="display:flex;align-items:center;gap:6px"><label>2次督促：入金期日から</label><input type="number" id="dunning_second" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('second',this.value)"><span>日経過後</span></div>
-          <div style="display:flex;align-items:center;gap:6px"><label>最終督促：入金期日から</label><input type="number" id="dunning_final" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('final',this.value)"><span>日経過後</span></div>
-          <div style="display:flex;align-items:center;gap:6px"><label>最終督促 支払期限：本書発行から</label><input type="number" id="dunning_finalDeadline" min="1" max="60" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('finalDeadline',this.value)"><span>日後</span></div>
-        </div>
-      </div>
-      <!-- メールテンプレート -->
+      <!-- メールタブ -->
+      <div id="mtab-mail" class="master-tab-pane">
+<!-- メールテンプレート -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px;flex-wrap:wrap">
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">📧 メールテンプレート</div>
@@ -1111,13 +1094,59 @@
         .mt-tab-btn{padding:6px 14px;border:1px solid #d1d5db;background:white;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;color:#6b7280;border-bottom:none}
         .mt-tab-btn.active{background:var(--primary);color:white;border-color:var(--primary)}
       </style>
-      <!-- 顧客情報 -->
+      </div>
+      <!-- 自社拠点タブ -->
+      <div id="mtab-branch" class="master-tab-pane">
+<!-- 自社拠点 -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">👥 顧客情報（顧客・拠点・担当者）</div>
-          <button class="btn btn-primary btn-xs" onclick="addCustomerFromHeader()">＋ 顧客を追加</button>
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 自社拠点（請求書・提案資料・確定資料に記載）</div>
+          <button class="btn btn-primary btn-xs" onclick="addBranch()">＋ 拠点を追加</button>
         </div>
-        <div id="masterCustomerList"></div>
+        <div id="branchList"></div>
+      </div>
+      </div>
+      <!-- 仕入先タブ -->
+      <div id="mtab-supplier" class="master-tab-pane">
+<!-- 仕入先マスタ -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 仕入先マスタ（管理会社・地主）</div>
+          <button class="btn btn-primary btn-xs" onclick="addSupplier()">＋ 仕入先を追加</button>
+        </div>
+        <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
+        <div id="supplierList"></div>
+      </div>
+      </div>
+      <!-- 設定タブ（振込先 + 督促） -->
+      <div id="mtab-settings" class="master-tab-pane">
+<!-- 振込先設定 -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏦 振込先設定（請求書に記載）</div>
+        <div class="master-field-grid">
+          <div class="master-field-group"><div class="master-field-label">金融機関名</div><input class="master-field-input" id="bankName" placeholder="○○銀行" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">支店名</div><input class="master-field-input" id="bankBranchName" placeholder="○○支店" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">預金種目</div>
+            <select class="master-field-select" id="bankAccountType" onchange="updateBankInfo()">
+              <option value="">── 選択 ──</option>
+              <option value="普通預金">普通預金</option>
+              <option value="当座預金">当座預金</option>
+            </select>
+          </div>
+          <div class="master-field-group"><div class="master-field-label">口座番号</div><input class="master-field-input" id="bankAccountNo" placeholder="0000000" oninput="updateBankInfo()"></div>
+          <div class="master-field-group"><div class="master-field-label">口座名義（カナ）</div><input class="master-field-input" id="bankAccountName" placeholder="カ）トメサポ" oninput="updateBankInfo()"></div>
+        </div>
+      </div>
+<!-- 督促タイミング設定 -->
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">⏰ 督促タイミング設定</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <div style="display:flex;align-items:center;gap:6px"><label>1次督促：入金期日から</label><input type="number" id="dunning_first" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('first',this.value)"><span>日経過後</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><label>2次督促：入金期日から</label><input type="number" id="dunning_second" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('second',this.value)"><span>日経過後</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><label>最終督促：入金期日から</label><input type="number" id="dunning_final" min="1" max="365" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('final',this.value)"><span>日経過後</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><label>最終督促 支払期限：本書発行から</label><input type="number" id="dunning_finalDeadline" min="1" max="60" style="width:60px;padding:6px;border:1px solid #d1d5db;border-radius:4px" oninput="updateDunningSetting('finalDeadline',this.value)"><span>日後</span></div>
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -2302,6 +2331,18 @@ async function purgeAllTrash() {
   } catch(e) { showToast('削除エラー: ' + e.message); }
 }
 
+// マスタ管理タブ切替
+function switchMasterTab(name) {
+  document.querySelectorAll('.master-tab-pane').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.master-tab-btn').forEach(el => el.classList.remove('active'));
+  const pane = document.getElementById('mtab-' + name);
+  if (pane) pane.classList.add('active');
+  const btn = document.querySelector('.master-tab-btn[data-mtab="' + name + '"]');
+  if (btn) btn.classList.add('active');
+  // モーダル本体のスクロール位置をリセット
+  const body = document.querySelector('#masterOverlay .modal-body');
+  if (body) body.scrollTop = 0;
+}
 function closeMasterModal() { document.getElementById('masterOverlay').classList.remove('open'); }
 
 // ── 案件番号 自動採番 ──
