@@ -2859,8 +2859,8 @@ async function saveCase() {
     renderStats();renderAll();updateYearFilter();syncCustomerFilter();
   }
   if(data.status==='提案済'&&data.estSales!=null&&data.estPurchase!=null&&data.proposalDate)setTimeout(()=>showMailBanner(data,'proposal'),400);
-  if(data.status==='未請求'&&data.fixedSales!=null&&data.fixedPurchase!=null)setTimeout(()=>showMailBanner(data,'invoice'),400);
-  if(data.status==='\u672a\u8acb\u6c42'&&data.parkingLots&&data.parkingLots.some(p=>p.contractStart&&p.contractEnd&&p.units))setTimeout(()=>showMailBanner(data,'kakutei'),400);
+  if(data.status==='請求済'&&data.invoiceDate)setTimeout(()=>showMailBanner(data,'invoice'),400);
+  if(data.status==='\u672a\u8acb\u6c42'&&data.fixedSales!=null&&data.fixedPurchase!=null)setTimeout(()=>showMailBanner(data,'kakutei'),400);
 }
 
 // ── 詳細パネル ──
