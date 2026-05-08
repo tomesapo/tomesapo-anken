@@ -1085,7 +1085,8 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px;flex-wrap:wrap">
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">📧 メールテンプレート</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-xs" onclick="resetMailTemplate()">🔄 デフォルトに戻す</button>
+            <button class="btn btn-outline btn-xs" onclick="resetMailTemplate()" title="現在のタブのテンプレートをデフォルトに戻す">🔄 デフォルトに戻す</button>
+            <button class="btn btn-outline btn-xs" onclick="resetAllMailTemplates()" title="全4種類のテンプレートを一括でデフォルトに戻して保存" style="border-color:#f59e0b;color:#b45309">🔁 全タブ一括リセット</button>
             <button class="btn btn-outline btn-xs" onclick="previewMailTemplate()">👁 プレビュー</button>
             <button class="btn btn-primary btn-xs" onclick="saveMailTemplate()">💾 保存</button>
           </div>
@@ -5424,7 +5425,7 @@ const _DEFAULT_MAIL_TEMPLATES = {
       '{branchName}\n' +
       '{ourStaffName}\n' +
       '－－－－－－－－－－－－－－－－－－－－\n' +
-      '{branchTel}\n' +
+      '携帯: {ourStaffMobile}\n' +
       '{branchEmail}\n' +
       '━━━━━━━━━━━━━━━━━━━━'
   },
@@ -5453,7 +5454,7 @@ const _DEFAULT_MAIL_TEMPLATES = {
       '{branchName}\n' +
       '{ourStaffName}\n' +
       '－－－－－－－－－－－－－－－－－－－－\n' +
-      '{branchTel}\n' +
+      '携帯: {ourStaffMobile}\n' +
       '{branchEmail}\n' +
       '━━━━━━━━━━━━━━━━━━━━'
   },
@@ -5482,9 +5483,9 @@ const _DEFAULT_MAIL_TEMPLATES = {
 
 // テンプレート種類別の使用可能プレースホルダ
 const _MAIL_PLACEHOLDERS = {
-  proposal: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','branchAddress','branchFax'],
-  invoice: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','caseAmount','paymentDue'],
-  kakutei: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','branchTel','branchEmail','contractStart','contractEnd'],
+  proposal: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','branchAddress','branchFax'],
+  invoice: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','caseAmount','paymentDue'],
+  kakutei: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','contractStart','contractEnd'],
   application_fax: ['supplierName','plName','units','contractStart','contractEnd','branchName','ourStaffName','branchTel','branchFax','branchEmail','ourStaffMobile']
 };
 
@@ -5556,6 +5557,29 @@ function resetMailTemplate() {
   _mtMarkDirty();
 }
 
+// 全4種類のテンプレートを一括でデフォルトに戻して即保存する
+function resetAllMailTemplates() {
+  if (!confirm('提案メール・申込書FAXメール・契約確定メール・請求メールの全4種類を、すべてデフォルト雛形にリセットして即保存します。\n\n現在のカスタマイズはすべて失われます。よろしいですか？')) return;
+  if (!masterData.mailTemplates) masterData.mailTemplates = {};
+  Object.keys(_DEFAULT_MAIL_TEMPLATES).forEach(type => {
+    masterData.mailTemplates[type] = {
+      subject: _DEFAULT_MAIL_TEMPLATES[type].subject,
+      body: _DEFAULT_MAIL_TEMPLATES[type].body
+    };
+  });
+  saveMasterToFS();
+  // 現在開いているタブの内容も更新
+  const def = _DEFAULT_MAIL_TEMPLATES[_mtCurrentType];
+  if (def) {
+    document.getElementById('mtSubject').value = def.subject;
+    document.getElementById('mtBody').value = def.body;
+  }
+  _mtDirty = false;
+  const st = document.getElementById('mtSaveStatus');
+  if (st) st.textContent = '✓ 全テンプレートをリセット・保存しました';
+  showToast('🔁 全4種類のメールテンプレートをデフォルトにリセット・保存しました', 4500);
+}
+
 function previewMailTemplate() {
   // 現在編集中の値で、ダミーデータでプレビュー
   const subj = document.getElementById('mtSubject').value;
@@ -5620,7 +5644,8 @@ async function openProposalMail(data){
     branchTel: br.tel||'',
     branchEmail: br.email||'info@tomesapo.co.jp',
     branchAddress: br.address||'',
-    branchFax: br.fax||''
+    branchFax: br.fax||'',
+    ourStaffMobile: data.ourStaffMobile||''
   };
   var rendered = applyMailTemplate('proposal', vars);
   _openGmailCompose(to, rendered.subject, rendered.body);
@@ -5648,6 +5673,7 @@ async function openInvoiceMail(data){
     ourStaffName: data.ourStaffName||'',
     branchTel: br.tel||'',
     branchEmail: br.email||'info@tomesapo.co.jp',
+    ourStaffMobile: data.ourStaffMobile||'',
     caseAmount: (data.taxIncludedSales||0).toLocaleString('ja-JP'),
     paymentDue: fmtJ(data.paymentDue||'')
   };
@@ -5677,6 +5703,7 @@ async function openKakuteiMail(data){
     ourStaffName: data.ourStaffName||'',
     branchTel: br.tel||'',
     branchEmail: br.email||'info@tomesapo.co.jp',
+    ourStaffMobile: data.ourStaffMobile||'',
     contractStart: fmtJ(data.contractStart||''),
     contractEnd: fmtJ(data.contractEnd||'')
   };
