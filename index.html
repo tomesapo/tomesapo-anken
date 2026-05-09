@@ -4288,35 +4288,6 @@ async function generateParkingMapExcel(){
     // A47・A48 を自社拠点マスタから動的生成（noStyleでテンプレート書式を保持）
     sc('A47', (ed.branchName||'') + (ed.branchAddress?'｜'+ed.branchAddress:''));
     sc('A48', '✉：' + (ed.branchEmail||''));
-    // AC10「満」AD10「×」の状況アイコン（1.21cm正方形・黒地白文字・Noto Sans JP・縦横中央）
-    var iconStyle = {
-      font:{name:'Noto Sans JP', sz:18, color:{rgb:'FFFFFF'}, bold:true},
-      fill:{patternType:'solid', fgColor:{rgb:'000000'}},
-      alignment:{horizontal:'center', vertical:'center', wrapText:false},
-      border:{
-        top:{style:'thin', color:{rgb:'000000'}},
-        bottom:{style:'thin', color:{rgb:'000000'}},
-        left:{style:'thin', color:{rgb:'000000'}},
-        right:{style:'thin', color:{rgb:'000000'}}
-      }
-    };
-    ws['AC10'] = {v:'満', t:'s', s:JSON.parse(JSON.stringify(iconStyle))};
-    ws['AD10'] = {v:'×', t:'s', s:JSON.parse(JSON.stringify(iconStyle))};
-    // 列幅調整（AC=index28, AD=index29）：1.21cm ≒ wch 5.5
-    if(!ws['!cols']) ws['!cols']=[];
-    while(ws['!cols'].length<30) ws['!cols'].push({});
-    ws['!cols'][28] = {wch:5.5, customWidth:1};
-    ws['!cols'][29] = {wch:5.5, customWidth:1};
-    // 行高調整（row10=index9）：1.21cm ≒ 34.3pt
-    if(!ws['!rows']) ws['!rows']=[];
-    while(ws['!rows'].length<10) ws['!rows'].push({});
-    ws['!rows'][9] = {hpt:34.3, customHeight:1};
-    // ws['!ref'] を AD10 まで拡張
-    var curRef = ws['!ref'] || 'A1:Y48';
-    var refRng = XLSX.utils.decode_range(curRef);
-    if(refRng.e.c < 29) refRng.e.c = 29; // AD = index 29
-    if(refRng.e.r < 9) refRng.e.r = 9;
-    ws['!ref'] = XLSX.utils.encode_range(refRng);
 
     // ── xlsx-js-style 書式設定 ──
     var F='Noto Sans JP';
@@ -4644,6 +4615,39 @@ async function generateParkingMapExcel(){
             '</xdr:txBody>'+
             '</xdr:sp><xdr:clientData/></xdr:oneCellAnchor>';
         }
+
+        // 「満」「×」 status icons at AC10 (col 28) and AD10 (col 29)
+        // 1.21cm = 1.21 * 360000 EMU = 435600 EMU
+        var IZ='435600';
+        sx +=
+          // 満 at AC10
+          '<xdr:oneCellAnchor>'+
+          '<xdr:from><xdr:col>28</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>9</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'+
+          '<xdr:ext cx="'+IZ+'" cy="'+IZ+'"/>'+
+          '<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="205" name="StatusFull"/><xdr:cNvSpPr><a:spLocks noGrp="1" noChangeAspect="1"/></xdr:cNvSpPr></xdr:nvSpPr>'+
+          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+IZ+'" cy="'+IZ+'"/></a:xfrm>'+
+          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
+          '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>'+
+          '<a:ln><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></xdr:spPr>'+
+          '<xdr:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/>'+
+          '<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ja-JP" b="1" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:latin typeface="Noto Sans JP"/><a:ea typeface="Noto Sans JP"/></a:rPr>'+
+          '<a:t>満</a:t></a:r></a:p>'+
+          '</xdr:txBody>'+
+          '</xdr:sp><xdr:clientData/></xdr:oneCellAnchor>'+
+          // × at AD10
+          '<xdr:oneCellAnchor>'+
+          '<xdr:from><xdr:col>29</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>9</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'+
+          '<xdr:ext cx="'+IZ+'" cy="'+IZ+'"/>'+
+          '<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="206" name="StatusUnavailable"/><xdr:cNvSpPr><a:spLocks noGrp="1" noChangeAspect="1"/></xdr:cNvSpPr></xdr:nvSpPr>'+
+          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+IZ+'" cy="'+IZ+'"/></a:xfrm>'+
+          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
+          '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>'+
+          '<a:ln><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></xdr:spPr>'+
+          '<xdr:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/>'+
+          '<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ja-JP" b="1" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:latin typeface="Noto Sans JP"/><a:ea typeface="Noto Sans JP"/></a:rPr>'+
+          '<a:t>×</a:t></a:r></a:p>'+
+          '</xdr:txBody>'+
+          '</xdr:sp><xdr:clientData/></xdr:oneCellAnchor>';
 
         var df=zip.file(dpth);
         if(df){
