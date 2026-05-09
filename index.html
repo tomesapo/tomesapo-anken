@@ -1873,8 +1873,9 @@ function renderSuppliers() {
 }
 function addSupplier() {
   if (!masterData.suppliers) masterData.suppliers = [];
+  const newId = 'sp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
   masterData.suppliers.push({
-    id: 'sp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+    id: newId,
     name: '',
     type: '管理会社',
     tel: '',
@@ -1886,8 +1887,33 @@ function addSupplier() {
     deleted: false,
     createdAt: new Date().toISOString()
   });
+  // 検索ボックスをクリア（追加した新規が見えるように）
+  const sb = document.getElementById('supplierSearchInput');
+  if (sb) sb.value = '';
   saveMasterToFS();
   renderSuppliers();
+  showToast('➕ 仕入先を追加しました。名前を入力してください', 4000);
+  // 新しいカードを画面内へスクロール＆名前入力にフォーカス
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#supplierList input[placeholder="仕入先名"]');
+    // 新規追加された仕入先（name=''）の最初の入力欄を探す
+    for (const inp of inputs) {
+      if (!inp.value) {
+        // 該当する仕入先カードへスクロール
+        const card = inp.closest('div[style*="border-radius:8px"]');
+        if (card) {
+          card.scrollIntoView({behavior:'smooth', block:'center'});
+          // 視覚的にハイライト
+          const orig = card.style.boxShadow;
+          card.style.transition = 'box-shadow .3s';
+          card.style.boxShadow = '0 0 0 3px #fbbf24';
+          setTimeout(() => { card.style.boxShadow = orig || ''; }, 1800);
+        }
+        inp.focus();
+        break;
+      }
+    }
+  }, 50);
 }
 // 名前と電話番号の組み合わせで重複チェック
 function findDuplicateSupplier(name, tel, excludeId) {
