@@ -4285,6 +4285,38 @@ async function generateParkingMapExcel(){
       sc(m.vt,pl.vehicleType||'');sc(m.r,pl.lotNote||'');
     });
     sc('A5',''); // A5のマップ文字を消す
+    // A47・A48 を自社拠点マスタから動的生成（noStyleでテンプレート書式を保持）
+    sc('A47', (ed.branchName||'') + (ed.branchAddress?'｜'+ed.branchAddress:''));
+    sc('A48', '✉：' + (ed.branchEmail||''));
+    // AC10「満」AD10「×」の状況アイコン（1.21cm正方形・黒地白文字・Noto Sans JP・縦横中央）
+    var iconStyle = {
+      font:{name:'Noto Sans JP', sz:18, color:{rgb:'FFFFFF'}, bold:true},
+      fill:{patternType:'solid', fgColor:{rgb:'000000'}},
+      alignment:{horizontal:'center', vertical:'center', wrapText:false},
+      border:{
+        top:{style:'thin', color:{rgb:'000000'}},
+        bottom:{style:'thin', color:{rgb:'000000'}},
+        left:{style:'thin', color:{rgb:'000000'}},
+        right:{style:'thin', color:{rgb:'000000'}}
+      }
+    };
+    ws['AC10'] = {v:'満', t:'s', s:JSON.parse(JSON.stringify(iconStyle))};
+    ws['AD10'] = {v:'×', t:'s', s:JSON.parse(JSON.stringify(iconStyle))};
+    // 列幅調整（AC=index28, AD=index29）：1.21cm ≒ wch 5.5
+    if(!ws['!cols']) ws['!cols']=[];
+    while(ws['!cols'].length<30) ws['!cols'].push({});
+    ws['!cols'][28] = {wch:5.5, customWidth:1};
+    ws['!cols'][29] = {wch:5.5, customWidth:1};
+    // 行高調整（row10=index9）：1.21cm ≒ 34.3pt
+    if(!ws['!rows']) ws['!rows']=[];
+    while(ws['!rows'].length<10) ws['!rows'].push({});
+    ws['!rows'][9] = {hpt:34.3, customHeight:1};
+    // ws['!ref'] を AD10 まで拡張
+    var curRef = ws['!ref'] || 'A1:Y48';
+    var refRng = XLSX.utils.decode_range(curRef);
+    if(refRng.e.c < 29) refRng.e.c = 29; // AD = index 29
+    if(refRng.e.r < 9) refRng.e.r = 9;
+    ws['!ref'] = XLSX.utils.encode_range(refRng);
 
     // ── xlsx-js-style 書式設定 ──
     var F='Noto Sans JP';
@@ -4843,10 +4875,12 @@ async function generateProposalDocument(caseId){
     await waitXLSX();
     var today=new Date();
     var todayStr=today.getFullYear()+'\u5e74'+(today.getMonth()+1)+'\u6708'+today.getDate()+'\u65e5';
+    var _br = (typeof getCaseBranch==='function') ? getCaseBranch(c) : {};
     window._pkgExcelData={
       caseNo:c.caseNo||'',siteName:c.siteName||'',siteAddress:c.siteAddress||'',
       customerName:c.customerName||'',requestStart:c.requestStart||'',requestEnd:c.requestEnd||'',
       requestUnits:c.requestUnits!=null?c.requestUnits:'',createdAt:todayStr,
+      branchName:_br.name||'',branchAddress:_br.address||'',branchEmail:_br.email||'',branchTel:_br.tel||'',branchPostalCode:_br.postalCode||'',
       lots:lots.map(function(pl,idx){
         var rm=pl.rateType!=='daily';
         var rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
