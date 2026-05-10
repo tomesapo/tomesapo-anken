@@ -787,6 +787,7 @@
       <button class="sv-tab active" id="avTabCustomer" onclick="switchAnalyticsTab('customer')">👥 顧客別</button>
       <button class="sv-tab" id="avTabPM" onclick="switchAnalyticsTab('pm')">🅿 駐車場別</button>
       <button class="sv-tab" id="avTabSupplier" onclick="switchAnalyticsTab('supplier')">🏢 仕入先別</button>
+      <button class="sv-tab" id="avTabRetention" onclick="switchAnalyticsTab('retention')">🔄 リテンション</button>
     </div>
     <div class="sv-body" id="avBody"></div>
   </div>
@@ -7560,6 +7561,7 @@ function switchAnalyticsTab(tab) {
   document.getElementById('avTabCustomer').classList.toggle('active', tab === 'customer');
   document.getElementById('avTabPM').classList.toggle('active', tab === 'pm');
   document.getElementById('avTabSupplier').classList.toggle('active', tab === 'supplier');
+  document.getElementById('avTabRetention').classList.toggle('active', tab === 'retention');
   renderAnalyticsView();
 }
 
@@ -7595,7 +7597,8 @@ function renderAnalyticsView() {
   } else {
     if (_avTab === 'customer') body.innerHTML = avFilterBar() + _avRenderCustomerList();
     else if (_avTab === 'pm') body.innerHTML = avFilterBar() + _avRenderPMList();
-    else body.innerHTML = avFilterBar() + _avRenderSupplierList();
+    else if (_avTab === 'supplier') body.innerHTML = avFilterBar() + _avRenderSupplierList();
+    else if (_avTab === 'retention') body.innerHTML = avFilterBar() + _avRenderRetention();
   }
 }
 
@@ -7713,6 +7716,197 @@ function _avRenderSupplierList() {
 function _avDrilldown(key) {
   _avDetailKey = key;
   renderAnalyticsView();
+}
+
+// ── 🔄 リテンション分析 ──
+function _avFmtDate(d) {
+  if (!d) return '-';
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return y + '/' + m + '/' + day;
+}
+function _avRenderRetention() {
+  const today = new Date();
+  const SUCCESS_STATUSES = ['契約中', '未請求', '請求済', '入金済'];
+
+  // 期フィルタ反映で対象案件を絞る（全期間 or 特定期）
+  let scopedCases = cases.filter(c => !c.deleted && SUCCESS_STATUSES.includes(c.status));
+  if (_avPeriod) scopedCases = scopedCases.filter(c => String(casePeriod(c)) === String(_avPeriod));
+
+  // 顧客別集計
+  const byCust = {};
+  scopedCases.forEach(c => {
+    const k = c.customerName || '（顧客未設定）';
+    if (!byCust[k]) byCust[k] = { name:k, cases:[], sales:0, profit:0, firstDate:null, lastDate:null };
+    byCust[k].cases.push(c);
+    if (SV_TARGET_STATUSES.includes(c.status)) {
+      const a = _avCaseAmounts(c);
+      byCust[k].sales += a.sales;
+      byCust[k].profit += a.profit;
+    }
+    const cs = c.contractStart ? new Date(c.contractStart + 'T00:00:00') : null;
+    const ce = c.contractEnd ? new Date(c.contractEnd + 'T00:00:00') : null;
+    if (cs && (!byCust[k].firstDate || cs < byCust[k].firstDate)) byCust[k].firstDate = cs;
+    if (ce && (!byCust[k].lastDate || ce > byCust[k].lastDate)) byCust[k].lastDate = ce;
+  });
+
+  const customers = Object.values(byCust).map(v => {
+    const lastDays = v.lastDate ? Math.floor((today - v.lastDate) / 86400000) : null;
+    const isDormant = lastDays != null && lastDays >= 90;
+    const isActive = !isDormant && v.lastDate != null;
+    const isRepeat = v.cases.length >= 2;
+    return Object.assign({}, v, { lastDays, isDormant, isActive, isRepeat, caseCount: v.cases.length });
+  });
+
+  if (!customers.length) return '<div style="padding:32px;text-align:center;color:#9ca3af">対象データがありません</div>';
+
+  // 全体KPI
+  const totalCust = customers.length;
+  const activeCust = customers.filter(c => c.isActive).length;
+  const dormantCust = customers.filter(c => c.isDormant).length;
+  const repeatCust = customers.filter(c => c.isRepeat).length;
+  const totalSales = customers.reduce((s,c) => s + c.sales, 0);
+  const totalProfit = customers.reduce((s,c) => s + c.profit, 0);
+  const avgLTV = totalCust ? totalSales / totalCust : 0;
+  const avgProfit = totalCust ? totalProfit / totalCust : 0;
+
+  // 期別 継続率（全期間ベースで計算、フィルタ無視）
+  const allCases = cases.filter(c => !c.deleted && SUCCESS_STATUSES.includes(c.status));
+  const periodMap = {};
+  allCases.forEach(c => {
+    const p = casePeriod(c);
+    const k = c.customerName || '（顧客未設定）';
+    if (!periodMap[p]) periodMap[p] = new Set();
+    periodMap[p].add(k);
+  });
+  const periods = Object.keys(periodMap).map(Number).sort((a,b) => a - b);
+  const retentionData = [];
+  for (let i = 0; i < periods.length - 1; i++) {
+    const cur = periodMap[periods[i]];
+    const nxt = periodMap[periods[i+1]];
+    let kept = 0;
+    cur.forEach(k => { if (nxt.has(k)) kept++; });
+    retentionData.push({
+      from: periods[i], to: periods[i+1],
+      total: cur.size, kept,
+      rate: cur.size ? Math.round(kept / cur.size * 1000) / 10 : 0
+    });
+  }
+
+  // RFMセグメント（頻度×金額）
+  const sortedSales = customers.slice().sort((a,b) => b.sales - a.sales);
+  const monetaryHigh = sortedSales[Math.floor(totalCust * 0.33)]?.sales || 0;
+  const segments = { vip:[], grow:[], risk:[], dormant:[] };
+  customers.forEach(c => {
+    const highF = c.caseCount >= 3;
+    const highM = c.sales >= monetaryHigh && monetaryHigh > 0;
+    if (highF && highM) segments.vip.push(c);
+    else if (highF && !highM) segments.grow.push(c);
+    else if (!highF && highM) segments.risk.push(c);
+    else segments.dormant.push(c);
+  });
+
+  // ===== HTML 生成 =====
+  let html = '';
+
+  // KPI カード
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px">';
+  const kpi = (label, val, sub, color) => '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px"><div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:4px">'+label+'</div><div style="font-size:22px;font-weight:700;color:'+(color||'#1e3a5f')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:#9ca3af;margin-top:2px">'+sub+'</div>':'')+'</div>';
+  html += kpi('顧客総数', totalCust, '取引のあった顧客');
+  html += kpi('アクティブ', activeCust, '直近90日以内に取引', '#10b981');
+  html += kpi('休眠顧客', dormantCust, '90日以上取引なし', '#f59e0b');
+  html += kpi('リピート率', (totalCust ? Math.round(repeatCust/totalCust*100):0) + '%', repeatCust+'/'+totalCust+' (2件以上)');
+  html += kpi('平均LTV', _fv(avgLTV), '顧客あたり累計売上');
+  html += kpi('平均粗利', _fv(avgProfit), '顧客あたり累計粗利');
+  html += '</div>';
+
+  // LTV ランキング
+  const topLTV = customers.slice().sort((a,b) => b.sales - a.sales).slice(0, 10);
+  html += '<h3 style="margin:20px 0 10px;font-size:14px;color:#1e3a5f">🏆 LTVランキング（TOP10）</h3>';
+  html += '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+  html += '<th style="text-align:left">順位</th><th style="text-align:left">顧客名</th><th>案件数</th><th>累計売上</th><th>累計粗利</th><th>最終契約終了</th>';
+  html += '</tr></thead><tbody>';
+  topLTV.forEach((c,i) => {
+    html += '<tr>';
+    html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + (i+1) + '位</td>';
+    html += '<td style="text-align:left">' + esc(c.name) + '</td>';
+    html += '<td>' + c.caseCount + '</td>';
+    html += '<td>' + _fv(c.sales) + '</td>';
+    html += '<td style="color:' + (c.profit>=0?'#16a34a':'#dc2626') + ';font-weight:600">' + _fv(c.profit) + '</td>';
+    html += '<td>' + _avFmtDate(c.lastDate) + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // 休眠顧客
+  const dormantList = customers.filter(c => c.isDormant).sort((a,b) => b.sales - a.sales);
+  html += '<h3 style="margin:24px 0 10px;font-size:14px;color:#f59e0b">😴 休眠顧客（' + dormantList.length + '件・90日以上取引なし）</h3>';
+  if (!dormantList.length) {
+    html += '<div style="padding:14px;color:#9ca3af;font-size:13px;text-align:center;background:#f9fafb;border-radius:6px;border:1px dashed #d1d5db">休眠顧客はいません</div>';
+  } else {
+    html += '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+    html += '<th style="text-align:left">顧客名</th><th>案件数</th><th>累計売上</th><th>累計粗利</th><th>最終契約終了</th><th>経過日数</th>';
+    html += '</tr></thead><tbody>';
+    dormantList.forEach(c => {
+      html += '<tr>';
+      html += '<td style="text-align:left">' + esc(c.name) + '</td>';
+      html += '<td>' + c.caseCount + '</td>';
+      html += '<td>' + _fv(c.sales) + '</td>';
+      html += '<td style="color:' + (c.profit>=0?'#16a34a':'#dc2626') + '">' + _fv(c.profit) + '</td>';
+      html += '<td>' + _avFmtDate(c.lastDate) + '</td>';
+      html += '<td style="color:#f59e0b;font-weight:700">' + c.lastDays + '日</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // セグメント分析
+  html += '<h3 style="margin:24px 0 10px;font-size:14px;color:#1e3a5f">🎯 セグメント分析（頻度×金額）</h3>';
+  html += '<div style="font-size:11px;color:#6b7280;margin-bottom:8px">頻度: 案件数3件以上=高　/　金額: 累計売上 上位33% = 高</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:20px">';
+  const seg = (icon, title, count, desc, list, bg, border) => {
+    let inner = '<div style="background:'+bg+';border:1px solid '+border+';border-radius:8px;padding:12px">';
+    inner += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;margin-bottom:4px">'+icon+' '+title+' ('+count+')</div>';
+    inner += '<div style="font-size:11px;color:#6b7280;margin-bottom:8px">'+desc+'</div>';
+    inner += '<div style="font-size:12px;line-height:1.7">'+list+'</div>';
+    inner += '</div>';
+    return inner;
+  };
+  const renderList = arr => {
+    if (!arr.length) return '<span style="color:#9ca3af">該当なし</span>';
+    return arr.slice(0,5).map(c => esc(c.name)+' <span style="color:#6b7280">('+_fv(c.sales)+')</span>').join('<br>') + (arr.length > 5 ? '<br><span style="color:#9ca3af">…他'+(arr.length-5)+'件</span>' : '');
+  };
+  html += seg('🌟', 'VIP顧客', segments.vip.length, '高頻度・高金額：継続フォロー必須', renderList(segments.vip), '#fef3c7', '#fbbf24');
+  html += seg('🎯', '育成対象', segments.grow.length, '高頻度・低中金額：客単価アップ余地', renderList(segments.grow), '#dbeafe', '#3b82f6');
+  html += seg('⚠️', '離反リスク', segments.risk.length, '低頻度・高金額：リピート提案で関係構築', renderList(segments.risk), '#fee2e2', '#ef4444');
+  html += seg('💤', '休眠/初回', segments.dormant.length, '低頻度・低金額：再開拓 or 新規育成', renderList(segments.dormant), '#f3f4f6', '#9ca3af');
+  html += '</div>';
+
+  // 期別 継続率推移
+  if (retentionData.length > 0) {
+    html += '<h3 style="margin:24px 0 10px;font-size:14px;color:#1e3a5f">📈 期別 継続率推移（全期間）</h3>';
+    html += '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+    html += '<th>期遷移</th><th>前期顧客数</th><th>継続顧客数</th><th>継続率</th><th>解約率</th>';
+    html += '</tr></thead><tbody>';
+    retentionData.forEach(r => {
+      const color = r.rate >= 70 ? '#16a34a' : r.rate >= 50 ? '#f59e0b' : '#dc2626';
+      const churn = Math.round((100 - r.rate)*10)/10;
+      html += '<tr>';
+      html += '<td>' + r.from + '期 → ' + r.to + '期</td>';
+      html += '<td>' + r.total + '</td>';
+      html += '<td>' + r.kept + '</td>';
+      html += '<td style="color:' + color + ';font-weight:700">' + r.rate + '%</td>';
+      html += '<td style="color:#9ca3af">' + churn + '%</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  } else {
+    html += '<h3 style="margin:24px 0 10px;font-size:14px;color:#1e3a5f">📈 期別 継続率推移</h3>';
+    html += '<div style="padding:14px;color:#9ca3af;font-size:13px;text-align:center;background:#f9fafb;border-radius:6px">複数期にまたがる取引データが必要です（現状は1期分のみ）</div>';
+  }
+
+  return html;
 }
 
 function _avRenderDetail() {
