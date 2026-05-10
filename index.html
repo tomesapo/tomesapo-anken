@@ -3242,6 +3242,21 @@ function filterByStatuses(arr, cardEl) {
   }
   renderAll();
 }
+// 現場単価計算ヘルパー（同一顧客×同一siteNameで1現場、確定売上を集計）
+function _siteKeyOf(c) {
+  return (c.customerName || '') + '||' + (c.siteName || '（現場未設定）');
+}
+function _calcSiteUnitPrice(caseList) {
+  const siteMap = {};
+  caseList.forEach(c => {
+    const k = _siteKeyOf(c);
+    if (!siteMap[k]) siteMap[k] = 0;
+    siteMap[k] += parseFloat(c.fixedSales || 0) || 0;
+  });
+  const sites = Object.values(siteMap);
+  const sum = sites.reduce((s,v) => s + v, 0);
+  return { siteCount: sites.length, totalSales: sum, avgPerSite: sites.length ? sum / sites.length : 0 };
+}
 function renderStats(){
   const baseCases=cases.filter(c=>!c.caseType||c.caseType==='通常');
   const addCount=cases.filter(c=>c.caseType==='追加').length;
@@ -3268,6 +3283,7 @@ function renderStats(){
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+(totalFP>=0?'var(--success)':'var(--danger)')+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
+    (function(){var sst=_calcSiteUnitPrice(ordered);return '<div class="stat-card"><div class="stat-label">現場単価 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(Math.round(sst.avgPerSite))+'</div><div class="stat-sub">'+sst.siteCount+'現場の平均</div></div>';})()+
     '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>';
 }
 function updateYearFilter(){
@@ -7611,22 +7627,40 @@ function _avRenderCustomerList() {
   const map = {};
   src.forEach(c => {
     const key = c.customerName || '（顧客未設定）';
-    if (!map[key]) map[key] = { key, name: key, sales: 0, purchase: 0, profit: 0, count: 0 };
+    if (!map[key]) map[key] = { key, name: key, sales: 0, purchase: 0, profit: 0, count: 0, sitesMap: {} };
     const a = _avCaseAmounts(c);
     map[key].sales += a.sales; map[key].purchase += a.purchase; map[key].profit += a.profit; map[key].count++;
+    const sName = c.siteName || '（現場未設定）';
+    if (!map[key].sitesMap[sName]) map[key].sitesMap[sName] = 0;
+    map[key].sitesMap[sName] += a.sales;
   });
-  const rows = Object.values(map).sort((a,b) => b.sales - a.sales);
+  const rows = Object.values(map).map(r => {
+    const sites = Object.keys(r.sitesMap).length;
+    return Object.assign(r, { sites, avgPerSite: sites ? r.sales / sites : 0 });
+  }).sort((a,b) => b.sales - a.sales);
   if (!rows.length) return '<div style="padding:32px;text-align:center;color:#9ca3af">対象データがありません</div>';
+  // 全体集計
+  const overall = _calcSiteUnitPrice(src);
   const tot = rows.reduce((s,r) => ({sales:s.sales+r.sales, purchase:s.purchase+r.purchase, profit:s.profit+r.profit, count:s.count+r.count}), {sales:0,purchase:0,profit:0,count:0});
-  let html = '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
-  html += '<th style="text-align:left">順位</th><th style="text-align:left">顧客名</th><th>案件数</th><th>売上(税抜)</th><th>仕入(税抜)</th><th>粗利</th><th>粗利率</th><th></th>';
+  // 全体KPIサマリ
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">全体現場単価</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + _fv(overall.avgPerSite) + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">現場数</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + overall.siteCount + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">案件数</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + tot.count + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">売上合計（税抜）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + _fv(tot.sales) + '</div></div>';
+  html += '</div>';
+
+  html += '<div class="mobile-scroll-wrap"><table class="sv-table"><thead><tr>';
+  html += '<th style="text-align:left">順位</th><th style="text-align:left">顧客名</th><th>案件数</th><th>現場数</th><th>売上(税抜)</th><th>現場単価</th><th>仕入(税抜)</th><th>粗利</th><th>粗利率</th><th></th>';
   html += '</tr></thead><tbody>';
   rows.forEach((r,i) => {
     html += '<tr style="cursor:pointer" onclick="_avDrilldown(\'' + esc(r.key).replace(/\\/g,'\\\\').replace(/\'/g,'\\\'') + '\')">';
     html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + (i+1) + '位</td>';
     html += '<td style="text-align:left">' + esc(r.name) + '</td>';
     html += '<td>' + r.count + '</td>';
+    html += '<td>' + r.sites + '</td>';
     html += '<td>' + _fv(r.sales) + '</td>';
+    html += '<td style="font-weight:600">' + _fv(r.avgPerSite) + '</td>';
     html += '<td>' + _fv(r.purchase) + '</td>';
     html += '<td style="color:' + (r.profit>=0?'#16a34a':'#dc2626') + ';font-weight:600">' + _fv(r.profit) + '</td>';
     html += '<td>' + _fp(r.sales, r.profit) + '</td>';
@@ -7634,7 +7668,9 @@ function _avRenderCustomerList() {
     html += '</tr>';
   });
   html += '<tr class="sv-total"><td colspan="2" style="text-align:right;padding-right:12px">合計</td>';
-  html += '<td>' + tot.count + '</td><td>' + _fv(tot.sales) + '</td><td>' + _fv(tot.purchase) + '</td>';
+  html += '<td>' + tot.count + '</td><td>' + overall.siteCount + '</td><td>' + _fv(tot.sales) + '</td>';
+  html += '<td style="font-weight:700">' + _fv(overall.avgPerSite) + '</td>';
+  html += '<td>' + _fv(tot.purchase) + '</td>';
   html += '<td>' + _fv(tot.profit) + '</td><td>' + _fp(tot.sales, tot.profit) + '</td><td></td></tr>';
   html += '</tbody></table></div>';
   return html;
@@ -7813,12 +7849,15 @@ function _avRenderRetention() {
   // KPI カード
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px">';
   const kpi = (label, val, sub, color) => '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px"><div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:4px">'+label+'</div><div style="font-size:22px;font-weight:700;color:'+(color||'#1e3a5f')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:#9ca3af;margin-top:2px">'+sub+'</div>':'')+'</div>';
+  // 現場単価（scopedCasesのうち SV_TARGET_STATUSES の案件で計算）
+  const ltvSiteData = _calcSiteUnitPrice(scopedCases.filter(c => SV_TARGET_STATUSES.includes(c.status)));
   html += kpi('顧客総数', totalCust, '取引のあった顧客');
   html += kpi('アクティブ', activeCust, '直近90日以内に取引', '#10b981');
   html += kpi('休眠顧客', dormantCust, '90日以上取引なし', '#f59e0b');
   html += kpi('リピート率', (totalCust ? Math.round(repeatCust/totalCust*100):0) + '%', repeatCust+'/'+totalCust+' (2件以上)');
   html += kpi('平均LTV', _fv(avgLTV), '顧客あたり累計売上');
   html += kpi('平均粗利', _fv(avgProfit), '顧客あたり累計粗利');
+  html += kpi('現場単価', _fv(ltvSiteData.avgPerSite), ltvSiteData.siteCount+'現場の平均');
   html += '</div>';
 
   // LTV ランキング
