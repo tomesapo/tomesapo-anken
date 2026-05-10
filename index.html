@@ -6999,11 +6999,11 @@ function renderSalesView() {
 
 function renderSalesCustomer() {
   const src = svFilteredCases();
-  // 顧客ごとに集計
+  // 顧客ごとに集計（現場数も追跡）
   const map = {};
   src.forEach(c => {
     const key = c.customerName || '（未設定）';
-    if (!map[key]) map[key] = { name: key, total: 0, purchase: 0, caseCount: 0, addCount: 0, extCount: 0 };
+    if (!map[key]) map[key] = { name: key, total: 0, purchase: 0, caseCount: 0, addCount: 0, extCount: 0, sites: {} };
     const g = map[key];
     const isBase = !c.caseType || c.caseType === '通常';
     if (isBase) g.caseCount++;
@@ -7011,23 +7011,37 @@ function renderSalesCustomer() {
     if (c.caseType === '延長') g.extCount++;
     g.total += c.fixedSales || 0;
     g.purchase += c.fixedPurchase || 0;
+    const sName = c.siteName || '（現場未設定）';
+    if (!g.sites[sName]) g.sites[sName] = 0;
+    g.sites[sName] += c.fixedSales || 0;
   });
   const rows = Object.values(map).sort((a,b) => b.total - a.total);
   const totSales = rows.reduce((s,r)=>s+r.total,0);
   const totPurchase = rows.reduce((s,r)=>s+r.purchase,0);
   const totCases = rows.reduce((s,r)=>s+r.caseCount,0);
+  // 全体現場集計
+  const overall = _calcSiteUnitPrice(src);
   const f = v => v ? '¥' + Math.round(v).toLocaleString() : '-';
   const pct = (s,p) => s ? Math.round((s-p)/s*100) + '%' : '-';
   const profitCls = v => v > 0 ? ' class="sv-profit-pos"' : v < 0 ? ' class="sv-profit-neg"' : '';
-  let html = '<table class="sv-table"><thead><tr><th>顧客名</th><th>契約数</th><th>追加/延長</th><th>確定売上（税別）</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
+  // 全体KPIサマリ
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">全体現場単価</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + f(overall.avgPerSite) + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">現場数</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + overall.siteCount + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">案件数（通常）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + totCases + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">売上合計（税別）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + f(totSales) + '</div></div>';
+  html += '</div>';
+  html += '<table class="sv-table"><thead><tr><th>顧客名</th><th>契約数</th><th>追加/延長</th><th>現場数</th><th>確定売上（税別）</th><th>現場単価</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
   rows.forEach(r => {
     const profit = r.total - r.purchase;
+    const sites = Object.keys(r.sites).length;
+    const avgPerSite = sites ? r.total / sites : 0;
     const addBadge = r.addCount ? `<span class="sv-badge-add">追加×${r.addCount}</span>` : '';
     const extBadge = r.extCount ? `<span class="sv-badge-ext">延長×${r.extCount}</span>` : '';
-    html += `<tr><td>${esc(r.name)}</td><td style="text-align:right">${r.caseCount}件</td><td style="text-align:left">${addBadge}${extBadge}</td><td>${f(r.total)}</td><td>${f(r.purchase)}</td><td${profitCls(profit)}>${f(profit)}</td><td>${pct(r.total,r.purchase)}</td></tr>`;
+    html += `<tr><td>${esc(r.name)}</td><td style="text-align:right">${r.caseCount}件</td><td style="text-align:left">${addBadge}${extBadge}</td><td style="text-align:right">${sites}</td><td>${f(r.total)}</td><td style="font-weight:600">${f(avgPerSite)}</td><td>${f(r.purchase)}</td><td${profitCls(profit)}>${f(profit)}</td><td>${pct(r.total,r.purchase)}</td></tr>`;
   });
   const totProfit = totSales - totPurchase;
-  html += `<tr class="sv-total"><td>合計</td><td style="text-align:right">${totCases}件</td><td></td><td>${f(totSales)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
+  html += `<tr class="sv-total"><td>合計</td><td style="text-align:right">${totCases}件</td><td></td><td style="text-align:right">${overall.siteCount}</td><td>${f(totSales)}</td><td style="font-weight:700">${f(overall.avgPerSite)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
   html += '</tbody></table>';
   return html;
 }
@@ -7049,10 +7063,19 @@ function renderSalesSite() {
   const rows = Object.values(map).sort((a,b) => b.sales - a.sales);
   const totSales = rows.reduce((s,r)=>s+r.sales,0);
   const totPurchase = rows.reduce((s,r)=>s+r.purchase,0);
+  const siteCount = rows.length;
+  const avgPerSite = siteCount ? totSales / siteCount : 0;
   const f = v => v ? '¥' + Math.round(v).toLocaleString() : '-';
   const pct = (s,p) => s ? Math.round((s-p)/s*100) + '%' : '-';
   const profitCls = v => v > 0 ? ' class="sv-profit-pos"' : v < 0 ? ' class="sv-profit-neg"' : '';
-  let html = '<table class="sv-table"><thead><tr><th>案件番号</th><th>現場名 / 顧客名</th><th>内訳</th><th>確定売上（税別）</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
+  // 全体KPIサマリ
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">全体現場単価</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + f(avgPerSite) + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">現場数</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + siteCount + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">売上合計（税別）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + f(totSales) + '</div></div>';
+  html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">粗利合計（税別）</div><div style="font-size:18px;font-weight:700;color:' + (totSales-totPurchase>=0?'#16a34a':'#dc2626') + '">' + f(totSales-totPurchase) + '</div></div>';
+  html += '</div>';
+  html += '<table class="sv-table"><thead><tr><th>案件番号</th><th>現場名 / 顧客名</th><th>内訳</th><th>確定売上（税別）</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
   rows.forEach(r => {
     const profit = r.sales - r.purchase;
     const addCases = r.cases.filter(c=>c.caseType==='追加');
@@ -7069,7 +7092,7 @@ function renderSalesSite() {
     </tr>`;
   });
   const totProfit = totSales - totPurchase;
-  html += `<tr class="sv-total"><td colspan="2">合計 ${rows.length}現場</td><td></td><td>${f(totSales)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
+  html += `<tr class="sv-total"><td colspan="2">合計 ${rows.length}現場（現場単価 ${f(avgPerSite)}）</td><td></td><td>${f(totSales)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
   html += '</tbody></table>';
   return html;
 }
