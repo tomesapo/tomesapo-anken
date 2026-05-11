@@ -4801,8 +4801,29 @@ async function generateParkingMapExcel(){
 }
 
 // ── 見積書兼発注書 Excel出力 ──
+// Noto Sans JP webフォントをGoogle Fontsから事前ロード（SVG→PNG変換時の文字描画品質を確保）
+async function _ensureNotoSansJP() {
+  if (!document.getElementById('_noto_jp_font_link')) {
+    const link = document.createElement('link');
+    link.id = '_noto_jp_font_link';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap';
+    document.head.appendChild(link);
+  }
+  if (document.fonts && document.fonts.load) {
+    try {
+      await Promise.all([
+        document.fonts.load('400 16px "Noto Sans JP"'),
+        document.fonts.load('700 16px "Noto Sans JP"'),
+        document.fonts.ready
+      ]);
+    } catch(e) { console.warn('Noto Sans JP load failed:', e); }
+  }
+}
+
 // ── TomeSapoロゴをPNG（Base64文字列）として生成（Excel/Word帳票への差し込み用）──
 async function _generateTomesapoLogoPNG(width, height) {
+  await _ensureNotoSansJP();
   width = width || 800; height = height || 240;
   const navy = '#1e3a5f';
   const amber = '#f59e0b';
@@ -4958,6 +4979,47 @@ async function generateEstimateExcel(caseId){
       shxml=ss(shxml,"U12",_brPostal);
       shxml=ss(shxml,"U13",_brAddr);
       shxml=ss(shxml,"U14",_brEmail);
+      // U12/U13/U14 のフォントをNoto Sans JPに変更（styles.xmlを更新）
+      var _stXml = await zip2.file("xl/styles.xml").async("string");
+      var _notoIdx = -1;
+      var _fontsContentM = /<fonts[^>]*>([\s\S]*?)<\/fonts>/.exec(_stXml);
+      if (_fontsContentM) {
+        var _fIdx = 0;
+        var _fre = /<font(?:\s[^>]*)?>[\s\S]*?<\/font>/g;
+        var _fm;
+        while ((_fm = _fre.exec(_fontsContentM[1])) !== null) {
+          if (_fm[0].indexOf('val="Noto Sans JP"') >= 0) { _notoIdx = _fIdx; break; }
+          _fIdx++;
+        }
+      }
+      if (_notoIdx < 0) {
+        var _fcM = /<fonts([^>]*)count="(\d+)"([^>]*)>/.exec(_stXml);
+        _notoIdx = parseInt(_fcM[2]);
+        _stXml = _stXml.replace(/<fonts([^>]*)count="(\d+)"([^>]*)>/, function(_m,a,c,b){ return '<fonts'+a+'count="'+(parseInt(c)+1)+'"'+b+'>'; });
+        _stXml = _stXml.replace('</fonts>', '<font><sz val="11"/><color theme="1"/><name val="Noto Sans JP"/><family val="2"/></font></fonts>');
+      }
+      var _xfcM = /<cellXfs([^>]*)count="(\d+)"([^>]*)>/.exec(_stXml);
+      var _notoXfIdx = parseInt(_xfcM[2]);
+      _stXml = _stXml.replace(/<cellXfs([^>]*)count="(\d+)"([^>]*)>/, function(_m,a,c,b){ return '<cellXfs'+a+'count="'+(parseInt(c)+1)+'"'+b+'>'; });
+      var _newXf = '<xf numFmtId="0" fontId="'+_notoIdx+'" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>';
+      _stXml = _stXml.replace('</cellXfs>', _newXf + '</cellXfs>');
+      zip2.file("xl/styles.xml", _stXml);
+      // 該当セルのstyle属性を上書き
+      function _replaceCellStyle(sx, addr, idx) {
+        var i = sx.indexOf('<c r="'+addr+'"');
+        if (i < 0) return sx;
+        var endTag = sx.indexOf('>', i);
+        if (endTag < 0) return sx;
+        var prefix = sx.substring(i, endTag+1);
+        var newPrefix = prefix.replace(/\s+s="\d+"/, ' s="'+idx+'"');
+        if (newPrefix === prefix) {
+          newPrefix = prefix.replace('<c r="'+addr+'"', '<c r="'+addr+'" s="'+idx+'"');
+        }
+        return sx.substring(0, i) + newPrefix + sx.substring(endTag+1);
+      }
+      shxml = _replaceCellStyle(shxml, "U12", _notoXfIdx);
+      shxml = _replaceCellStyle(shxml, "U13", _notoXfIdx);
+      shxml = _replaceCellStyle(shxml, "U14", _notoXfIdx);
       // ロゴ画像をU8:AD10に差し込み（draw)
       zip2.file("xl/media/image_logo.png", _logoPngBytes);
       var _drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
