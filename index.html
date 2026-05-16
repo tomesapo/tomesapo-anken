@@ -996,9 +996,15 @@
       <div class="form-section">
         <div class="form-section-title">業者費用 別建て表示</div>
         <div class="form-grid">
-          <div class="form-group span-2" style="display:flex;align-items:center;gap:8px">
+          <div class="form-group span-3" style="display:flex;flex-direction:column;gap:8px">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="checkbox" id="f_feeBreakdownMode" style="width:18px;height:18px"> 業者費用を別建てで請求書/見積書/明細書に表示する
+              <input type="radio" name="feeMode" value="none" id="f_feeMode_none" checked onchange="onFeeModeChange()" style="width:18px;height:18px"> なし（業者費用行を表示しない）
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="feeMode" value="auto" id="f_feeMode_auto" onchange="onFeeModeChange()" style="width:18px;height:18px"> 自動計算（見積－仕入の差額を業者費用として表示）
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="feeMode" value="manual" id="f_feeMode_manual" onchange="onFeeModeChange()" style="width:18px;height:18px"> 任意金額（業者費用単価 × 台数 で別行表示）
             </label>
           </div>
           <div class="form-group">
@@ -1008,6 +1014,10 @@
               <option value="手配料">手配料</option>
               <option value="外注費">外注費</option>
             </select>
+          </div>
+          <div class="form-group" id="f_agencyFeeUnitGroup" style="display:none">
+            <label>業者費用単価 <span class="auto-tag">円/台（税抜）</span></label>
+            <input type="number" id="f_agencyFeeUnit" placeholder="例: 5000" min="0" step="100">
           </div>
         </div>
       </div>
@@ -2807,8 +2817,12 @@ function clearForm() {
   const pnGrp=document.getElementById('parentCaseNoGroup');if(pnGrp)pnGrp.style.display='none';
   const hint=document.getElementById('caseNoHint');if(hint)hint.textContent='YYYY-顧客番号-連番';
   const sbClr=document.getElementById('saveCaseBtn');if(sbClr){sbClr.disabled=false;sbClr.style.opacity='';sbClr.style.cursor='';}
-  const _fbm = document.getElementById('f_feeBreakdownMode'); if (_fbm) _fbm.checked = false;
+  const _fmn = document.getElementById('f_feeMode_none'); if (_fmn) _fmn.checked = true;
+  const _fma = document.getElementById('f_feeMode_auto'); if (_fma) _fma.checked = false;
+  const _fmm = document.getElementById('f_feeMode_manual'); if (_fmm) _fmm.checked = false;
   const _fbl = document.getElementById('f_feeBreakdownLabel'); if (_fbl) _fbl.value = '業者費用';
+  const _afu = document.getElementById('f_agencyFeeUnit'); if (_afu) _afu.value = '';
+  const _afg = document.getElementById('f_agencyFeeUnitGroup'); if (_afg) _afg.style.display = 'none';
   ['f_customer','f_base','f_staff'].forEach(id=>{
     const lbl=id==='f_customer'?'顧客':id==='f_base'?'拠点':'担当者';
     document.getElementById(id).innerHTML='<option value="">── '+lbl+'を選択 ──</option>';
@@ -2861,8 +2875,12 @@ function populateForm(c) {
   const ctEl2=document.getElementById('f_caseType');if(ctEl2)ctEl2.value=c.caseType||'通常';
   populateBranchSelector(c.branchId||'');
   populateOurStaffSelector(c.ourStaffId||'');
-  const _fbm2 = document.getElementById('f_feeBreakdownMode'); if (_fbm2) _fbm2.checked = !!c.feeBreakdownMode;
+  // feeMode（3モード）の復元。後方互換: c.feeMode が無く c.feeBreakdownMode=true なら 'auto'
+  var _fm = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
+  var _fmnEl = document.getElementById('f_feeMode_'+_fm); if (_fmnEl) _fmnEl.checked = true;
   const _fbl2 = document.getElementById('f_feeBreakdownLabel'); if (_fbl2) _fbl2.value = c.feeBreakdownLabel || '業者費用';
+  const _afu2 = document.getElementById('f_agencyFeeUnit'); if (_afu2) _afu2.value = c.agencyFeeUnit != null ? c.agencyFeeUnit : '';
+  const _afg2 = document.getElementById('f_agencyFeeUnitGroup'); if (_afg2) _afg2.style.display = (_fm === 'manual') ? '' : 'none';
   const pnEl2=document.getElementById('f_parentCaseNo');if(pnEl2)pnEl2.value=c.parentCaseNo||'';
   const pnGrp2=document.getElementById('parentCaseNoGroup');
   if(pnGrp2)pnGrp2.style.display=(c.caseType==='追加'||c.caseType==='延長')?'':'none';
@@ -3001,8 +3019,10 @@ async function saveCase() {
     paymentDue:document.getElementById('f_paymentDue').value,
     paymentDate:document.getElementById('f_paymentDate').value,
     paymentAmount:parseFloat(document.getElementById('f_paymentAmount').value)||null,
-    feeBreakdownMode: document.getElementById('f_feeBreakdownMode')?.checked || false,
+    feeMode: (document.querySelector('input[name="feeMode"]:checked')?.value) || 'none',
+    feeBreakdownMode: ((document.querySelector('input[name="feeMode"]:checked')?.value) === 'auto'), // 後方互換
     feeBreakdownLabel: document.getElementById('f_feeBreakdownLabel')?.value || '業者費用',
+    agencyFeeUnit: (function(){var v=parseInt(document.getElementById('f_agencyFeeUnit')?.value);return isNaN(v)?null:v;})(),
     caseNote:document.getElementById('f_caseNote').value.trim(),
     caseType:document.getElementById('f_caseType')?.value||'通常',
     branchId:document.getElementById('f_branchId')?.value||'',
@@ -3336,6 +3356,11 @@ function syncCustomerFilter(){
 function toggleDrawer(){document.getElementById('drawerOverlay').classList.toggle('open');}
 function closeDrawer(){document.getElementById('drawerOverlay').classList.remove('open');}
 function openManual(){window.open('./manual.html','_blank','noopener');}
+function onFeeModeChange(){
+  var sel = document.querySelector('input[name="feeMode"]:checked')?.value || 'none';
+  var grp = document.getElementById('f_agencyFeeUnitGroup');
+  if (grp) grp.style.display = (sel === 'manual') ? '' : 'none';
+}
 
 // ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
@@ -4909,9 +4934,10 @@ async function generateEstimateExcel(caseId){
       function ss(sx,addr,val){var i=sx.indexOf('<c r="'+addr+'"');if(i<0)return sx;var e=sx.indexOf('</c>',i);if(e<0)return sx;var cell=sx.substring(i,e+4);var sm=cell.match(/s="(\d+)"/);var s=sm?sm[1]:"0";return sx.substring(0,i)+'<c r="'+addr+'" s="'+s+'" t="inlineStr"><is><t>'+ex(val)+"</t></is></c>"+sx.substring(e+4);}
       function sn(sx,addr,val){var i=sx.indexOf('<c r="'+addr+'"');if(i<0)return sx;var e=sx.indexOf('</c>',i);if(e<0)return sx;var cell=sx.substring(i,e+4);var sm=cell.match(/s="(\d+)"/);var s=sm?sm[1]:"0";return sx.substring(0,i)+'<c r="'+addr+'" s="'+s+'"><v>'+(Number(val)||0)+"</v></c>"+sx.substring(e+4);}
       var units=pl.estimateUnits||pl.units||1;
-      // 業者費用 別建て表示モードのとき、表示には仕入額を使う
-      var feeMode=!!c.feeBreakdownMode;
-      var feeLabel=c.feeBreakdownLabel||'業者費用';
+      // 業者費用モード: 'none' / 'auto' / 'manual'（後方互換: feeBreakdownMode=true → 'auto'）
+      var feeMode = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
+      var feeLabel = c.feeBreakdownLabel || '業者費用';
+      var agencyFeeUnit = c.agencyFeeUnit || 0;
       var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
       var quoteAdminFee=pl.quoteAdminFee||0;
       var quoteKeyMoney=pl.quoteKeyMoney||0;
@@ -4922,9 +4948,10 @@ async function generateEstimateExcel(caseId){
       var purchaseRent = ownerT ? Math.round(purchaseRentRaw/1.1) : purchaseRentRaw;
       var purchaseAdminFee = managerT ? (pl.adminFee?Math.round(pl.adminFee/1.1):0) : (pl.adminFee||0);
       var purchaseKeyMoney = ownerT ? (pl.keyMoney?Math.round(pl.keyMoney/1.1):0) : (pl.keyMoney||0);
-      var displayRent=feeMode?purchaseRent:quoteRent;
-      var displayAdminFee=feeMode?purchaseAdminFee:quoteAdminFee;
-      var displayKeyMoney=feeMode?purchaseKeyMoney:quoteKeyMoney;
+      // 'auto'モードのときだけ仕入額表示、それ以外（none/manual）は見積額表示
+      var displayRent = (feeMode==='auto') ? purchaseRent : quoteRent;
+      var displayAdminFee = (feeMode==='auto') ? purchaseAdminFee : quoteAdminFee;
+      var displayKeyMoney = (feeMode==='auto') ? purchaseKeyMoney : quoteKeyMoney;
       var estStart=pl.estimateStart||c.contractStart||"";
       var estEnd=pl.estimateEnd||c.contractEnd||"";
       var estimateNo=c.caseNo+"-P"+(plIdx+1);
@@ -4940,9 +4967,9 @@ async function generateEstimateExcel(caseId){
       var extras=[];
       if(displayKeyMoney)extras.push({label:"礼金",period:"-",unitPrice:displayKeyMoney,amount:units*displayKeyMoney});
       if(displayAdminFee)extras.push({label:"事務手数料",period:"-",unitPrice:displayAdminFee,amount:units*displayAdminFee});
-      // 業者費用行（別建てモードのみ）
-      if(feeMode){
-        // 業者費用 = 見積合計 − 仕入合計
+      // 業者費用行（モード別）
+      if(feeMode==='auto'){
+        // 自動計算: 業者費用 = 見積合計 − 仕入合計
         var quoteRentRows=calcMonthlyRentRows(pl.rateType,quoteRent,estStart,estEnd,units,pl.startProRate,pl.endProRate);
         var quoteRentTotal=quoteRentRows.reduce(function(s,r){return s+r.amount;},0);
         var purchaseRentRows=calcMonthlyRentRows(pl.rateType,purchaseRent,estStart,estEnd,units,pl.startProRate,pl.endProRate);
@@ -4952,6 +4979,9 @@ async function generateEstimateExcel(caseId){
         var agencyFee=quoteAllTotal-purchaseAllTotal;
         if(agencyFee<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
         extras.push({label:feeLabel,period:"-",unitPrice:agencyFee,amount:agencyFee,isAgency:true});
+      } else if(feeMode==='manual' && agencyFeeUnit>0){
+        // 任意金額: 業者費用 = 単価 × 台数（期間中1回の一時金）
+        extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeUnit,amount:agencyFeeUnit*units});
       }
       var allRows=[...rentRows,...extras];
       allRows.forEach(function(row,i){
@@ -5478,9 +5508,10 @@ async function generateKakuteiMeisai(caseId,plId){
     var startFmt=fmtDateJP(pl.contractStart);
     var endFmt=fmtDateJP(pl.contractEnd);
     var units=pl.units||1;
-    // 業者費用 別建て表示モード
-    var feeMode=!!c.feeBreakdownMode;
-    var feeLabel=c.feeBreakdownLabel||'業者費用';
+    // 業者費用モード: 'none' / 'auto' / 'manual'
+    var feeMode = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
+    var feeLabel = c.feeBreakdownLabel || '業者費用';
+    var agencyFeeUnit = c.agencyFeeUnit || 0;
     var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
     var quoteAdminFee=pl.quoteAdminFee||0;
     var quoteKeyMoney=pl.quoteKeyMoney||0;
@@ -5491,14 +5522,14 @@ async function generateKakuteiMeisai(caseId,plId){
     var purchaseRent = ownerT ? Math.round(purchaseRentRaw/1.1) : purchaseRentRaw;
     var purchaseAdminFee = managerT ? (pl.adminFee?Math.round(pl.adminFee/1.1):0) : (pl.adminFee||0);
     var purchaseKeyMoney = ownerT ? (pl.keyMoney?Math.round(pl.keyMoney/1.1):0) : (pl.keyMoney||0);
-    var displayRent=feeMode?purchaseRent:quoteRent;
-    var displayAdminFee=feeMode?purchaseAdminFee:quoteAdminFee;
-    var displayKeyMoney=feeMode?purchaseKeyMoney:quoteKeyMoney;
+    var displayRent = (feeMode==='auto') ? purchaseRent : quoteRent;
+    var displayAdminFee = (feeMode==='auto') ? purchaseAdminFee : quoteAdminFee;
+    var displayKeyMoney = (feeMode==='auto') ? purchaseKeyMoney : quoteKeyMoney;
     var rentRows=calcMonthlyRentRows(pl.rateType,displayRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate);
     var extras=[];
     if(displayKeyMoney)extras.push({label:"\u793c\u91d1",period:"-",unitPrice:displayKeyMoney,amount:units*displayKeyMoney});
     if(displayAdminFee)extras.push({label:"\u4e8b\u52d9\u624b\u6570\u6599",period:"-",unitPrice:displayAdminFee,amount:units*displayAdminFee});
-    if(feeMode){
+    if(feeMode==='auto'){
       var quoteRentRowsK=calcMonthlyRentRows(pl.rateType,quoteRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate);
       var quoteRentTotalK=quoteRentRowsK.reduce(function(s,r){return s+r.amount;},0);
       var purchaseRentRowsK=calcMonthlyRentRows(pl.rateType,purchaseRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate);
@@ -5508,6 +5539,9 @@ async function generateKakuteiMeisai(caseId,plId){
       var agencyFeeK=quoteAllTotalK-purchaseAllTotalK;
       if(agencyFeeK<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
       extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeK,amount:agencyFeeK,isAgency:true});
+    } else if(feeMode==='manual' && agencyFeeUnit>0){
+      // 任意金額: 業者費用 = 単価 × 台数
+      extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeUnit,amount:agencyFeeUnit*units});
     }
     var allRowsK=[...rentRows,...extras];
     var subtotalK=allRowsK.reduce(function(s,r){return s+r.amount;},0);
@@ -6774,9 +6808,10 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   setV('Y16', fmtD(c.paymentDue || ''));
 
   // ─── 明細行の準備 ───
-  // 業者費用 別建て表示モード（案件単位）
-  const feeMode = !!c.feeBreakdownMode;
+  // 業者費用モード: 'none' / 'auto' / 'manual'
+  const feeMode = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
   const feeLabel = c.feeBreakdownLabel || '業者費用';
+  const agencyFeeUnit = c.agencyFeeUnit || 0;
   let subtotalExTax = 0;
   const dataRows = [];
   const CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
@@ -6796,18 +6831,21 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const purchaseUnitPrice = ownerT ? (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0) : (pl.monthlyRent || 0);
     const purchaseAdminFee = managerT ? (pl.adminFee ? Math.round(pl.adminFee / 1.1) : 0) : (pl.adminFee || 0);
     const purchaseKeyMoney = ownerT ? (pl.keyMoney ? Math.round(pl.keyMoney / 1.1) : 0) : (pl.keyMoney || 0);
-    // 表示するのは feeMode 時は 仕入、それ以外は 見積
-    const unitPrice = feeMode ? purchaseUnitPrice : quoteUnitPrice;
-    const adminFee  = feeMode ? purchaseAdminFee  : quoteAdminFee;
-    const keyMoney  = feeMode ? purchaseKeyMoney  : quoteKeyMoney;
+    // 'auto'モードのみ仕入額表示、それ以外（none/manual）は見積額表示
+    const unitPrice = (feeMode==='auto') ? purchaseUnitPrice : quoteUnitPrice;
+    const adminFee  = (feeMode==='auto') ? purchaseAdminFee  : quoteAdminFee;
+    const keyMoney  = (feeMode==='auto') ? purchaseKeyMoney  : quoteKeyMoney;
     const dailyRate = Math.floor(unitPrice / 30);
     const rentAmt  = Math.round(unitPrice * units * months + dailyRate * units * days);
     const adminAmt = Math.round(adminFee * units);
     const keyAmt   = Math.round(keyMoney * units);
 
-    // 業者費用（税抜） = 見積合計 − 仕入合計（税抜）
+    // 業者費用（税抜）
     let agencyFeeAmt = 0;
-    if (feeMode) {
+    let agencyFeeUnitPriceForDisplay = 0;
+    let agencyFeeQty = '1式';
+    if (feeMode === 'auto') {
+      // 自動計算: 見積合計 − 仕入合計
       const qDailyRate = Math.floor(quoteUnitPrice / 30);
       const qRentAmt = Math.round(quoteUnitPrice * units * months + qDailyRate * units * days);
       const qAdminAmt = Math.round(quoteAdminFee * units);
@@ -6817,9 +6855,16 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       const pAdminAmt = Math.round(purchaseAdminFee * units);
       const pKeyAmt = Math.round(purchaseKeyMoney * units);
       agencyFeeAmt = (qRentAmt + qAdminAmt + qKeyAmt) - (pRentAmt + pAdminAmt + pKeyAmt);
+      agencyFeeUnitPriceForDisplay = agencyFeeAmt;
+      agencyFeeQty = '1式';
       if (agencyFeeAmt < 0) {
         showToast('⚠ ' + (pl.name || '') + '：' + feeLabel + 'がマイナスです（仕入＞見積）');
       }
+    } else if (feeMode === 'manual' && agencyFeeUnit > 0) {
+      // 任意金額: 単価 × 台数
+      agencyFeeAmt = agencyFeeUnit * units;
+      agencyFeeUnitPriceForDisplay = agencyFeeUnit;
+      agencyFeeQty = units;
     }
 
     subtotalExTax += rentAmt + adminAmt + keyAmt + agencyFeeAmt;
@@ -6837,8 +6882,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     if (adminFee > 0) {
       dataRows.push({ kind:'data', item: '事務手数料', qty: units, per: '-', up: adminFee, amt: adminAmt });
     }
-    if (feeMode) {
-      dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: agencyFeeAmt, amt: agencyFeeAmt, isAgency: true });
+    if (agencyFeeAmt !== 0) {
+      dataRows.push({ kind:'data', item: feeLabel, qty: agencyFeeQty, per: '-', up: agencyFeeUnitPriceForDisplay, amt: agencyFeeAmt, isAgency: (feeMode==='auto') });
     }
   });
   const taxAmt   = Math.round(subtotalExTax * 0.1);
@@ -9686,8 +9731,4 @@ window.addEventListener('DOMContentLoaded', initApp);
         }
         out.cells[k] = info;
       });
-      document.getElementById('dbgOut').textContent = JSON.stringify(out, null, 2);
-    };
-    reader.readAsBinaryString(file);
-  });
-  function dbgCop                                                                                                                                                                                                                                                   
+      document.getElementById('dbgOut').textC
