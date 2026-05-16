@@ -2,10 +2,11 @@
 // 最低限のオフライン対応：HTML/JS/manifestをキャッシュし、オンライン優先で動作。
 // Firebase通信はキャッシュしない（リアルタイム性を維持）。
 
-const CACHE_NAME = 'tomesapo-anken-v1';
+const CACHE_NAME = 'tomesapo-anken-v2';
 const PRECACHE = [
   './',
   './index.html',
+  './manual.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
