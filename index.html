@@ -3106,7 +3106,7 @@ function openDetail(id) {
       html += '<div style="font-size:12px;color:#374151;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + esc(m.to||'') + '</div>';
       html += '<div style="font-size:11px;color:#6b7280;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">件名: ' + esc(m.subject||'') + '</div>';
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-      html += '<button onclick="reopenMailFromQueue(\''+c.id+'\',\''+m.id+'\')" style="background:#1e3a5f;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">📧 Gmail で開く</button>';
+      html += '<button onclick="reopenMailFromQueue(\''+c.id+'\',\''+m.id+'\')" style="background:#1e3a5f;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">📧 メーラーで開く</button>';
       if (!m.sentAt) {
         html += '<button onclick="markMailAsSent(\''+c.id+'\',\''+m.id+'\')" style="background:#10b981;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer">✓ 送信済みにする</button>';
       }
@@ -5689,25 +5689,23 @@ async function _saveMailToQueue(caseId, mailData) {
   return id;
 }
 
-// Gmail compose URL を組み立てて新タブで開く（保存はせず開くだけ）
-// 注意: Gmailのリダイレクト挙動で to= が反映されない場合があるため、
-// 保険として宛先メールアドレスをクリップボードにもコピーする
+// mailto: で OS の既定メールクライアント（Outlookデスクトップ等）を起動
+// 宛先・件名・本文をすべて反映した新規メール作成画面が開く
+// ※関数名は互換性のため _openGmailCompose のまま
 function _openGmailCompose(to, subject, body) {
-  const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
-    (to ? '&to=' + encodeURIComponent(to) : '') +
-    (subject ? '&su=' + encodeURIComponent(subject) : '') +
-    (body ? '&body=' + encodeURIComponent(body) : '');
-  // 先にクリップボードコピー（user activationが新タブ遷移で消える前に）
-  if (to && navigator.clipboard && navigator.clipboard.writeText) {
-    try {
-      navigator.clipboard.writeText(to);
-      showToast('📋 宛先「' + to + '」をコピー済み！Gmailの宛先欄で Ctrl+V を押してください', 6000);
-    } catch(e) {}
-  }
-  window.open(url, '_blank');
+  const url = 'mailto:' + (to || '') +
+    '?subject=' + encodeURIComponent(subject || '') +
+    '&body=' + encodeURIComponent(body || '');
+  // 隠しアンカーで mailto: を起動（ページ離脱を回避）
+  const a = document.createElement('a');
+  a.href = url;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ a.remove(); }, 100);
 }
 
-// メール下書きから Gmail を再オープン
+// メール下書きから既定メーラーで再オープン
 function reopenMailFromQueue(caseId, mailId) {
   const c = cases.find(x => x.id === caseId);
   if (!c || !c.mailQueue) return;
@@ -9685,12 +9683,4 @@ window.addEventListener('DOMContentLoaded', initApp);
     };
     reader.readAsBinaryString(file);
   });
-  function dbgCopy(){
-    const txt = document.getElementById('dbgOut').textContent;
-    navigator.clipboard.writeText(txt).then(()=>showToast('コピーしました'));
-  }
-  window.dbgCopy = dbgCopy;
-})();
-</script>
-</body>
-</html>
+  function dbgCop
