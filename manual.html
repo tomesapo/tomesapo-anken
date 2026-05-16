@@ -343,9 +343,49 @@
   </tbody>
 </table>
 
-<div class="tip">
-  <strong>💡 業者費用を別建て表示</strong>
-  「業者費用を別建てで請求書/見積書/明細書に表示する」のチェックを入れると、業者費用を明細書に分けて表示する形式に切り替わります（顧客側で内訳を確認したい場合に使用）。
+<h2 id="fee-mode">業者費用の表示モード（3モード選択）</h2>
+<p>案件編集画面の「業者費用 別建て表示」セクションで、帳票（提案資料・確定資料・請求書）における業者費用の表示方法を3つから選べます。</p>
+
+<table>
+  <thead><tr><th style="width:130px">モード</th><th>賃料欄の表示</th><th>業者費用行</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td><strong>なし</strong><br>（デフォルト）</td><td>見積額</td><td>表示しない</td><td>通常の取引。シンプルに金額を提示</td></tr>
+    <tr><td><strong>自動計算</strong></td><td>仕入額<br>（税抜換算）</td><td>見積－仕入<br>の差額を自動表示</td><td>顧客に「実費＋手配料」の内訳を見せたい場合（仕入をそのまま開示）</td></tr>
+    <tr><td><strong>任意金額</strong></td><td>見積額<br>（上乗せ込み）</td><td>業者費用単価×台数<br>を別行表示</td><td>賃料に上乗せして利益を取りつつ、業者費用も別途いただく標準的なパターン</td></tr>
+  </tbody>
+</table>
+
+<h3>「任意金額」モードの例</h3>
+<p><strong>前提</strong>: 仕入8,000円/月、見積10,000円/月（上乗せ2,000円）、業者費用単価5,000円/台、駐車場A: 3台×3ヶ月</p>
+
+<table>
+  <thead><tr><th>項目</th><th>単価</th><th>数量</th><th>金額</th></tr></thead>
+  <tbody>
+    <tr><td>賃料（3ヶ月分）</td><td style="text-align:right">¥10,000</td><td style="text-align:right">3台×3ヶ月</td><td style="text-align:right">¥90,000</td></tr>
+    <tr><td>業者費用</td><td style="text-align:right">¥5,000</td><td style="text-align:right">3台</td><td style="text-align:right">¥15,000</td></tr>
+    <tr><td colspan="3"><strong>小計（税抜）</strong></td><td style="text-align:right"><strong>¥105,000</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>名目（行ラベル）の選択</h3>
+<p>業者費用行の名目は「業者費用」「手配料」「外注費」から選択できます（3モード共通）。顧客や業界の慣習に合わせて使い分けてください。</p>
+
+<h3>「任意金額」モードの仕様詳細</h3>
+<ul>
+  <li><strong>業者費用単価は案件全体に1つ</strong>: 案件画面で1回入力すれば、すべての駐車場に同じ単価が適用されます</li>
+  <li><strong>期間中1回の一時金</strong>: 月数では掛け算しません（礼金と同じ扱い）</li>
+  <li><strong>駐車場ごとに台数分の業者費用</strong>: 駐車場A(3台)=15,000円、駐車場B(2台)=10,000円、合計25,000円</li>
+  <li><strong>業者費用単価が0または未入力なら業者費用行は出ない</strong></li>
+</ul>
+
+<div class="note">
+  <strong>📌 「自動計算」モードの注意</strong>
+  「自動計算」モードでは仕入額がそのまま顧客に見えてしまいます（業者費用＝粗利が明確に開示される）。粗利を隠したい場合は「なし」または「任意金額」モードを選んでください。
+</div>
+
+<div class="warn">
+  <strong>⚠ マイナス警告</strong>
+  「自動計算」モードで仕入＞見積の逆ザヤ状態だと、保存時にトースト警告「⚠ 〇〇：業者費用がマイナスです」が表示されます。設定ミスや赤字案件の検知に活用してください。
 </div>
 
 <hr>
