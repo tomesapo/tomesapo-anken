@@ -5249,7 +5249,8 @@ async function generateProposalDocument(caseId){
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;
-    a.download='\u63d0\u6848\u8cc7\u6599_'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    var _propD=(c.proposalDate||new Date().toISOString().slice(0,10)).replace(/-/g,'').slice(2);
+    a.download='\u63d0\u6848\u8cc7\u6599\uff5c'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'_'+_propD+'.xlsx';
     document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
   }catch(e){alert('\u63d0\u6848\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
 }
@@ -5655,7 +5656,8 @@ async function generateKakuteiDocument(caseId){
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;
-    a.download='\u78ba\u5b9a\u8cc7\u6599_'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'.xlsx';
+    var _kakD=new Date().toISOString().slice(0,10).replace(/-/g,'').slice(2);
+    a.download='\u78ba\u5b9a\u8cc7\u6599\uff5c'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'_'+_kakD+'.xlsx';
     document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
   }catch(e){alert('\u78ba\u5b9a\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
 }
@@ -6910,8 +6912,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   // ─── ファイル出力（ブラウザダウンロード） ───
   const out = await wb.xlsx.writeBuffer();
   const safeName = (c.siteName || c.caseNo || '案件').replace(/[/\\:*?"<>|]/g, '_');
-  const dateStr  = (c.invoiceDate || new Date().toISOString().slice(0,10)).replace(/-/g, '');
-  const filename = '請求書_' + safeName + '_' + dateStr + '.xlsx';
+  const dateStr  = (c.invoiceDate || new Date().toISOString().slice(0,10)).replace(/-/g, '').slice(2);
+  const filename = '請求書｜' + safeName + '_' + dateStr + '.xlsx';
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
