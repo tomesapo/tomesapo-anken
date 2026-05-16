@@ -351,19 +351,42 @@
   <tbody>
     <tr><td><strong>なし</strong><br>（デフォルト）</td><td>見積額</td><td>表示しない</td><td>通常の取引。シンプルに金額を提示</td></tr>
     <tr><td><strong>自動計算</strong></td><td>仕入額<br>（税抜換算）</td><td>見積－仕入<br>の差額を自動表示</td><td>顧客に「実費＋手配料」の内訳を見せたい場合（仕入をそのまま開示）</td></tr>
-    <tr><td><strong>任意金額</strong></td><td>見積額<br>（上乗せ込み）</td><td>業者費用単価×台数<br>を別行表示</td><td>賃料に上乗せして利益を取りつつ、業者費用も別途いただく標準的なパターン</td></tr>
+    <tr><td><strong>任意金額</strong></td><td>見積額<br>（上乗せ込み）</td><td>案件全体で<br>一式金額を表示</td><td>賃料に上乗せして利益を取りつつ、業者費用も別途いただく標準的なパターン</td></tr>
   </tbody>
 </table>
 
 <h3>「任意金額」モードの例</h3>
-<p><strong>前提</strong>: 仕入8,000円/月、見積10,000円/月（上乗せ2,000円）、業者費用単価5,000円/台、駐車場A: 3台×3ヶ月</p>
+<p><strong>前提</strong>: 仕入8,000円/月、見積10,000円/月（上乗せ2,000円）、業者費用（一式）25,000円、駐車場A: 3台 / 駐車場B: 2台（いずれも3ヶ月契約）</p>
 
+<h4>請求書（案件全体・1ファイル）</h4>
 <table>
   <thead><tr><th>項目</th><th>単価</th><th>数量</th><th>金額</th></tr></thead>
   <tbody>
+    <tr><td>①駐車場A 賃料</td><td style="text-align:right">¥10,000</td><td style="text-align:right">3台×3ヶ月</td><td style="text-align:right">¥90,000</td></tr>
+    <tr><td>②駐車場B 賃料</td><td style="text-align:right">¥10,000</td><td style="text-align:right">2台×3ヶ月</td><td style="text-align:right">¥60,000</td></tr>
+    <tr><td>業者費用</td><td style="text-align:right">¥25,000</td><td style="text-align:right">1式</td><td style="text-align:right">¥25,000</td></tr>
+    <tr><td colspan="3"><strong>小計（税抜）</strong></td><td style="text-align:right"><strong>¥175,000</strong></td></tr>
+  </tbody>
+</table>
+
+<h4>提案資料・確定資料（駐車場ごとのExcel）</h4>
+<p>案件全体の業者費用 ¥25,000 を、各駐車場の台数で按分して表示します。</p>
+
+<table>
+  <thead><tr><th colspan="4">駐車場A（3台 / 全5台中）</th></tr></thead>
+  <tbody>
     <tr><td>賃料（3ヶ月分）</td><td style="text-align:right">¥10,000</td><td style="text-align:right">3台×3ヶ月</td><td style="text-align:right">¥90,000</td></tr>
-    <tr><td>業者費用</td><td style="text-align:right">¥5,000</td><td style="text-align:right">3台</td><td style="text-align:right">¥15,000</td></tr>
+    <tr><td>業者費用</td><td style="text-align:right">¥15,000</td><td style="text-align:right">1式</td><td style="text-align:right">¥15,000</td></tr>
     <tr><td colspan="3"><strong>小計（税抜）</strong></td><td style="text-align:right"><strong>¥105,000</strong></td></tr>
+  </tbody>
+</table>
+
+<table>
+  <thead><tr><th colspan="4">駐車場B（2台 / 全5台中）</th></tr></thead>
+  <tbody>
+    <tr><td>賃料（3ヶ月分）</td><td style="text-align:right">¥10,000</td><td style="text-align:right">2台×3ヶ月</td><td style="text-align:right">¥60,000</td></tr>
+    <tr><td>業者費用</td><td style="text-align:right">¥10,000</td><td style="text-align:right">1式</td><td style="text-align:right">¥10,000</td></tr>
+    <tr><td colspan="3"><strong>小計（税抜）</strong></td><td style="text-align:right"><strong>¥70,000</strong></td></tr>
   </tbody>
 </table>
 
@@ -372,10 +395,11 @@
 
 <h3>「任意金額」モードの仕様詳細</h3>
 <ul>
-  <li><strong>業者費用単価は案件全体に1つ</strong>: 案件画面で1回入力すれば、すべての駐車場に同じ単価が適用されます</li>
-  <li><strong>期間中1回の一時金</strong>: 月数では掛け算しません（礼金と同じ扱い）</li>
-  <li><strong>駐車場ごとに台数分の業者費用</strong>: 駐車場A(3台)=15,000円、駐車場B(2台)=10,000円、合計25,000円</li>
-  <li><strong>業者費用単価が0または未入力なら業者費用行は出ない</strong></li>
+  <li><strong>業者費用は案件全体で一式の固定金額</strong>: 案件画面で1回だけ金額を入力します（例: ¥25,000）</li>
+  <li><strong>請求書には1行のみ表示</strong>: 全駐車場の明細の最後に「業者費用 一式 ¥25,000」が1行追加されます</li>
+  <li><strong>提案資料・確定資料は台数で按分</strong>: 駐車場ごとのExcelファイルでは、その駐車場の台数 ÷ 全駐車場の合計台数 で按分して表示</li>
+  <li><strong>按分の端数は最終駐車場で吸収</strong>: 例えば¥10,000を3台と2台で按分すると、3台分=¥6,000、2台分=¥4,000となり、合計が必ず元の金額に一致します</li>
+  <li><strong>業者費用が0または未入力なら業者費用行は出ない</strong></li>
 </ul>
 
 <div class="note">
