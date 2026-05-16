@@ -2,14 +2,17 @@
 // 最低限のオフライン対応：HTML/JS/manifestをキャッシュし、オンライン優先で動作。
 // Firebase通信はキャッシュしない（リアルタイム性を維持）。
 
-const CACHE_NAME = 'tomesapo-anken-v3';
+const CACHE_NAME = 'tomesapo-anken-v4';
 const PRECACHE = [
   './',
   './index.html',
   './manual.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './favicon.ico',
+  './favicon-16.png',
+  './favicon-32.png'
 ];
 
 self.addEventListener('install', (event) => {
