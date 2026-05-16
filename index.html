@@ -634,6 +634,8 @@
       </div>
     </div>
 
+    <button class="btn btn-ghost" onclick="openManual()" title="操作マニュアルを開く">📖 ヘルプ</button>
+
     <div class="user-info" id="authUserInfo" style="display:none">
       <span>👤</span>
       <span class="user-info-email" id="authUserEmail"></span>
@@ -683,6 +685,10 @@
     <div class="drawer-divider"></div>
     <button class="drawer-btn" onclick="openTrash();closeDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>ゴミ箱
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-btn" onclick="openManual();closeDrawer()">
+      📖 操作マニュアル
     </button>
   </div>
 </div>
@@ -3329,6 +3335,7 @@ function syncCustomerFilter(){
 // ── ドロワー ──
 function toggleDrawer(){document.getElementById('drawerOverlay').classList.toggle('open');}
 function closeDrawer(){document.getElementById('drawerOverlay').classList.remove('open');}
+function openManual(){window.open('./manual.html','_blank','noopener');}
 
 // ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
@@ -9683,4 +9690,4 @@ window.addEventListener('DOMContentLoaded', initApp);
     };
     reader.readAsBinaryString(file);
   });
-  function dbgCop
+  function dbgCop                                                                                                                                                                                                                                                   
