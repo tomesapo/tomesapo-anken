@@ -1016,8 +1016,8 @@
             </select>
           </div>
           <div class="form-group" id="f_agencyFeeUnitGroup" style="display:none">
-            <label>業者費用単価 <span class="auto-tag">円/台（税抜）</span></label>
-            <input type="number" id="f_agencyFeeUnit" placeholder="例: 5000" min="0" step="100">
+            <label>業者費用（一式） <span class="auto-tag">円・税抜・案件全体</span></label>
+            <input type="number" id="f_agencyFeeUnit" placeholder="例: 25000" min="0" step="1000">
           </div>
         </div>
       </div>
@@ -3361,6 +3361,28 @@ function onFeeModeChange(){
   var grp = document.getElementById('f_agencyFeeUnitGroup');
   if (grp) grp.style.display = (sel === 'manual') ? '' : 'none';
 }
+// 業者費用「任意金額」モードの台数按分（最終駐車場で端数吸収）
+function calcAgencyFeeShare(c, plIdx){
+  var fm = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
+  if (fm !== 'manual') return 0;
+  var total = c.agencyFeeUnit || 0;
+  if (!total) return 0;
+  var lots = c.parkingLots || [];
+  if (!lots.length) return 0;
+  var totalUnits = lots.reduce(function(s,l){return s + (l.estimateUnits || l.units || 1);}, 0);
+  if (!totalUnits) return 0;
+  if (plIdx === lots.length - 1) {
+    var allocated = 0;
+    for (var i = 0; i < plIdx; i++) {
+      var u = (lots[i].estimateUnits || lots[i].units || 1);
+      allocated += Math.floor(total * u / totalUnits);
+    }
+    return total - allocated;
+  } else {
+    var u = (lots[plIdx].estimateUnits || lots[plIdx].units || 1);
+    return Math.floor(total * u / totalUnits);
+  }
+}
 
 // ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
@@ -4980,8 +5002,11 @@ async function generateEstimateExcel(caseId){
         if(agencyFee<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
         extras.push({label:feeLabel,period:"-",unitPrice:agencyFee,amount:agencyFee,isAgency:true});
       } else if(feeMode==='manual' && agencyFeeUnit>0){
-        // 任意金額: 業者費用 = 単価 × 台数（期間中1回の一時金）
-        extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeUnit,amount:agencyFeeUnit*units});
+        // 任意金額: 案件全体「一式金額」を駐車場の台数で按分（最終駐車場で端数吸収）
+        var share = calcAgencyFeeShare(c, plIdx);
+        if (share !== 0) {
+          extras.push({label:feeLabel,period:"-",unitPrice:share,amount:share,isAgency:true});
+        }
       }
       var allRows=[...rentRows,...extras];
       allRows.forEach(function(row,i){
@@ -5540,8 +5565,11 @@ async function generateKakuteiMeisai(caseId,plId){
       if(agencyFeeK<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
       extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeK,amount:agencyFeeK,isAgency:true});
     } else if(feeMode==='manual' && agencyFeeUnit>0){
-      // 任意金額: 業者費用 = 単価 × 台数
-      extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeUnit,amount:agencyFeeUnit*units});
+      // 任意金額: 案件全体「一式金額」を駐車場の台数で按分
+      var shareK = calcAgencyFeeShare(c, plIdx);
+      if (shareK !== 0) {
+        extras.push({label:feeLabel,period:"-",unitPrice:shareK,amount:shareK,isAgency:true});
+      }
     }
     var allRowsK=[...rentRows,...extras];
     var subtotalK=allRowsK.reduce(function(s,r){return s+r.amount;},0);
@@ -6840,10 +6868,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const adminAmt = Math.round(adminFee * units);
     const keyAmt   = Math.round(keyMoney * units);
 
-    // 業者費用（税抜）
+    // 業者費用（税抜）— 'auto'モードは駐車場ごとに、'manual'モードは案件全体で最後に1行
     let agencyFeeAmt = 0;
-    let agencyFeeUnitPriceForDisplay = 0;
-    let agencyFeeQty = '1式';
     if (feeMode === 'auto') {
       // 自動計算: 見積合計 − 仕入合計
       const qDailyRate = Math.floor(quoteUnitPrice / 30);
@@ -6855,16 +6881,9 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       const pAdminAmt = Math.round(purchaseAdminFee * units);
       const pKeyAmt = Math.round(purchaseKeyMoney * units);
       agencyFeeAmt = (qRentAmt + qAdminAmt + qKeyAmt) - (pRentAmt + pAdminAmt + pKeyAmt);
-      agencyFeeUnitPriceForDisplay = agencyFeeAmt;
-      agencyFeeQty = '1式';
       if (agencyFeeAmt < 0) {
         showToast('⚠ ' + (pl.name || '') + '：' + feeLabel + 'がマイナスです（仕入＞見積）');
       }
-    } else if (feeMode === 'manual' && agencyFeeUnit > 0) {
-      // 任意金額: 単価 × 台数
-      agencyFeeAmt = agencyFeeUnit * units;
-      agencyFeeUnitPriceForDisplay = agencyFeeUnit;
-      agencyFeeQty = units;
     }
 
     subtotalExTax += rentAmt + adminAmt + keyAmt + agencyFeeAmt;
@@ -6882,10 +6901,17 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     if (adminFee > 0) {
       dataRows.push({ kind:'data', item: '事務手数料', qty: units, per: '-', up: adminFee, amt: adminAmt });
     }
-    if (agencyFeeAmt !== 0) {
-      dataRows.push({ kind:'data', item: feeLabel, qty: agencyFeeQty, per: '-', up: agencyFeeUnitPriceForDisplay, amt: agencyFeeAmt, isAgency: (feeMode==='auto') });
+    // 'auto'モードはここで駐車場ごとに業者費用行を追加
+    if (feeMode === 'auto' && agencyFeeAmt !== 0) {
+      dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: agencyFeeAmt, amt: agencyFeeAmt, isAgency: true });
     }
   });
+
+  // 'manual'モード: 案件全体に1行で業者費用を追加（最後にまとめて）
+  if (feeMode === 'manual' && agencyFeeUnit > 0) {
+    subtotalExTax += agencyFeeUnit;
+    dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: agencyFeeUnit, amt: agencyFeeUnit, isAgency: true });
+  }
   const taxAmt   = Math.round(subtotalExTax * 0.1);
   const totalAmt = subtotalExTax + taxAmt;
 
