@@ -5690,6 +5690,17 @@ async function generateKakuteiDocument(caseId){
     // ワークブック情報取得
     var kukakuWbXml=await kukakuZip.file('xl/workbook.xml').async('string');
     var kukakuSheetCount=(kukakuWbXml.match(/<sheet /g)||[]).length;
+    // 区画図シートの表示倍率を60%に設定
+    for(var kzi=1;kzi<=kukakuSheetCount;kzi++){
+      var kshXml=await kukakuZip.file('xl/worksheets/sheet'+kzi+'.xml').async('string');
+      kshXml=kshXml.replace(/<sheetView\b([^>]*?)(\/?)>/g,function(_,attrs,slash){
+        attrs=attrs.replace(/\s+zoomScale="\d+"/g,'');
+        attrs=attrs.replace(/\s+zoomScaleNormal="\d+"/g,'');
+        attrs=attrs.replace(/\s+zoomScalePageLayoutView="\d+"/g,'');
+        return '<sheetView'+attrs+' zoomScale="60" zoomScaleNormal="60"'+slash+'>';
+      });
+      kukakuZip.file('xl/worksheets/sheet'+kzi+'.xml',kshXml);
+    }
     var kukakuRels=await kukakuZip.file('xl/_rels/workbook.xml.rels').async('string');
     var kukakuCt=await kukakuZip.file('[Content_Types].xml').async('string');
     var rNs='xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -5711,6 +5722,13 @@ async function generateKakuteiDocument(caseId){
         });
       }
       mShXml=mShXml.replace(/\bs="(\d+)"/g,function(mm,n){return 's="'+(parseInt(n)+meisaiXfOff)+'"';});
+      // 確定明細シートの表示倍率を60%に設定
+      mShXml=mShXml.replace(/<sheetView\b([^>]*?)(\/?)>/g,function(_,attrs,slash){
+        attrs=attrs.replace(/\s+zoomScale="\d+"/g,'');
+        attrs=attrs.replace(/\s+zoomScaleNormal="\d+"/g,'');
+        attrs=attrs.replace(/\s+zoomScalePageLayoutView="\d+"/g,'');
+        return '<sheetView'+attrs+' zoomScale="60" zoomScaleNormal="60"'+slash+'>';
+      });
       var newShNum=kukakuSheetCount+i+1;
       var mRId='rId_m'+(i+1);
       var sheetName='\u78ba\u5b9a\u660e\u7d30'+(lots.length>1?String(i+1):'');
