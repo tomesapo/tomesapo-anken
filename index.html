@@ -1900,6 +1900,13 @@ function renderSuppliers() {
     const typeBadge = s.type === '管理会社'
       ? '<span style="background:#dbeafe;color:#1e40af;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600">管理会社</span>'
       : '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600">地主</span>';
+    const pm = s.paymentMethod || '';
+    const showBank = (pm === '振込' || pm === '口座引落');
+    const pmOpts = ['','振込','現金','口座引落','手形','その他'].map(v =>
+      '<option value="'+v+'"'+(pm===v?' selected':'')+'>'+(v||'未設定')+'</option>').join('');
+    const atype = s.accountType || '';
+    const atOpts = ['','普通','当座'].map(v =>
+      '<option value="'+v+'"'+(atype===v?' selected':'')+'>'+(v||'-')+'</option>').join('');
     return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;background:white">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
         typeBadge +
@@ -1911,9 +1918,31 @@ function renderSuppliers() {
         '<input type="tel" value="'+esc(s.tel||'')+'" placeholder="電話番号" oninput="updateSupplierField(\''+s.id+'\',\'tel\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
         '<input type="tel" value="'+esc(s.fax||'')+'" placeholder="FAX" oninput="updateSupplierField(\''+s.id+'\',\'fax\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center">' +
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center;margin-bottom:6px">' +
         '<select onchange="updateSupplierField(\''+s.id+'\',\'taxable\',this.value===\'true\')" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;background:'+taxBg+';color:'+taxColor+'"><option value="false"' + (!s.taxable?' selected':'') + '>免税事業者</option><option value="true"' + (s.taxable?' selected':'') + '>課税事業者</option></select>' +
         '<input type="text" value="'+esc(s.invoiceRegNo||'')+'" placeholder="インボイス登録番号" oninput="updateSupplierField(\''+s.id+'\',\'invoiceRegNo\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px"' + (!s.taxable?' disabled style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;background:#f3f4f6;color:#9ca3af"':'') + '>' +
+      '</div>' +
+      // 支払方法
+      '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap">💳 支払方法</span>' +
+          '<select onchange="updateSupplierField(\''+s.id+'\',\'paymentMethod\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;min-width:130px">' + pmOpts + '</select>' +
+        '</div>' +
+        // 振込先情報（振込・口座引落のときだけ表示）
+        (showBank ?
+          '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-top:4px">' +
+            '<div style="font-size:11px;color:#6b7280;font-weight:600;margin-bottom:6px">🏦 振込先情報</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">' +
+              '<input type="text" value="'+esc(s.bankName||'')+'" placeholder="銀行名（例: 三菱UFJ銀行）" oninput="updateSupplierField(\''+s.id+'\',\'bankName\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+              '<input type="text" value="'+esc(s.branchName||'')+'" placeholder="支店名（例: 名古屋支店）" oninput="updateSupplierField(\''+s.id+'\',\'branchName\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;margin-bottom:6px">' +
+              '<select onchange="updateSupplierField(\''+s.id+'\',\'accountType\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' + atOpts + '</select>' +
+              '<input type="text" value="'+esc(s.accountNo||'')+'" placeholder="口座番号" oninput="updateSupplierField(\''+s.id+'\',\'accountNo\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+            '</div>' +
+            '<input type="text" value="'+esc(s.accountName||'')+'" placeholder="口座名義（例: カ）トメサポ）" oninput="updateSupplierField(\''+s.id+'\',\'accountName\',this.value)" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+          '</div>'
+        : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -1930,6 +1959,12 @@ function addSupplier() {
     email: '',
     taxable: false,
     invoiceRegNo: '',
+    paymentMethod: '',
+    bankName: '',
+    branchName: '',
+    accountType: '',
+    accountNo: '',
+    accountName: '',
     memo: '',
     deleted: false,
     createdAt: new Date().toISOString()
@@ -1993,7 +2028,7 @@ function updateSupplierField(id, field, value) {
   s[field] = value;
   s.updatedAt = new Date().toISOString();
   saveMasterToFS();
-  if (field === 'taxable') renderSuppliers();
+  if (field === 'taxable' || field === 'paymentMethod') renderSuppliers();
 }
 function deleteSupplier(id) {
   if (!confirm('この仕入先を削除しますか？\n（既に駐車場で参照されている場合、表示されている情報は影響を受けません）')) return;
