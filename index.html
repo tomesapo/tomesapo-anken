@@ -4950,10 +4950,10 @@ async function generateEstimateExcel(caseId){
       var pl=lots[plIdx];
       var zip2=await JSZip.loadAsync(tmplBytes);
       var shxml=await zip2.file("xl/worksheets/sheet1.xml").async("string");
-      // ページブレークプレビュー(85%ズーム)→標準ビュー(100%)に変換
+      // ページブレークプレビュー→標準ビューに変換し、表示倍率を60%に設定
       shxml=shxml.replace(/<sheetView\s[^>]*>/,function(m){
         var wbv=m.match(/workbookViewId="(\d+)"/);var wid=wbv?wbv[1]:"0";
-        return '<sheetView tabSelected="1" workbookViewId="'+wid+'">';
+        return '<sheetView tabSelected="1" workbookViewId="'+wid+'" zoomScale="60" zoomScaleNormal="60">';
       });
       shxml=shxml.replace(/<selection[^/]*\/>/,'<selection activeCell="A1" sqref="A1"/>');
       function ex(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -5243,12 +5243,12 @@ async function generateProposalDocument(caseId){
     for(var i=1;i<=mapSheetCount;i++){
       var mshXml=await mapZip.file('xl/worksheets/sheet'+i+'.xml').async('string');
       mshXml=mshXml.replace(/\bs="(\d+)"/g,function(m,n){return 's="'+(parseInt(n)+mapXfOff)+'"';});
-      // 案内図シートの表示倍率を85%に設定（既存zoom属性は除去して上書き）
+      // 案内図シートの表示倍率を60%に設定（既存zoom属性は除去して上書き）
       mshXml=mshXml.replace(/<sheetView\b([^>]*?)(\/?)>/g,function(_,attrs,slash){
         attrs=attrs.replace(/\s+zoomScale="\d+"/g,'');
         attrs=attrs.replace(/\s+zoomScaleNormal="\d+"/g,'');
         attrs=attrs.replace(/\s+zoomScalePageLayoutView="\d+"/g,'');
-        return '<sheetView'+attrs+' zoomScale="85" zoomScaleNormal="85"'+slash+'>';
+        return '<sheetView'+attrs+' zoomScale="60" zoomScaleNormal="60"'+slash+'>';
       });
       mapZip.file('xl/worksheets/sheet'+i+'.xml',mshXml);
     }
