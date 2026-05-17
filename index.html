@@ -8929,6 +8929,7 @@ function renderPMList() {
       + (photos ? '<div style="display:flex;gap:4px;margin-bottom:6px">' + photos + ((p.photoUrls||[]).length > 3 ? '<span style="font-size:11px;color:#6b7280;align-self:center">+' + (p.photoUrls.length-3) + '枚</span>' : '') + '</div>' : '')
       + '<div class="pm-card-title">🅿 ' + esc(p.name)
       + (p.startProRate || p.endProRate ? '<span style="font-size:11px;font-weight:400;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;border:1px solid #bbf7d0">開始:' + esc(p.startProRate||'未設定') + ' 終了:' + esc(p.endProRate||'未設定') + '</span>' : '')
+      + (p.layoutImageUrl ? '<span style="font-size:11px;font-weight:500;background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 8px;border:1px solid #fde68a;cursor:pointer" onclick="event.stopPropagation();window.open(\'' + p.layoutImageUrl + '\',\'_blank\')" title="クリックで区画図を表示">📐 区画図あり</span>' : '')
       + '</div>'
       + '<div class="pm-card-meta">'
       + (p.address ? '<span>📍 ' + esc(p.address) + '</span>' : '')
@@ -8975,6 +8976,10 @@ function clearPMForm() {
   const pl = document.getElementById('pmfPhotoList'); if(pl) pl.innerHTML = '';
   const pp = document.getElementById('pmf_photoProgress'); if(pp) pp.textContent = '';
   const pf = document.getElementById('pmf_photos'); if(pf) pf.value = '';
+  // 区画図関連クリア
+  renderPMLayoutPreview('');
+  const lp = document.getElementById('pmf_layoutProgress'); if(lp) lp.textContent = '';
+  const lf = document.getElementById('pmf_layoutImage'); if(lf) lf.value = '';
   // 税区分セレクトを免税にリセット → インボイス番号欄を無効化
   const _ownT = document.getElementById('pmf_ownerTaxable');
   if (_ownT) { _ownT.value = 'false'; _syncInvoiceFieldDisabled(_ownT, 'pmf_ownerInvoiceRegNo'); }
@@ -9008,6 +9013,8 @@ function populatePMForm(p) {
   set('pmf_vehicleType', p.vehicleType);
   // 写真サムネイル表示
   renderPMPhotoList(p.photoUrls || []);
+  // 区画図プレビュー表示
+  renderPMLayoutPreview(p.layoutImageUrl || '');
 }
 
 // ── 駐車場写真 ──
@@ -9029,6 +9036,76 @@ function removePMPhoto(idx) {
   if (!pm || !pm.photoUrls) return;
   pm.photoUrls.splice(idx, 1);
   renderPMPhotoList(pm.photoUrls);
+}
+
+// ── 区画図 ──
+function renderPMLayoutPreview(url) {
+  const container = document.getElementById('pmfLayoutPreview');
+  if (!container) return;
+  if (!url) { container.innerHTML = '<div style="color:#9ca3af;font-size:12px;padding:8px;border:1px dashed #e5e7eb;border-radius:6px;text-align:center">区画図は未登録です</div>'; return; }
+  container.innerHTML =
+    '<div style="position:relative;display:inline-block">'
+    + '<img src="' + url + '" style="max-width:300px;max-height:200px;object-fit:contain;border-radius:6px;border:1px solid #e5e7eb;background:#fff;cursor:pointer" loading="lazy" onclick="window.open(\'' + url + '\',\'_blank\')" title="クリックで拡大表示">'
+    + '<button onclick="removePMLayout()" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>'
+    + '</div>';
+}
+
+async function uploadPMLayout() {
+  const input = document.getElementById('pmf_layoutImage');
+  const prog = document.getElementById('pmf_layoutProgress');
+  if (!input || !input.files.length) return;
+  const file = input.files[0];
+  input.value = '';
+  if (prog) prog.textContent = '準備中…';
+  const sdkOk = await loadStorageSDK();
+  if (!sdkOk || !storage) {
+    showToast('区画図保存にはFirebase Storageが必要です');
+    if (prog) prog.textContent = '';
+    return;
+  }
+  const pmId = pmEditingId || uid();
+  if (!pmEditingId) pmEditingId = pmId;
+  try {
+    if (prog) prog.textContent = 'アップロード中…';
+    const ref = storage.ref('parkingLayouts/' + pmId + '/' + Date.now() + '_' + file.name);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+    if (prog) { prog.textContent = '✓ アップロード完了'; setTimeout(()=>{if(prog)prog.textContent='';},3000); }
+    // 既存の区画図画像があれば削除（古いファイルを残さない）
+    const pm = parkingMasters.find(p => p.id === pmEditingId);
+    if (pm && pm.layoutImageUrl) {
+      try {
+        const oldRef = storage.refFromURL(pm.layoutImageUrl);
+        await oldRef.delete();
+      } catch(e) { /* 削除失敗は無視（既に消えてる等） */ }
+    }
+    renderPMLayoutPreview(url);
+    if (pm) pm.layoutImageUrl = url;
+    else parkingMasters.push({ id: pmEditingId, layoutImageUrl: url });
+  } catch(e) {
+    showToast('区画図のアップロードに失敗しました: ' + e.message);
+    if (prog) prog.textContent = '';
+  }
+}
+
+async function removePMLayout() {
+  if (!pmEditingId) return;
+  if (!confirm('区画図を削除しますか？')) return;
+  const pm = parkingMasters.find(p => p.id === pmEditingId);
+  if (!pm) return;
+  const oldUrl = pm.layoutImageUrl;
+  pm.layoutImageUrl = '';
+  renderPMLayoutPreview('');
+  // Storageからも削除
+  if (oldUrl) {
+    try {
+      const sdkOk = await loadStorageSDK();
+      if (sdkOk && storage) {
+        const oldRef = storage.refFromURL(oldUrl);
+        await oldRef.delete();
+      }
+    } catch(e) { /* 削除失敗は無視 */ }
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -9284,6 +9361,7 @@ async function savePM() {
     endProRate: document.getElementById('pmf_endProRate').value,
     memo: document.getElementById('pmf_memo').value.trim(),
     photoUrls: pmEditingId ? (parkingMasters.find(p=>p.id===pmEditingId)?.photoUrls || []) : [],
+    layoutImageUrl: pmEditingId ? (parkingMasters.find(p=>p.id===pmEditingId)?.layoutImageUrl || '') : '',
     updatedAt: new Date().toISOString()
   };
 
@@ -9769,6 +9847,16 @@ window.addEventListener('DOMContentLoaded', initApp);
         </label>
         <span id="pmf_photoProgress" style="font-size:12px;color:#6366f1"></span>
       </div>
+      <div class="pmf-section-title" style="margin-top:14px">📐 区画図</div>
+      <div id="pmfLayoutPreview" style="margin-bottom:6px"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 16px;cursor:pointer;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-weight:500">
+          📁 区画図画像を選択
+          <input type="file" id="pmf_layoutImage" accept="image/*" style="display:none" onchange="uploadPMLayout()">
+        </label>
+        <span id="pmf_layoutProgress" style="font-size:12px;color:#6366f1"></span>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">Excelの区画図を画像（PNG/JPG）で保存。一度借りた駐車場の区画図を保管し、再利用時の現地調査の手間を省きます。</div>
       <div class="pmf-group">
         <label>条件メモ</label>
         <textarea id="pmf_memo" placeholder="特記事項・条件など自由記入"></textarea>
