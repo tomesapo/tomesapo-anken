@@ -8903,13 +8903,19 @@ function refreshPMMarkers() {
 
 function renderPMList() {
   const q = (document.getElementById('pmSearch')?.value || '').toLowerCase();
+  const qDigits = q.replace(/\D/g, ''); // 数字のみ抽出（電話番号検索用）
   const body = document.getElementById('pmListBody');
   if (!body) return;
-  const filtered = parkingMasters.filter(p =>
-    !q || (p.name||'').toLowerCase().includes(q) ||
-    (p.address||'').toLowerCase().includes(q) ||
-    (p.supplierName||'').toLowerCase().includes(q)
-  );
+  const filtered = parkingMasters.filter(p => {
+    if (!q) return true;
+    if ((p.name||'').toLowerCase().includes(q)) return true;
+    if ((p.address||'').toLowerCase().includes(q)) return true;
+    if ((p.supplierName||'').toLowerCase().includes(q)) return true;
+    if ((p.tel||'').toLowerCase().includes(q)) return true;
+    // ハイフン無視で電話番号マッチ（クエリが数字を含む場合のみ）
+    if (qDigits && (p.tel||'').replace(/\D/g, '').includes(qDigits)) return true;
+    return false;
+  });
   if (filtered.length === 0) {
     body.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:24px">登録された駐車場がありません</div>';
     return;
@@ -9601,7 +9607,7 @@ window.addEventListener('DOMContentLoaded', initApp);
         <!-- 一覧タブ -->
         <div class="pm-tab-pane active" id="pmListPane">
           <div class="pm-list-header">
-            <input class="pm-search" id="pmSearch" type="text" placeholder="駐車場名・住所・仕入先で検索…" oninput="renderPMList()">
+            <input class="pm-search" id="pmSearch" type="text" placeholder="駐車場名・住所・仕入先・電話番号で検索…" oninput="renderPMList()">
             <button class="btn btn-primary" onclick="openPMForm(null)" style="font-size:13px;padding:7px 16px">＋ 新規登録</button>
           </div>
           <div id="pmListBody" style="display:flex;flex-direction:column;gap:10px"></div>
