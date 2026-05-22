@@ -1036,6 +1036,7 @@
         <div id="parkingLotCards"></div>
         <button type="button" class="btn-add-parking" onclick="addParkingLotCard()">&#43; 駐車場を追加</button>
         <button type="button" class="btn-add-parking" onclick="openPlDbModal()" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;margin-left:8px">🅿 駐車場DBから追加</button>
+        <button type="button" class="btn-add-parking" onclick="sortParkingCardsByWalk()" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;margin-left:8px" title="徒歩分数の近い順（昇順）に並び替えます">🚶 徒歩分数順に並び替え</button>
       </div>
       <div class="form-section">
         <div class="form-section-title">&#128206; 添付ファイル</div>
@@ -3008,6 +3009,15 @@ function validateCase(data) {
       }
     }
   }
+  // D. 徒歩分数必須チェック（駐車場が登録されている場合）
+  if (data.parkingLots && data.parkingLots.length > 0) {
+    data.parkingLots.forEach((p, idx) => {
+      const nm = (p.name && p.name.trim()) ? p.name.trim() : ('駐車場 '+(idx+1));
+      if (p.walkMinutes == null || p.walkMinutes === '' || isNaN(Number(p.walkMinutes))) {
+        errors.push('駐車場「'+nm+'」の徒歩分数を入力してください');
+      }
+    });
+  }
   return { errors, warnings };
 }
 
@@ -3509,8 +3519,10 @@ function addParkingLotCard(pl={}) {
     '<div class="parking-card-header" onclick="toggleParkingCard(this)">' +
       '<span class="parking-card-title">🅿 ' + (pl.name ? esc(pl.name) : '駐車場 ' + (container.children.length + 1)) + '</span>' +
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+        '<button type="button" class="btn btn-xs btn-move-up" onclick="event.stopPropagation();moveParkingCard(this,-1);" style="background:#e5e7eb;color:#374151;border:none;padding:4px 8px;border-radius:4px;font-size:12px;cursor:pointer" title="上に移動（順番を入れ替え）">↑</button>' +
+        '<button type="button" class="btn btn-xs btn-move-down" onclick="event.stopPropagation();moveParkingCard(this,1);" style="background:#e5e7eb;color:#374151;border:none;padding:4px 8px;border-radius:4px;font-size:12px;cursor:pointer" title="下に移動（順番を入れ替え）">↓</button>' +
         '<button type="button" class="btn btn-xs" onclick="event.stopPropagation();pushParkingLotToDB(this);" style="background:#06b6d4;color:white;border:none;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer" title="案件側の編集内容を駐車場DBに反映">📤 DB登録/更新</button>' +
-        '<button type="button" class="btn btn-danger btn-xs" onclick="event.stopPropagation();this.closest(\'.parking-card\').remove();autoRecalcEst();updateCaseFixedPurchase();">削除</button>' +
+        '<button type="button" class="btn btn-danger btn-xs" onclick="event.stopPropagation();this.closest(\'.parking-card\').remove();renumberParkingTitles();autoRecalcEst();updateCaseFixedPurchase();">削除</button>' +
         '<span style="color:var(--gray-500)">▼</span>' +
       '</div>' +
     '</div>' +
@@ -3592,7 +3604,72 @@ function addParkingLotCard(pl={}) {
   if (_mgrSelInit) _syncInvoiceFieldDisabled(_mgrSelInit, 'pl_managerInvoiceRegNo');
 }
 function toggleParkingCard(h){const b=h.nextElementSibling,a=h.querySelector('span:last-child');b.classList.toggle('collapsed');a.textContent=b.classList.contains('collapsed')?'▶':'▼';}
-function updateParkingCardTitle(i){const t=i.closest('.parking-card').querySelector('.parking-card-title');t.textContent='🅿 '+(i.value.trim()||'駐車場');}
+function updateParkingCardTitle(i){
+  const card=i.closest('.parking-card');
+  const t=card.querySelector('.parking-card-title');
+  const v=i.value.trim();
+  if(v){t.textContent='🅿 '+v;}
+  else{
+    const cards=document.querySelectorAll('#parkingLotCards .parking-card');
+    const idx=Array.from(cards).indexOf(card);
+    t.textContent='🅿 駐車場 '+(idx+1);
+  }
+}
+function renumberParkingTitles(){
+  const cards=document.querySelectorAll('#parkingLotCards .parking-card');
+  cards.forEach((card,idx)=>{
+    const t=card.querySelector('.parking-card-title');if(!t)return;
+    const nameInput=card.querySelector('input[name="pl_name"]');
+    const nm=nameInput?nameInput.value.trim():'';
+    t.textContent='🅿 '+(nm||('駐車場 '+(idx+1)));
+  });
+}
+function moveParkingCard(btn,dir){
+  const card=btn.closest('.parking-card');if(!card)return;
+  const container=card.parentNode;
+  if(dir===-1){
+    const prev=card.previousElementSibling;
+    if(prev)container.insertBefore(card,prev);
+    else{showToast('これ以上、上に移動できません');return;}
+  }else{
+    const next=card.nextElementSibling;
+    if(next)container.insertBefore(next,card);
+    else{showToast('これ以上、下に移動できません');return;}
+  }
+  renumberParkingTitles();
+  try{autoRecalcEst();}catch(e){}
+  try{updateCaseFixedPurchase();}catch(e){}
+}
+function sortParkingCardsByWalk(){
+  const container=document.getElementById('parkingLotCards');if(!container)return;
+  const cards=Array.from(container.querySelectorAll('.parking-card'));
+  if(cards.length<2){showToast('駐車場が1件のため並び替えできません');return;}
+  // 全駐車場に徒歩分数が入力されているかチェック
+  const missing=[];
+  cards.forEach((card,idx)=>{
+    const inp=card.querySelector('input[name="pl_walkMinutes"]');
+    const val=inp?inp.value.trim():'';
+    if(val===''||isNaN(parseInt(val))){
+      const nameInput=card.querySelector('input[name="pl_name"]');
+      const nm=nameInput?nameInput.value.trim():'';
+      missing.push(nm||('駐車場 '+(idx+1)));
+    }
+  });
+  if(missing.length){
+    alert('以下の駐車場の徒歩分数が未入力のため、並び替えできません：\n\n・'+missing.join('\n・')+'\n\n徒歩分数を入力してから再度お試しください。');
+    return;
+  }
+  cards.sort((a,b)=>{
+    const va=parseInt(a.querySelector('input[name="pl_walkMinutes"]').value);
+    const vb=parseInt(b.querySelector('input[name="pl_walkMinutes"]').value);
+    return va-vb;
+  });
+  cards.forEach(card=>container.appendChild(card));
+  renumberParkingTitles();
+  try{autoRecalcEst();}catch(e){}
+  try{updateCaseFixedPurchase();}catch(e){}
+  showToast('徒歩分数の近い順に並び替えました');
+}
 function onParkingRateTypeChange(s){const c=s.closest('.parking-card'),m=s.value==='monthly';c.querySelector('.rate-group-monthly').style.display=m?'':'none';c.querySelector('.rate-group-daily').style.display=m?'none':'';}
 function triggerPhotoInput(a){a.nextElementSibling.click();}
 async function handleParkingPhoto(input){
