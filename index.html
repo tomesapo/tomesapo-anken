@@ -6437,7 +6437,10 @@ function buildMonthlyData(period) {
             if (pl.adjustmentAmount) costAmt += pl.adjustmentAmount;
           }
 
-          var costExcl = Math.round(costAmt / 1.1);
+          // 駐車場の課税区分に応じて税抜化を分岐（非課税駐車場は元から税なし）
+          var costExcl = (pl.taxCategory === 'nontaxable')
+            ? Math.round(costAmt)
+            : Math.round(costAmt / 1.1);
           result[idx].sales    += salesAmt;
           result[idx].purchase += costExcl;
           result[idx].profit   += (salesAmt - costExcl);
