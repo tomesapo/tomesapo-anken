@@ -5582,7 +5582,18 @@ async function generateKukakuzu(caseId){
       xml=lot.walkMinutes!=null?setNum(xml,'K36',lot.walkMinutes):setStr(xml,'K36','');
       xml=setStr(xml,'C38',lot.address||'');
       // v111: 土地一括は「土地一括」文字列、それ以外は数値の台数
-      if(lot.rentMode==='lump'){xml=setStr(xml,'K38','土地一括');}
+      if(lot.rentMode==='lump'){
+        xml=setStr(xml,'K38','土地一括');
+        // L列の「台」サフィックスをクリア
+        xml=setStr(xml,'L38','');
+        xml=setStr(xml,'L39','');
+        // テンプレートのK38:K39とL38:L39の縦結合を解除して、K38:L39の2x2結合に置き換える
+        xml=xml.replace(/<mergeCell ref="K38:K39"\/>/,'');
+        xml=xml.replace(/<mergeCell ref="L38:L39"\/>/,'');
+        xml=xml.replace(/<mergeCells count="(\d+)">/, function(_,n){
+          return '<mergeCells count="'+(parseInt(n)-1)+'"><mergeCell ref="K38:L39"/>';
+        });
+      }
       else{xml=lot.units!=null?setNum(xml,'K38',lot.units):setStr(xml,'K38','');}
       xml=setStr(xml,'C40',sf);
       xml=setStr(xml,'I40',ef);
