@@ -4025,7 +4025,7 @@ function renderParkingLotsDetail(c){
       ['見積期間',estPeriodStr],
       ['見積台数',pl.estimateUnits!=null?(pl.estimateUnits+' 台'):''],
       ['対応車両',pl.vehicleType||''],
-      ['空き台数',pl.vacancyUnits!=null?pl.vacancyUnits+' 台':''],
+      ['空き台数',pl.rentMode==='lump'?'土地一括':(pl.vacancyUnits!=null?pl.vacancyUnits+' 台':'')],
       ['契約台数',pl.units!=null?pl.units+' 台':''],
       ['開始月日割',pl.startProRate?'可':'不可'],['終了月日割',pl.endProRate?'可':'不可'],
       ['保証金（1台あたり）',pl.deposit!=null?'¥'+fmt(pl.deposit):''],
@@ -4336,7 +4336,9 @@ function generateProposal(caseId){
     pageLots.forEach((pl,j)=>{
       const rm=pl.rateType!=='daily';
       const rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
-      const tu=pl.vacancyUnits;
+      // v111: 土地一括は空き「土地一括」表記、台数別は通常通り
+      const isLumpVa=(pl.rentMode==='lump');
+      const tu=isLumpVa ? '土地一括' : pl.vacancyUnits;
       const estStart=pl.estimateStart||c.contractStart;
       const estEnd=pl.estimateEnd||c.contractEnd;
       inf+='<div class="ph">駐車場'+NUMS[j]+'</div>';
@@ -4350,7 +4352,7 @@ function generateProposal(caseId){
       // 終了月 removed
       if(pl.quoteKeyMoney!=null)inf+='<tr><th>礼金</th><td>¥'+fmtN(pl.quoteKeyMoney)+'</td></tr>';
       // 賃料 removed
-      if(tu)inf+='<tr><th>空き台数</th><td>'+tu+'台</td></tr>';
+      if(tu)inf+='<tr><th>空き台数</th><td>'+(isLumpVa?tu:(tu+'台'))+'</td></tr>';
       inf+='<tr><th>備考</th><td>&nbsp;</td></tr>';
       inf+='</table>';
     });
@@ -4562,7 +4564,9 @@ async function generateParkingMapExcel(){
       sc(m.sp,pl.startProRate?'\u53ef':'\u4e0d\u53ef');
       sc(m.ep,pl.endProRate?'\u53ef':'\u4e0d\u53ef');
       sc(m.k,(pl.keyMoney!=''&&pl.keyMoney!=null&&Number(pl.keyMoney)>0)?'\u6709':'\u7121');
-      if(pl.vacancyUnits!=null)nc(m.v,Number(pl.vacancyUnits));else sc(m.v,'');
+      // v111: 土地一括は「土地一括」文字列、台数別は数値
+      if(pl.rentMode==='lump')sc(m.v,'土地一括');
+      else if(pl.vacancyUnits!=null)nc(m.v,Number(pl.vacancyUnits));else sc(m.v,'');
       sc(m.vt,pl.vehicleType||'');sc(m.r,pl.lotNote||'');
     });
     sc('A5',''); // A5のマップ文字を消す
@@ -4666,7 +4670,9 @@ async function generateParkingMapExcel(){
         scN(m.sp,pl.startProRate?'\u53ef':'\u4e0d\u53ef');
         scN(m.ep,pl.endProRate?'\u53ef':'\u4e0d\u53ef');
         scN(m.k,(pl.keyMoney!=''&&pl.keyMoney!=null&&Number(pl.keyMoney)>0)?'\u6709':'\u7121');
-        if(pl.vacancyUnits!=null)ncN(m.v,Number(pl.vacancyUnits));else scN(m.v,'');
+        // v111: 土地一括は「土地一括」文字列、台数別は数値
+        if(pl.rentMode==='lump')scN(m.v,'土地一括');
+        else if(pl.vacancyUnits!=null)ncN(m.v,Number(pl.vacancyUnits));else scN(m.v,'');
         scN(m.vt,pl.vehicleType||'');scN(m.r,pl.lotNote||'');
       });
       // 駐車場番号ラベル（①②③→④⑤⑥など）を更新
