@@ -7103,6 +7103,7 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   const CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
 
   (c.parkingLots || []).forEach((pl, idx) => {
+    const isLumpInv = (pl.rentMode === 'lump'); // v111: 土地一括
     const units  = pl.units || pl.estimateUnits || 0;
     const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
     let months = period.months, days = period.days;
@@ -7152,12 +7153,14 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       ? fmtD(pl.contractStart) + '〜' + fmtD(pl.contractEnd) + '　賃料'
       : '賃料';
     const periodCell = fmtPlPeriod(months, days) || (months + 'ヶ月');
-    dataRows.push({ kind:'data', item: periodTxt, qty: units, per: periodCell, up: unitPrice, amt: rentAmt });
+    // v111: 土地一括時は数量列を「土地一括」文字列にする
+    const qtyVal = isLumpInv ? '土地一括' : units;
+    dataRows.push({ kind:'data', item: periodTxt, qty: qtyVal, per: periodCell, up: unitPrice, amt: rentAmt });
     if (keyMoney > 0) {
-      dataRows.push({ kind:'data', item: '礼金', qty: units, per: '-', up: keyMoney, amt: keyAmt });
+      dataRows.push({ kind:'data', item: '礼金', qty: qtyVal, per: '-', up: keyMoney, amt: keyAmt });
     }
     if (adminFee > 0) {
-      dataRows.push({ kind:'data', item: '事務手数料', qty: units, per: '-', up: adminFee, amt: adminAmt });
+      dataRows.push({ kind:'data', item: '事務手数料', qty: qtyVal, per: '-', up: adminFee, amt: adminAmt });
     }
     // 'auto'モードはここで駐車場ごとに業者費用行を追加
     if (feeMode === 'auto' && agencyFeeAmt !== 0) {
