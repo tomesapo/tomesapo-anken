@@ -4567,10 +4567,11 @@ async function generateParkingMapExcel(){
       sc(m.ep,pl.endProRate?'\u53ef':'\u4e0d\u53ef');
       sc(m.k,(pl.keyMoney!=''&&pl.keyMoney!=null&&Number(pl.keyMoney)>0)?'\u6709':'\u7121');
       // v111: 土地一括は「土地一括」文字列、台数別は数値
-      // テンプレートのR列に「台」サフィックスがあるため、土地一括時はそれもクリア
+      // テンプレートのT列に「台」サフィックスがあるため、土地一括時はそれもクリア
+      // （R列は「空き状況」ラベルなので消さない）
       if(pl.rentMode==='lump'){
         sc(m.v,'土地一括');
-        sc('R'+m.v.substring(1),''); // R8/R22/R36 の「台」を消す
+        sc('T'+m.v.substring(1),''); // T8/T22/T36 の「台」を消す
       }
       else if(pl.vacancyUnits!=null)nc(m.v,Number(pl.vacancyUnits));else sc(m.v,'');
       sc(m.vt,pl.vehicleType||'');sc(m.r,pl.lotNote||'');
@@ -4677,10 +4678,10 @@ async function generateParkingMapExcel(){
         scN(m.ep,pl.endProRate?'\u53ef':'\u4e0d\u53ef');
         scN(m.k,(pl.keyMoney!=''&&pl.keyMoney!=null&&Number(pl.keyMoney)>0)?'\u6709':'\u7121');
         // v111: 土地一括は「土地一括」文字列、台数別は数値
-        // テンプレートのR列に「台」サフィックスがあるため、土地一括時はそれもクリア
+        // テンプレートのT列に「台」サフィックスがあるため、土地一括時はそれもクリア
         if(pl.rentMode==='lump'){
           scN(m.v,'土地一括');
-          scN('R'+m.v.substring(1),''); // R8/R22/R36 の「台」を消す
+          scN('T'+m.v.substring(1),''); // T8/T22/T36 の「台」を消す
         }
         else if(pl.vacancyUnits!=null)ncN(m.v,Number(pl.vacancyUnits));else scN(m.v,'');
         scN(m.vt,pl.vehicleType||'');scN(m.r,pl.lotNote||'');
