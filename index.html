@@ -4468,6 +4468,7 @@ function generateProposal(caseId){
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
         vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
+        rentMode:pl.rentMode||'perUnit',
         estEnd:pl.estimateEnd||c.contractEnd||'',
         startProRate:!!pl.startProRate,
         endProRate:!!pl.endProRate,
@@ -4517,6 +4518,7 @@ async function generateParkingMapExcelDirect(caseId){
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
         vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
+        rentMode:pl.rentMode||'perUnit',
         estEnd:pl.estimateEnd||c.contractEnd||'',
         startProRate:!!pl.startProRate,
         endProRate:!!pl.endProRate,
@@ -5381,6 +5383,7 @@ async function generateProposalDocument(caseId){
           units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
           estStart:pl.estimateStart||c.contractStart||'',vehicleType:pl.vehicleType||'',
           vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
+        rentMode:pl.rentMode||'perUnit',
           estEnd:pl.estimateEnd||c.contractEnd||'',startProRate:!!pl.startProRate,endProRate:!!pl.endProRate,
           lotNote:pl.lotNote||'',photo:pl.photo||''};
       })
