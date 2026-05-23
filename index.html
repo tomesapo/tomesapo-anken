@@ -5584,9 +5584,14 @@ async function generateKukakuzu(caseId){
       // v111: 土地一括は「土地一括」文字列、それ以外は数値の台数
       if(lot.rentMode==='lump'){
         xml=setStr(xml,'K38','土地一括');
-        // L列の「台」サフィックスをクリア
-        xml=setStr(xml,'L38','');
-        xml=setStr(xml,'L39','');
+        // L38は「台」を含むので、self-closing空セルに置換（スタイルは保持）
+        // 結合領域内のサブセルに値が残るとExcelが破損警告を出すため
+        xml=xml.replace(/<c\b[^>]*\br="L38"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/,function(mm){
+          var sm=mm.match(/\bs="(\d+)"/);
+          var sa=sm?' s="'+sm[1]+'"':'';
+          return '<c r="L38"'+sa+'/>';
+        });
+        // K39, L39 はテンプレート上もともと self-closing なのでそのまま
         // テンプレートのK38:K39とL38:L39の縦結合を解除して、K38:L39の2x2結合に置き換える
         xml=xml.replace(/<mergeCell ref="K38:K39"\/>/,'');
         xml=xml.replace(/<mergeCell ref="L38:L39"\/>/,'');
