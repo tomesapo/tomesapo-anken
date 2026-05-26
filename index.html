@@ -10125,4 +10125,101 @@ window.addEventListener('DOMContentLoaded', initApp);
       <div style="display:flex;align-items:center;gap:10px">
         <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 16px;cursor:pointer;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-weight:500">
           📁 区画図画像を選択
-   
+          <input type="file" id="pmf_layoutImage" accept="image/*" style="display:none" onchange="uploadPMLayout()">
+        </label>
+        <span id="pmf_layoutProgress" style="font-size:12px;color:#6366f1"></span>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">Excelの区画図を画像（PNG/JPG）で保存。一度借りた駐車場の区画図を保管し、再利用時の現地調査の手間を省きます。</div>
+      <div class="pmf-group">
+        <label>条件メモ</label>
+        <textarea id="pmf_memo" placeholder="特記事項・条件など自由記入"></textarea>
+      </div>
+    </div>
+    <div class="pmf-footer">
+      <button class="btn btn-ghost" onclick="closePMForm()">キャンセル</button>
+      <button class="btn btn-primary" onclick="savePM()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 🔧 DEBUGパネル（Ctrl+Shift+D で開閉） ═══ -->
+<div id="dbgPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
+     background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:11px;padding:12px;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <strong style="color:#4ec9b0">📊 XLSXアナライザー</strong>
+    <label style="background:#0078d4;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer">
+      ファイル選択
+      <input type="file" id="dbgFileIn" accept=".xlsx" style="display:none">
+    </label>
+    <button onclick="dbgCopy()" style="padding:4px 10px;border-radius:4px;cursor:pointer">📋 コピー</button>
+    <button onclick="document.getElementById('dbgPanel').style.display='none'"
+            style="padding:4px 10px;border-radius:4px;cursor:pointer;margin-left:auto">✕ 閉じる</button>
+  </div>
+  <pre id="dbgOut" style="max-height:50vh;overflow:auto;margin:0;white-space:pre-wrap"></pre>
+</div>
+<script>
+(function(){
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      const p = document.getElementById('dbgPanel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+  document.getElementById('dbgFileIn').addEventListener('change', function(){
+    const file = this.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      if (!window.XLSX) { document.getElementById('dbgOut').textContent = 'XLSXライブラリ未ロード'; return; }
+      const wb = XLSX.read(e.target.result, {type:'binary', cellStyles:true});
+      const wsName = wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const out = {
+        sheetName: wsName,
+        ref: ws['!ref'],
+        cols: ws['!cols'] || [],
+        rows: ws['!rows'] || [],
+        merges: (ws['!merges']||[]).map(m => XLSX.utils.encode_cell(m.s)+':'+XLSX.utils.encode_cell(m.e)),
+        cells: {}
+      };
+      Object.keys(ws).forEach(k => {
+        if (k.startsWith('!')) return;
+        const cell = ws[k];
+        const info = {v: cell.v, t: cell.t};
+        if (cell.s) {
+          info.s = {};
+          if (cell.s.font)      info.s.font      = cell.s.font;
+          if (cell.s.fill)      info.s.fill      = cell.s.fill;
+          if (cell.s.alignment) info.s.alignment = cell.s.alignment;
+          if (cell.s.border)    info.s.border    = '(has border)';
+          if (cell.s.numFmt)    info.s.numFmt    = cell.s.numFmt;
+        }
+        out.cells[k] = info;
+      });
+      document.getElementById('dbgOut').textContent = JSON.stringify(out, null, 2);
+    };
+    reader.readAsBinaryString(file);
+  });
+  window.dbgCopy = function(){
+    const txt = document.getElementById('dbgOut').textContent || '';
+    if (!txt) { alert('コピーする内容がありません'); return; }
+    navigator.clipboard.writeText(txt).then(
+      ()=>alert('クリップボードにコピーしました'),
+      ()=>alert('コピーに失敗しました')
+    );
+  };
+})();
+</script>
+
+<!-- PWA: Service Worker 登録 -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(err){
+      console.warn('SW register failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
