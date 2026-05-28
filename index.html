@@ -3193,7 +3193,12 @@ function openDetail(id) {
   }
   if(c.caseNote){html+='<div class="detail-section"><div class="detail-section-title">案件メモ</div><div style="font-size:13px;color:var(--gray-700);line-height:1.7;white-space:pre-wrap">'+esc(c.caseNote)+'</div></div>';}
   if(c.statusHistory&&c.statusHistory.length){
-    html+='<div class="detail-section"><div class="detail-section-title">ステータス履歴</div><div class="status-timeline">';
+    // v111: 折りたたみ対応（localStorage で状態を記憶。デフォルト=開）
+    var _shCollapsed = false;
+    try { _shCollapsed = localStorage.getItem('detailStatusHistoryCollapsed') === '1'; } catch(_) {}
+    var _shArrow = _shCollapsed ? '▶' : '▼';
+    var _shHidden = _shCollapsed ? ' style="display:none"' : '';
+    html+='<div class="detail-section"><div class="detail-section-title" onclick="toggleStatusHistory(this)" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between"><span>ステータス履歴 <span style="font-weight:400;color:#9ca3af;font-size:10px">('+c.statusHistory.length+'件)</span></span><span class="sh-arrow" style="font-size:12px;color:#6b7280">'+_shArrow+'</span></div><div class="status-timeline sh-body"'+_shHidden+'>';
     const hist=[...c.statusHistory].reverse();
     hist.forEach((h,i)=>{
       const isCurrent=(i===0);
@@ -3607,6 +3612,16 @@ function addParkingLotCard(pl={}) {
   if (_mgrSelInit) _syncInvoiceFieldDisabled(_mgrSelInit, 'pl_managerInvoiceRegNo');
 }
 function toggleParkingCard(h){const b=h.nextElementSibling,a=h.querySelector('span:last-child');b.classList.toggle('collapsed');a.textContent=b.classList.contains('collapsed')?'▶':'▼';}
+// v111: 案件詳細パネルの「ステータス履歴」開閉トグル（localStorageで状態記憶）
+function toggleStatusHistory(headerEl){
+  var body = headerEl.parentElement.querySelector('.sh-body');
+  var arrow = headerEl.querySelector('.sh-arrow');
+  if (!body || !arrow) return;
+  var nowHidden = body.style.display !== 'none';
+  body.style.display = nowHidden ? 'none' : '';
+  arrow.textContent = nowHidden ? '▶' : '▼';
+  try { localStorage.setItem('detailStatusHistoryCollapsed', nowHidden ? '1' : '0'); } catch(_) {}
+}
 function updateParkingCardTitle(i){
   const card=i.closest('.parking-card');
   const t=card.querySelector('.parking-card-title');
