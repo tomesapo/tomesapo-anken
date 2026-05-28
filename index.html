@@ -6142,9 +6142,9 @@ const _DEFAULT_MAIL_TEMPLATES = {
 // テンプレート種類別の使用可能プレースホルダ
 const _MAIL_PLACEHOLDERS = {
   proposal: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','branchAddress','branchFax'],
-  invoice: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','caseAmount','paymentDue'],
-  kakutei: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','contractStart','contractEnd'],
-  application_fax: ['supplierName','plName','unitsLabel','contractStart','contractEnd','branchName','ourStaffName','branchTel','branchFax','branchEmail','ourStaffMobile']
+  invoice: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','branchAddress','caseAmount','paymentDue'],
+  kakutei: ['customerName','staffName','caseNo','siteName','branchName','ourStaffName','ourStaffMobile','branchTel','branchEmail','branchAddress','contractStart','contractEnd'],
+  application_fax: ['supplierName','plName','unitsLabel','contractStart','contractEnd','branchName','ourStaffName','branchTel','branchFax','branchEmail','branchAddress','ourStaffMobile']
 };
 
 let _mtCurrentType = 'proposal';
@@ -6331,6 +6331,7 @@ async function openInvoiceMail(data){
     ourStaffName: data.ourStaffName||'',
     branchTel: br.tel||'',
     branchEmail: br.email||'info@tomesapo.co.jp',
+    branchAddress: br.address||'',
     ourStaffMobile: data.ourStaffMobile||'',
     caseAmount: (data.taxIncludedSales||0).toLocaleString('ja-JP'),
     paymentDue: fmtJ(data.paymentDue||'')
@@ -6361,6 +6362,7 @@ async function openKakuteiMail(data){
     ourStaffName: data.ourStaffName||'',
     branchTel: br.tel||'',
     branchEmail: br.email||'info@tomesapo.co.jp',
+    branchAddress: br.address||'',
     ourStaffMobile: data.ourStaffMobile||'',
     contractStart: fmtJ(data.contractStart||''),
     contractEnd: fmtJ(data.contractEnd||'')
@@ -6412,6 +6414,7 @@ async function openApplicationFaxMail(data) {
     branchTel: branch.tel||'',
     branchFax: branch.fax||'',
     branchEmail: branch.email||'info@tomesapo.co.jp',
+    branchAddress: branch.address||'',
     ourStaffMobile: c.ourStaffMobile||''
   };
   const rendered = applyMailTemplate('application_fax', vars);
