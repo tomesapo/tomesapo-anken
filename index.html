@@ -2589,7 +2589,7 @@ function calcEstProfit() {
     em.style.color=margin<0?'#dc2626':margin>0?'#16a34a':'';
   }
 }
-function calcParkingLotProfit(pl, contractStart, contractEnd) {
+function calcParkingLotProfit(pl, contractStart, contractEnd, caseObj, plIdx) {
   // 駐車場ごとの見積期間を優先、なければ案件の契約期間にフォールバック
   const estStart=pl.estimateStart||contractStart||'';
   const estEnd=pl.estimateEnd||contractEnd||'';
@@ -2609,7 +2609,7 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
-  const quoteSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
+  let quoteSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
@@ -2617,11 +2617,16 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
   const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
   const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
+  // v111: 業者費用「任意金額」モードの按分を見積売上に加算（仕入には影響しない）
+  if (caseObj && plIdx!=null && typeof calcAgencyFeeShare==='function'){
+    var _agency = calcAgencyFeeShare(caseObj, plIdx) || 0;
+    quoteSales += _agency;
+  }
   const profit=quoteSales-costTotal;
   const margin=quoteSales>0?Math.round(profit/quoteSales*1000)/10:0;
   return{quoteSales,costTotal,profit,margin};
 }
-function calcParkingLotFixed(pl) {
+function calcParkingLotFixed(pl, caseObj, plIdx) {
   // 確定期間・台数ベースの売上・粗利計算
   const start=pl.contractStart||'';
   const end=pl.contractEnd||'';
@@ -2641,7 +2646,7 @@ function calcParkingLotFixed(pl) {
   const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,start,end,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,start,end,units,pl.startProRate,pl.endProRate);
-  const fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
+  let fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
@@ -2649,6 +2654,11 @@ function calcParkingLotFixed(pl) {
   // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
   const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
   const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
+  // v111: 業者費用「任意金額」モードの按分を確定売上に加算（仕入には影響しない）
+  if (caseObj && plIdx!=null && typeof calcAgencyFeeShare==='function'){
+    var _agency = calcAgencyFeeShare(caseObj, plIdx) || 0;
+    fixedSales += _agency;
+  }
   const profit=fixedSales-costTotal;
   const margin=fixedSales>0?Math.round(profit/fixedSales*1000)/10:0;
   return{fixedSales,costTotal,profit,margin};
@@ -2664,8 +2674,12 @@ function autoCalcCaseEstimate() {
     calcEstProfit();return;
   }
   let totalQ=0,totalC=0,counted=0;
-  lots.forEach(pl=>{
-    const r=calcParkingLotProfit(pl,cs,ce);
+  // v111: 業者費用任意金額モードも反映するため、case-shapeのオブジェクトを組み立てる
+  const _feeModeNow = document.querySelector('input[name="feeMode"]:checked')?.value || 'none';
+  const _agencyFeeUnitNow = parseFloat(document.getElementById('f_agencyFeeUnit')?.value)||0;
+  const _caseShape = { feeMode:_feeModeNow, agencyFeeUnit:_agencyFeeUnitNow, parkingLots:lots };
+  lots.forEach((pl,idx)=>{
+    const r=calcParkingLotProfit(pl,cs,ce,_caseShape,idx);
     if(r){totalQ+=r.quoteSales;totalC+=r.costTotal;counted++;}
   });
   if(!counted){
@@ -4193,7 +4207,7 @@ function renderParkingLotsDetail(c){
     h+='</div></div>';
     // 粗利サマリー（契約期間がある場合）
     {
-      const pr=calcParkingLotProfit(pl,c.contractStart||'',c.contractEnd||'');
+      const pr=calcParkingLotProfit(pl,c.contractStart||'',c.contractEnd||'',c,i);
         if(pr&&(pr.quoteSales||pr.costTotal)){
         const pc=pr.profit>=0?'#16a34a':'#dc2626';
         const estPeriod=(pl.estimateStart&&pl.estimateEnd)?(pl.estimateStart+' ～ '+pl.estimateEnd):(c.contractStart&&c.contractEnd)?'(案件契約期間使用)':'';
@@ -4213,7 +4227,7 @@ function renderParkingLotsDetail(c){
     }
     // 確定売上サマリー（契約期間・台数がある場合）
     {
-      const fx=calcParkingLotFixed(pl);
+      const fx=calcParkingLotFixed(pl,c,i);
       if(fx){
         const pc=fx.profit>=0?'#0369a1':'#dc2626';
         const fxPeriod=pl.contractStart&&pl.contractEnd?(pl.contractStart+' ～ '+pl.contractEnd):'';
@@ -4236,7 +4250,7 @@ function renderParkingLotsDetail(c){
   // 複数駐車場の合計粗利
   if(c.parkingLots.length>1){
     let tQ=0,tC=0;
-    c.parkingLots.forEach(pl=>{const r=calcParkingLotProfit(pl,c.contractStart||'',c.contractEnd||'');if(r){tQ+=r.quoteSales;tC+=r.costTotal;}});
+    c.parkingLots.forEach((pl,plIdx)=>{const r=calcParkingLotProfit(pl,c.contractStart||'',c.contractEnd||'',c,plIdx);if(r){tQ+=r.quoteSales;tC+=r.costTotal;}});
     const tP=tQ-tC,tM=tQ>0?Math.round(tP/tQ*1000)/10:0;
     const pc=tP>=0?'#86efac':'#fca5a5';
     h+='<div style="background:#1e3a5f;color:white;border-radius:8px;padding:12px;margin-top:4px">';
@@ -4249,7 +4263,7 @@ function renderParkingLotsDetail(c){
     h+='</div></div>';
     // 全駐車場 確定売上合計
     let tfS=0,tfC=0,tfCount=0;
-    c.parkingLots.forEach(pl=>{const r=calcParkingLotFixed(pl);if(r){tfS+=r.fixedSales;tfC+=r.costTotal;tfCount++;}});
+    c.parkingLots.forEach((pl,plIdx)=>{const r=calcParkingLotFixed(pl,c,plIdx);if(r){tfS+=r.fixedSales;tfC+=r.costTotal;tfCount++;}});
     if(tfCount>0){
       const tfP=tfS-tfC,tfM=tfS>0?Math.round(tfP/tfS*1000)/10:0;
       const fpc=tfP>=0?'#93c5fd':'#fca5a5';
