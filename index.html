@@ -3688,7 +3688,13 @@ function sortParkingCardsByWalk(){
   try{updateCaseFixedPurchase();}catch(e){}
   showToast('徒歩分数の近い順に並び替えました');
 }
-function onParkingRateTypeChange(s){const c=s.closest('.parking-card'),m=s.value==='monthly';c.querySelector('.rate-group-monthly').style.display=m?'':'none';c.querySelector('.rate-group-daily').style.display=m?'none':'';}
+function onParkingRateTypeChange(s){
+  const c=s.closest('.parking-card'),m=s.value==='monthly';
+  // 仕入価格・見積価格の両方に rate-group-monthly / rate-group-daily が各1つずつあるため、
+  // querySelectorAll で全部切替える必要がある（querySelectorだと先頭1つしか切替わらない）
+  c.querySelectorAll('.rate-group-monthly').forEach(function(el){ el.style.display = m?'':'none'; });
+  c.querySelectorAll('.rate-group-daily').forEach(function(el){ el.style.display = m?'none':''; });
+}
 function onPlRentModeChange(sel){
   const card = sel.closest('.parking-card');
   if (!card) return;
