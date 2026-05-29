@@ -2600,17 +2600,22 @@ function calcParkingLotProfit(pl, contractStart, contractEnd) {
   const quoteKeyMoney=pl.quoteKeyMoney||0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
+  // v111: コインP封鎖手数料(一式・台数を掛けない)
+  const quoteBlockingFee=pl.quoteBlockingFee||0;
+  const costBlockingFee=pl.blockingFee||0;
   // 仕入は税込で入力されており、税抜換算は税区分次第（課税のみ /1.1）
   const ownerT=!!pl.ownerTaxable;
   const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,estStart,estEnd,units,pl.startProRate,pl.endProRate);
-  const quoteSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney;
+  const quoteSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
   const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
-  const costTotal=costRentExTax+costAdminExTax+costKeyExTax;
+  // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
+  const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
+  const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
   const profit=quoteSales-costTotal;
   const margin=quoteSales>0?Math.round(profit/quoteSales*1000)/10:0;
   return{quoteSales,costTotal,profit,margin};
@@ -2627,17 +2632,22 @@ function calcParkingLotFixed(pl) {
   const quoteKeyMoney=pl.quoteKeyMoney||0;
   const costAdminFee=pl.adminFee??0;
   const costKeyMoney=pl.keyMoney??0;
+  // v111: コインP封鎖手数料(一式・台数を掛けない)
+  const quoteBlockingFee=pl.quoteBlockingFee||0;
+  const costBlockingFee=pl.blockingFee||0;
   // 税区分（地主/管理会社）に基づき税抜換算を分岐
   const ownerT=!!pl.ownerTaxable;
   const managerT=!!pl.managerTaxable;
   const qRows=calcMonthlyRentRows(pl.rateType,quoteRate,start,end,units,pl.startProRate,pl.endProRate);
   const cRows=calcMonthlyRentRows(pl.rateType,costRate,start,end,units,pl.startProRate,pl.endProRate);
-  const fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney;
+  const fixedSales=qRows.reduce((s,r)=>s+r.amount,0)+units*quoteAdminFee+units*quoteKeyMoney+quoteBlockingFee;
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
   const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
-  const costTotal=costRentExTax+costAdminExTax+costKeyExTax;
+  // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
+  const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
+  const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
   const profit=fixedSales-costTotal;
   const margin=fixedSales>0?Math.round(profit/fixedSales*1000)/10:0;
   return{fixedSales,costTotal,profit,margin};
@@ -2713,6 +2723,9 @@ function calcPlPurchase(el){
   const startProRate=(g('pl_startProRate')?g('pl_startProRate').value:'')==='true';
   const endProRate  =(g('pl_endProRate')?g('pl_endProRate').value:'')==='true';
   const quoteKeyMoney=parseFloat(g('pl_quoteKeyMoney')?g('pl_quoteKeyMoney').value:0)||0;
+  // v111: コインP封鎖手数料(一式・台数を掛けない)
+  const blockingFee=parseFloat(g('pl_blockingFee')?g('pl_blockingFee').value:0)||0;
+  const quoteBlockingFee=parseFloat(g('pl_quoteBlockingFee')?g('pl_quoteBlockingFee').value:0)||0;
   const deposit=parseFloat(g('pl_deposit')?g('pl_deposit').value:0)||0;
   const pa=g('pl_purchaseAmount');
   const ia=g('pl_invoiceAmount');
@@ -2726,10 +2739,13 @@ function calcPlPurchase(el){
       }
     }
     if(rentPart!=null){
-      const purchase=rentPart+adminFee*units+keyMoney*units+adjustment;
+      // 封鎖手数料は「一式」のため units を掛けず加算
+      const purchase=rentPart+adminFee*units+keyMoney*units+adjustment+blockingFee;
       pa.value=fmt(purchase);
       const effectiveKey=quoteKeyMoney||keyMoney;
-      const invoice=purchase-keyMoney*units+effectiveKey*units+deposit*units;
+      const effectiveBlocking=quoteBlockingFee||blockingFee;
+      // 請求額 = 仕入 − 仕入礼金×台 + 見積礼金×台 + 保証金×台 − 仕入封鎖 + 見積封鎖
+      const invoice=purchase-keyMoney*units+effectiveKey*units+deposit*units-blockingFee+effectiveBlocking;
       if(ia)ia.value=fmt(invoice);
     }else{pa.value='';if(ia)ia.value='';}
   }
@@ -3566,6 +3582,7 @@ function addParkingLotCard(pl={}) {
             '<div class="form-group rate-group-daily"'+(rm?' style="display:none"':'')+'><label>仕入日額賃料 <span class="auto-tag">税込</span></label><input type="number" name="pl_dailyRent" min="0" placeholder="0" value="'+(pl.dailyRent!=null?pl.dailyRent:'')+'"></div>' +
             '<div class="form-group"><label>仕入手数料 <span class="auto-tag">税込</span></label><input type="number" name="pl_adminFee" min="0" placeholder="0" value="'+(pl.adminFee!=null?pl.adminFee:'')+'"></div>' +
             '<div class="form-group"><label>仕入礼金 <span class="auto-tag">税込</span></label><input type="number" name="pl_keyMoney" min="0" placeholder="0" value="'+(pl.keyMoney!=null?pl.keyMoney:'')+'" onchange="calcPlPurchase(this)"></div>' +
+            '<div class="form-group"><label>仕入封鎖手数料 <span class="auto-tag">税込・一式</span></label><input type="number" name="pl_blockingFee" min="0" placeholder="0" value="'+(pl.blockingFee!=null?pl.blockingFee:'')+'" onchange="calcPlPurchase(this)" title="コインPのフラップ封鎖/解除など、台数に依らず一式で発生する費用"></div>' +
           '</div>' +
         '</div>' +
         '<div class="form-group span-3" style="background:#eff6ff;border-radius:6px;padding:8px 10px 2px;margin-bottom:0"><div style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:6px">見積価格（見積書用）</div>' +
@@ -3574,6 +3591,7 @@ function addParkingLotCard(pl={}) {
             '<div class="form-group rate-group-daily"'+(rm?' style="display:none"':'')+'><label>見積日額賃料 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteDailyRent" min="0" placeholder="0" value="'+(pl.quoteDailyRent!=null?pl.quoteDailyRent:'')+'"></div>' +
             '<div class="form-group"><label>見積手数料 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteAdminFee" min="0" placeholder="0" value="'+(pl.quoteAdminFee!=null?pl.quoteAdminFee:'')+'"></div>' +
             '<div class="form-group"><label>見積礼金 <span class="auto-tag">税別</span></label><input type="number" name="pl_quoteKeyMoney" min="0" placeholder="0" value="'+(pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'')+'"></div>' +
+            '<div class="form-group"><label>見積封鎖手数料 <span class="auto-tag">税別・一式</span></label><input type="number" name="pl_quoteBlockingFee" min="0" placeholder="0" value="'+(pl.quoteBlockingFee!=null?pl.quoteBlockingFee:'')+'" onchange="calcPlPurchase(this)" title="コインPのフラップ封鎖/解除など、台数に依らず一式で計上する見積額"></div>' +
           '</div>' +
         '</div>' +
         '<div class="form-group span-3" style="background:#f0fdf4;border-radius:6px;padding:8px 10px 6px;margin-bottom:0"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:6px">🤝 契約情報（受注後）</div><div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">' +
@@ -4010,9 +4028,11 @@ function getParkingLotsFromForm(){
       monthlyRent:rt==='monthly'?(parseFloat(g('pl_monthlyRent').value)||null):null,
       dailyRent:rt==='daily'?(parseFloat(g('pl_dailyRent').value)||null):null,
       adminFee:parseFloat(g('pl_adminFee').value)||null,keyMoney:parseFloat(g('pl_keyMoney').value)||null,deposit:parseFloat(g('pl_deposit').value)||null,
+      blockingFee:g('pl_blockingFee')?(parseFloat(g('pl_blockingFee').value)||null):null, // v111: コインP封鎖手数料(税込・一式)
       quoteMonthlyRent:rt==='monthly'?(parseFloat(g('pl_quoteMonthlyRent').value)||null):null,
       quoteDailyRent:rt==='daily'?(parseFloat(g('pl_quoteDailyRent').value)||null):null,
       quoteAdminFee:parseFloat(g('pl_quoteAdminFee').value)||null,quoteKeyMoney:parseFloat(g('pl_quoteKeyMoney').value)||null,
+      quoteBlockingFee:g('pl_quoteBlockingFee')?(parseFloat(g('pl_quoteBlockingFee').value)||null):null, // v111: コインP封鎖手数料(税別・一式)
       startProRate:g('pl_startProRate').value==='true',endProRate:g('pl_endProRate').value==='true',
       contractStart:g('pl_contractStart')?g('pl_contractStart').value||'':'',
       contractEnd:g('pl_contractEnd')?g('pl_contractEnd').value||'':'',
@@ -4184,12 +4204,15 @@ function generateEstimate(caseId,plId){
   const quoteRent=pl.rateType==='daily'?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
   const quoteAdminFee=pl.quoteAdminFee||0;
   const quoteKeyMoney=pl.quoteKeyMoney||0;
+  // v111: コインP封鎖手数料(一式・台数を掛けない・見積=quote, 仕入=blockingFee)
+  const quoteBlockingFee=pl.quoteBlockingFee||0;
   const estStart=pl.estimateStart||c.contractStart||'';
   const estEnd=pl.estimateEnd||c.contractEnd||'';
   const rentRows=calcMonthlyRentRows(pl.rateType,quoteRent,estStart,estEnd,units,pl.startProRate,pl.endProRate,isLump);
   const extras=[];
   if(quoteKeyMoney)extras.push({label:'礼金',qty:qtyLbl,period:'-',unitPrice:quoteKeyMoney,amount:units*quoteKeyMoney});
   if(quoteAdminFee)extras.push({label:'事務手数料',qty:qtyLbl,period:'-',unitPrice:quoteAdminFee,amount:units*quoteAdminFee});
+  if(quoteBlockingFee)extras.push({label:'封鎖手数料',qty:'一式',period:'-',unitPrice:quoteBlockingFee,amount:quoteBlockingFee});
   const allRows=[...rentRows,...extras];
   const subtotal=allRows.reduce((s,r)=>s+r.amount,0);
   const tax=Math.floor(subtotal*0.1);
@@ -4485,6 +4508,7 @@ function generateProposal(caseId){
         rentUnit:rm?'/月':'/日',
         adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
         keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
+        blockingFee:pl.blockingFee!=null?pl.blockingFee:null, quoteBlockingFee:pl.quoteBlockingFee!=null?pl.quoteBlockingFee:null,
         units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
@@ -4535,6 +4559,7 @@ async function generateParkingMapExcelDirect(caseId){
         rentUnit:rm?'/月':'/日',
         adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
         keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
+        blockingFee:pl.blockingFee!=null?pl.blockingFee:null, quoteBlockingFee:pl.quoteBlockingFee!=null?pl.quoteBlockingFee:null,
         units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
         estStart:pl.estimateStart||c.contractStart||'',
         vehicleType:pl.vehicleType||'',
@@ -5159,6 +5184,8 @@ async function generateEstimateExcel(caseId){
       var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
       var quoteAdminFee=pl.quoteAdminFee||0;
       var quoteKeyMoney=pl.quoteKeyMoney||0;
+      // v111: コインP封鎖手数料(一式・台数を掛けない)
+      var quoteBlockingFee=pl.quoteBlockingFee||0;
       // 仕入は税込入力。地主税区分/管理会社税区分で課税のときだけ税抜換算
       var ownerT = !!pl.ownerTaxable;
       var managerT = !!pl.managerTaxable;
@@ -5166,10 +5193,13 @@ async function generateEstimateExcel(caseId){
       var purchaseRent = ownerT ? Math.round(purchaseRentRaw/1.1) : purchaseRentRaw;
       var purchaseAdminFee = managerT ? (pl.adminFee?Math.round(pl.adminFee/1.1):0) : (pl.adminFee||0);
       var purchaseKeyMoney = ownerT ? (pl.keyMoney?Math.round(pl.keyMoney/1.1):0) : (pl.keyMoney||0);
+      // 封鎖手数料仕入(税抜): 駐車場の課税区分(taxCategory)準拠
+      var purchaseBlockingFee = (pl.taxCategory==='nontaxable') ? (pl.blockingFee||0) : (pl.blockingFee ? Math.round(pl.blockingFee/1.1) : 0);
       // 'auto'モードのときだけ仕入額表示、それ以外（none/manual）は見積額表示
       var displayRent = (feeMode==='auto') ? purchaseRent : quoteRent;
       var displayAdminFee = (feeMode==='auto') ? purchaseAdminFee : quoteAdminFee;
       var displayKeyMoney = (feeMode==='auto') ? purchaseKeyMoney : quoteKeyMoney;
+      var displayBlockingFee = (feeMode==='auto') ? purchaseBlockingFee : quoteBlockingFee;
       var estStart=pl.estimateStart||c.contractStart||"";
       var estEnd=pl.estimateEnd||c.contractEnd||"";
       var estimateNo=c.caseNo+"-P"+(plIdx+1);
@@ -5186,6 +5216,8 @@ async function generateEstimateExcel(caseId){
       var extras=[];
       if(displayKeyMoney)extras.push({label:"礼金",period:"-",unitPrice:displayKeyMoney,amount:units*displayKeyMoney});
       if(displayAdminFee)extras.push({label:"事務手数料",period:"-",unitPrice:displayAdminFee,amount:units*displayAdminFee});
+      // v111: 封鎖手数料(一式)
+      if(displayBlockingFee)extras.push({label:"封鎖手数料",period:"-",unitPrice:displayBlockingFee,amount:displayBlockingFee,isLump:true});
       // 業者費用行（モード別）
       if(feeMode==='auto'){
         // 自動計算: 業者費用 = 見積合計 − 仕入合計
@@ -5193,8 +5225,8 @@ async function generateEstimateExcel(caseId){
         var quoteRentTotal=quoteRentRows.reduce(function(s,r){return s+r.amount;},0);
         var purchaseRentRows=calcMonthlyRentRows(pl.rateType,purchaseRent,estStart,estEnd,units,pl.startProRate,pl.endProRate,isLumpEx);
         var purchaseRentTotal=purchaseRentRows.reduce(function(s,r){return s+r.amount;},0);
-        var quoteAllTotal=quoteRentTotal+(quoteKeyMoney||0)*units+(quoteAdminFee||0)*units;
-        var purchaseAllTotal=purchaseRentTotal+(purchaseKeyMoney||0)*units+(purchaseAdminFee||0)*units;
+        var quoteAllTotal=quoteRentTotal+(quoteKeyMoney||0)*units+(quoteAdminFee||0)*units+(quoteBlockingFee||0);
+        var purchaseAllTotal=purchaseRentTotal+(purchaseKeyMoney||0)*units+(purchaseAdminFee||0)*units+(purchaseBlockingFee||0);
         var agencyFee=quoteAllTotal-purchaseAllTotal;
         if(agencyFee<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
         extras.push({label:feeLabel,period:"-",unitPrice:agencyFee,amount:agencyFee,isAgency:true});
@@ -5402,6 +5434,7 @@ async function generateProposalDocument(caseId){
           rateType:rm?'\u6708\u6255':'\u65e5\u6255',rent:rent!=null?rent:'',rentUnit:rm?'/\u6708':'/\u65e5',
           adminFee:pl.quoteAdminFee!=null?pl.quoteAdminFee:'',
           keyMoney:pl.quoteKeyMoney!=null?pl.quoteKeyMoney:'',
+        blockingFee:pl.blockingFee!=null?pl.blockingFee:null, quoteBlockingFee:pl.quoteBlockingFee!=null?pl.quoteBlockingFee:null,
           units:pl.estimateUnits!=null?pl.estimateUnits:(pl.units!=null?pl.units:''),
           estStart:pl.estimateStart||c.contractStart||'',vehicleType:pl.vehicleType||'',
           vacancyUnits:pl.vacancyUnits!=null?pl.vacancyUnits:null,
@@ -5766,6 +5799,8 @@ async function generateKakuteiMeisai(caseId,plId){
     var quoteRent=pl.rateType==="daily"?(pl.quoteDailyRent||0):(pl.quoteMonthlyRent||0);
     var quoteAdminFee=pl.quoteAdminFee||0;
     var quoteKeyMoney=pl.quoteKeyMoney||0;
+    // v111: コインP封鎖手数料(一式・台数を掛けない)
+    var quoteBlockingFee=pl.quoteBlockingFee||0;
     // 仕入は税込入力。地主税区分/管理会社税区分で課税のときだけ税抜換算
     var ownerT = !!pl.ownerTaxable;
     var managerT = !!pl.managerTaxable;
@@ -5773,21 +5808,26 @@ async function generateKakuteiMeisai(caseId,plId){
     var purchaseRent = ownerT ? Math.round(purchaseRentRaw/1.1) : purchaseRentRaw;
     var purchaseAdminFee = managerT ? (pl.adminFee?Math.round(pl.adminFee/1.1):0) : (pl.adminFee||0);
     var purchaseKeyMoney = ownerT ? (pl.keyMoney?Math.round(pl.keyMoney/1.1):0) : (pl.keyMoney||0);
+    // 封鎖手数料仕入(税抜): 駐車場の課税区分(taxCategory)準拠
+    var purchaseBlockingFee = (pl.taxCategory==='nontaxable') ? (pl.blockingFee||0) : (pl.blockingFee ? Math.round(pl.blockingFee/1.1) : 0);
     var displayRent = (feeMode==='auto') ? purchaseRent : quoteRent;
     var displayAdminFee = (feeMode==='auto') ? purchaseAdminFee : quoteAdminFee;
     var displayKeyMoney = (feeMode==='auto') ? purchaseKeyMoney : quoteKeyMoney;
+    var displayBlockingFee = (feeMode==='auto') ? purchaseBlockingFee : quoteBlockingFee;
     var isLumpK=(pl.rentMode==='lump'); // v111: \u571f\u5730\u4e00\u62ec
     var rentRows=calcMonthlyRentRows(pl.rateType,displayRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate,isLumpK);
     var extras=[];
     if(displayKeyMoney)extras.push({label:"\u793c\u91d1",period:"-",unitPrice:displayKeyMoney,amount:units*displayKeyMoney});
     if(displayAdminFee)extras.push({label:"\u4e8b\u52d9\u624b\u6570\u6599",period:"-",unitPrice:displayAdminFee,amount:units*displayAdminFee});
+    // v111: \u5c01\u9396\u624b\u6570\u6599(\u4e00\u5f0f)
+    if(displayBlockingFee)extras.push({label:"\u5c01\u9396\u624b\u6570\u6599",period:"-",unitPrice:displayBlockingFee,amount:displayBlockingFee,isLump:true});
     if(feeMode==='auto'){
       var quoteRentRowsK=calcMonthlyRentRows(pl.rateType,quoteRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate,isLumpK);
       var quoteRentTotalK=quoteRentRowsK.reduce(function(s,r){return s+r.amount;},0);
       var purchaseRentRowsK=calcMonthlyRentRows(pl.rateType,purchaseRent,pl.contractStart||"",pl.contractEnd||"",units,pl.startProRate,pl.endProRate,isLumpK);
       var purchaseRentTotalK=purchaseRentRowsK.reduce(function(s,r){return s+r.amount;},0);
-      var quoteAllTotalK=quoteRentTotalK+quoteKeyMoney*units+quoteAdminFee*units;
-      var purchaseAllTotalK=purchaseRentTotalK+purchaseKeyMoney*units+purchaseAdminFee*units;
+      var quoteAllTotalK=quoteRentTotalK+quoteKeyMoney*units+quoteAdminFee*units+(quoteBlockingFee||0);
+      var purchaseAllTotalK=purchaseRentTotalK+purchaseKeyMoney*units+purchaseAdminFee*units+(purchaseBlockingFee||0);
       var agencyFeeK=quoteAllTotalK-purchaseAllTotalK;
       if(agencyFeeK<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
       extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeK,amount:agencyFeeK,isAgency:true});
@@ -6543,6 +6583,11 @@ function buildMonthlyData(period) {
             salesAmt += units * (quoteAdmin + quoteKey);
             costAmt  += units * (costAdmin  + costKey);
             if (pl.adjustmentAmount) costAmt += pl.adjustmentAmount;
+            // v111: コインP封鎖手数料(一式・台数を掛けない・始月一括計上)
+            var quoteBlocking = pl.quoteBlockingFee || 0;
+            var costBlocking  = pl.blockingFee || 0;
+            salesAmt += quoteBlocking;
+            costAmt  += costBlocking;
           }
 
           // 駐車場の課税区分に応じて税抜化を分岐（非課税駐車場は元から税なし）
@@ -7136,20 +7181,27 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const quoteUnitPrice = pl.quoteMonthlyRent || 0;
     const quoteAdminFee  = pl.quoteAdminFee || 0;
     const quoteKeyMoney  = pl.quoteKeyMoney || 0;
+    // v111: コインP封鎖手数料(一式・見積=税別、仕入=税込)
+    const quoteBlockingFee = pl.quoteBlockingFee || 0;
     // 仕入額（税抜）— 地主/管理会社の税区分で課税のときだけ税抜換算
     const ownerT = !!pl.ownerTaxable;
     const managerT = !!pl.managerTaxable;
     const purchaseUnitPrice = ownerT ? (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0) : (pl.monthlyRent || 0);
     const purchaseAdminFee = managerT ? (pl.adminFee ? Math.round(pl.adminFee / 1.1) : 0) : (pl.adminFee || 0);
     const purchaseKeyMoney = ownerT ? (pl.keyMoney ? Math.round(pl.keyMoney / 1.1) : 0) : (pl.keyMoney || 0);
+    // 封鎖手数料仕入(税抜): 駐車場の課税区分(taxCategory)準拠（非課税は元から税なし）
+    const purchaseBlockingFee = (pl.taxCategory==='nontaxable') ? (pl.blockingFee||0) : (pl.blockingFee ? Math.round(pl.blockingFee/1.1) : 0);
     // 'auto'モードのみ仕入額表示、それ以外（none/manual）は見積額表示
     const unitPrice = (feeMode==='auto') ? purchaseUnitPrice : quoteUnitPrice;
     const adminFee  = (feeMode==='auto') ? purchaseAdminFee  : quoteAdminFee;
     const keyMoney  = (feeMode==='auto') ? purchaseKeyMoney  : quoteKeyMoney;
+    const blockingFee = (feeMode==='auto') ? purchaseBlockingFee : quoteBlockingFee;
     const dailyRate = Math.floor(unitPrice / 30);
     const rentAmt  = Math.round(unitPrice * units * months + dailyRate * units * days);
     const adminAmt = Math.round(adminFee * units);
     const keyAmt   = Math.round(keyMoney * units);
+    // 封鎖手数料は一式（×units しない）
+    const blockingAmt = Math.round(blockingFee);
 
     // 業者費用（税抜）— 'auto'モードは駐車場ごとに、'manual'モードは案件全体で最後に1行
     let agencyFeeAmt = 0;
@@ -7159,17 +7211,19 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       const qRentAmt = Math.round(quoteUnitPrice * units * months + qDailyRate * units * days);
       const qAdminAmt = Math.round(quoteAdminFee * units);
       const qKeyAmt = Math.round(quoteKeyMoney * units);
+      const qBlocking = Math.round(quoteBlockingFee);
       const pDailyRate = Math.floor(purchaseUnitPrice / 30);
       const pRentAmt = Math.round(purchaseUnitPrice * units * months + pDailyRate * units * days);
       const pAdminAmt = Math.round(purchaseAdminFee * units);
       const pKeyAmt = Math.round(purchaseKeyMoney * units);
-      agencyFeeAmt = (qRentAmt + qAdminAmt + qKeyAmt) - (pRentAmt + pAdminAmt + pKeyAmt);
+      const pBlocking = Math.round(purchaseBlockingFee);
+      agencyFeeAmt = (qRentAmt + qAdminAmt + qKeyAmt + qBlocking) - (pRentAmt + pAdminAmt + pKeyAmt + pBlocking);
       if (agencyFeeAmt < 0) {
         showToast('⚠ ' + (pl.name || '') + '：' + feeLabel + 'がマイナスです（仕入＞見積）');
       }
     }
 
-    subtotalExTax += rentAmt + adminAmt + keyAmt + agencyFeeAmt;
+    subtotalExTax += rentAmt + adminAmt + keyAmt + blockingAmt + agencyFeeAmt;
 
     const num = CIRC[idx] || '(' + (idx+1) + ')';
     dataRows.push({ kind:'name', item: num + '　' + (pl.name || '') });
@@ -7185,6 +7239,10 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     }
     if (adminFee > 0) {
       dataRows.push({ kind:'data', item: '事務手数料', qty: qtyVal, per: '-', up: adminFee, amt: adminAmt });
+    }
+    // v111: コインP封鎖手数料(一式)
+    if (blockingAmt > 0) {
+      dataRows.push({ kind:'data', item: '封鎖手数料', qty: '一式', per: '-', up: blockingFee, amt: blockingAmt });
     }
     // 'auto'モードはここで駐車場ごとに業者費用行を追加
     if (feeMode === 'auto' && agencyFeeAmt !== 0) {
