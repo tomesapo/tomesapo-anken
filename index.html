@@ -633,7 +633,8 @@
         💾 出力 <span class="hb-caret">▾</span>
       </button>
       <div class="hb-menu-list" id="hbMenu-export">
-        <button onclick="exportCSV();closeHbMenus()">📥 Excel出力</button>
+        <button onclick="exportCSV();closeHbMenus()">📥 Excel出力（案件単位）</button>
+        <button onclick="exportCSVByLot();closeHbMenus()">🅿 Excel出力（駐車場単位）</button>
         <button onclick="exportFreeeCSV();closeHbMenus()">💴 freee CSV</button>
       </div>
     </div>
@@ -3456,6 +3457,8 @@ function calcAgencyFeeShare(c, plIdx){
 
 // ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
+// v111: 駐車場単位Excel出力用 追加ヘッダー
+const CSV_LOT_HEADERS=['駐車場No','駐車場名','駐車場住所','徒歩(分)','賃借形態','料金タイプ','契約台数','契約開始','契約終了','見積開始','見積終了','仕入賃料(税込)','見積賃料(税別)','仕入手数料','見積手数料','仕入礼金','見積礼金','仕入封鎖手数料','見積封鎖手数料','保証金','調整金額','仕入金額(税込)','請求額(税込)','仕入先名','仕入先電話','駐車場の課税区分','地主税区分','管理会社税区分','貸主住所','備考'];
 function csvCell(v){const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCSV(){
   if(!cases.length){showToast('エクスポートする案件がありません');return;}
@@ -3506,6 +3509,108 @@ async function exportCSV(){
   const a=document.createElement('a');a.href=url;a.download='案件データ_'+new Date().toISOString().slice(0,10)+'.xlsx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   showToast(cases.length+' 件をExcelに出力しました');
+}
+
+// v111: 駐車場単位Excel出力（1駐車場1行、案件列を各行に複製）
+async function exportCSVByLot(){
+  if(!cases.length){showToast('エクスポートする案件がありません');return;}
+  await waitXLSX();
+  function fmtDateJP(s){if(!s)return'';const p=String(s||'').split('-');if(p.length<3)return s;return p[0]+'年'+parseInt(p[1])+'月'+parseInt(p[2])+'日';}
+  function ex(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function colLetter(n){let s='';n++;while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-(n%26?0:1)-1)/26);}return s;}
+  function cellRef(r,c){return colLetter(c)+(r+1);}
+
+  const HEADERS = CSV_HEADERS.concat(CSV_LOT_HEADERS);
+  const dataRows = [];
+  let skipped = 0;
+  cases.forEach(c => {
+    const lots = (c.parkingLots || []);
+    if (!lots.length) { skipped++; return; } // 駐車場0件はスキップ
+    // 案件側の共通列（exportCSVと同じ並び）
+    const caseCols = [c.caseNo, c.status, c.customerName??'', c.baseName??'', c.staffName??'', c.siteName??'', c.siteAddress??'',
+      fmtDateJP(c.receptionDate), fmtDateJP(c.requestStart), fmtDateJP(c.requestEnd), c.requestUnits??'', c.requestNote??'',
+      fmtDateJP(c.proposalDate), c.estSales??'', c.estPurchase??'', c.estProfit??'',
+      fmtDateJP(c.orderDate), fmtDateJP(c.contractStart), fmtDateJP(c.contractEnd),
+      c.fixedSales??'', c.fixedPurchase??'', c.fixedProfit??'', c.taxIncludedSales??'', c.fixedUnits??'',
+      fmtDateJP(c.invoiceDate), fmtDateJP(c.paymentDue), fmtDateJP(c.paymentDate), c.paymentAmount??'', c.caseNote??''];
+    lots.forEach((pl, idx) => {
+      const isLump = (pl.rentMode === 'lump');
+      const rentMode = isLump ? '土地一括' : '台数別';
+      const rateLabel = (pl.rateType === 'daily') ? '日額' : '月額';
+      const unitsVal = isLump ? '土地一括' : (pl.units!=null ? pl.units : '');
+      const costRent = (pl.rateType === 'daily') ? (pl.dailyRent??'') : (pl.monthlyRent??'');
+      const quoteRent = (pl.rateType === 'daily') ? (pl.quoteDailyRent??'') : (pl.quoteMonthlyRent??'');
+      const taxCat = (pl.taxCategory === 'nontaxable') ? '非課税' : '課税';
+      const ownerTax = pl.ownerTaxable ? '課税' : '免税';
+      const managerTax = pl.managerTaxable ? '課税' : '免税/該当なし';
+      const lotCols = [
+        idx+1, pl.name??'', pl.address??'', pl.walkMinutes??'',
+        rentMode, rateLabel, unitsVal,
+        fmtDateJP(pl.contractStart), fmtDateJP(pl.contractEnd),
+        fmtDateJP(pl.estimateStart), fmtDateJP(pl.estimateEnd),
+        costRent, quoteRent,
+        pl.adminFee??'', pl.quoteAdminFee??'',
+        pl.keyMoney??'', pl.quoteKeyMoney??'',
+        pl.blockingFee??'', pl.quoteBlockingFee??'',
+        pl.deposit??'', pl.adjustmentAmount??'',
+        pl.purchaseAmount??'', pl.invoiceAmount??'',
+        pl.supplierName??'', pl.supplierPhone??'',
+        taxCat, ownerTax, managerTax,
+        pl.lessorAddress??'', pl.lotNote??''
+      ];
+      dataRows.push(caseCols.concat(lotCols));
+    });
+  });
+
+  if (!dataRows.length) {
+    showToast('駐車場が登録された案件がありません');
+    return;
+  }
+
+  // 以下、exportCSV と同じXLSX組み立て
+  let sd='<sheetData>';
+  sd+='<row r="1">';
+  HEADERS.forEach((h,ci)=>{sd+=`<c r="${cellRef(0,ci)}" s="1" t="inlineStr"><is><t>${ex(h)}</t></is></c>`;});
+  sd+='</row>';
+  dataRows.forEach((row,ri)=>{
+    sd+=`<row r="${ri+2}">`;
+    row.forEach((val,ci)=>{
+      if(typeof val==='number'||(val!==''&&val!=null&&!isNaN(Number(val))&&String(val).trim()!==''&&!/^\d{4}-\d{2}/.test(String(val)))){
+        sd+=`<c r="${cellRef(ri+1,ci)}" s="2"><v>${ex(String(val))}</v></c>`;
+      } else {
+        sd+=`<c r="${cellRef(ri+1,ci)}" s="2" t="inlineStr"><is><t>${ex(String(val??''))}</t></is></c>`;
+      }
+    });
+    sd+='</row>';
+  });
+  sd+='</sheetData>';
+
+  let colsXml='<cols>';
+  // 案件列 → 駐車場列、ざっくり既定幅
+  const caseW=[12,8,16,12,10,20,20,12,12,12,8,20,12,14,14,14,12,12,12,14,14,14,14,8,12,12,12,14,20];
+  const lotW =[7,18,22,8,10,8,9,12,12,12,12,12,12,11,11,11,11,12,12,10,11,14,14,16,14,12,12,14,18,16];
+  const allW = caseW.concat(lotW);
+  HEADERS.forEach((_,i)=>{colsXml+=`<col min="${i+1}" max="${i+1}" width="${allW[i]||12}" customWidth="1"/>`;});
+  colsXml+='</cols>';
+
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView>${colsXml}${sd}</worksheet>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Noto Sans JP"/></font><font><b/><sz val="10"/><name val="Noto Sans JP"/><color rgb="FFFFFFFF"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1E3A5F"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFCCCCCC"/></left><right style="thin"><color rgb="FFCCCCCC"/></right><top style="thin"><color rgb="FFCCCCCC"/></top><bottom style="thin"><color rgb="FFCCCCCC"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/></cellXfs></styleSheet>`;
+  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="駐車場別データ" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const zip=new JSZip();
+  zip.file('[Content_Types].xml',contentTypes);
+  zip.file('_rels/.rels',rels);
+  zip.file('xl/workbook.xml',workbook);
+  zip.file('xl/_rels/workbook.xml.rels',wbRels);
+  zip.file('xl/worksheets/sheet1.xml',sheet1);
+  zip.file('xl/styles.xml',styles);
+  const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='案件データ_駐車場別_'+new Date().toISOString().slice(0,10)+'.xlsx';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast(dataRows.length+' 行（駐車場単位）をExcelに出力しました' + (skipped?'（'+skipped+'件は駐車場0件のためスキップ）':''));
 }
 
 
