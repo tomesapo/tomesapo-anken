@@ -163,6 +163,10 @@
   label .required{color:var(--danger);margin-left:2px}
   label .auto-tag{background:var(--gray-100);color:var(--gray-500);font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px}
   input[type=text],input[type=number],input[type=date],input[type=email],input[type=tel],select,textarea{padding:10px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:16px;color:var(--gray-800);outline:none;transition:border-color .15s,box-shadow .15s;width:100%;background:white;font-family:inherit;-webkit-appearance:none;appearance:none}
+  /* v111: number入力の上下スピナーを非表示（Chrome/Edge/Safari + Firefox） */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input[type=number]{-moz-appearance:textfield;appearance:textfield}
   input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
   input.readonly-calc{background:var(--gray-50);color:var(--gray-600);cursor:default}
   input.auto-gen{background:#f0f7ff;color:var(--primary);font-weight:600;cursor:default}
