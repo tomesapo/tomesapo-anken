@@ -952,7 +952,7 @@
           <div class="form-group"><label>案件種別</label><select id="f_caseType" onchange="onCaseTypeChange()"><option value="通常">通常</option><option value="追加">追加</option><option value="延長">延長</option></select></div>
           <div class="form-group" id="branchSelectGroup"><label>担当拠点 <span class="auto-tag">マスタから選択</span></label><select id="f_branchId" onchange="onBranchChange()"><option value="">（主拠点）</option></select></div>
           <div class="form-group"><label>自社担当者 <span class="auto-tag">申込書C21</span></label><select id="f_ourStaffId"><option value="">（未選択）</option></select></div>
-          <div class="form-group"><label>案件番号 <span class="auto-tag">自動採番</span></label><input type="text" id="f_caseNo" class="auto-gen" readonly placeholder="顧客または元案件番号を入力後に自動生成"><div class="case-num-hint" id="caseNoHint">YYYY-顧客番号-連番</div></div>
+          <div class="form-group"><label>案件番号 <span class="auto-tag">自動採番</span> <button type="button" id="caseNoEditBtn" onclick="toggleCaseNoEdit()" style="margin-left:6px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:1px 8px;border-radius:4px;font-size:10px;cursor:pointer">✏ 手動編集</button></label><input type="text" id="f_caseNo" class="auto-gen" readonly placeholder="顧客または元案件番号を入力後に自動生成"><div class="case-num-hint" id="caseNoHint">YYYY-顧客番号-連番</div></div>
           <div class="form-group span-3" id="parentCaseNoGroup" style="display:none"><label>元案件番号 <span class="required">*</span></label><input type="text" id="f_parentCaseNo" placeholder="例：2026-001-001" oninput="onParentCaseNoChange()"><div class="case-num-hint">追加はT1・T2…、延長はE1・E2…が自動付与されます</div></div>
           <div class="form-group span-2"><label>現場名<span class="required">*</span></label><input type="text" id="f_siteName" placeholder="現場名を入力"></div>
           <div class="form-group span-3"><label>現場住所</label><input type="text" id="f_siteAddress" placeholder="住所を入力"></div>
@@ -2877,7 +2877,15 @@ function openModal(id=null) {
   document.getElementById('modalOverlay').classList.add('open');
   renderFileSection(id);
 }
-function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); editingId=null; }
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  editingId=null;
+  // v111: 案件番号の手動編集モードをリセット
+  if (typeof _caseNoManualEdit !== 'undefined' && _caseNoManualEdit) {
+    var _btn = document.getElementById('caseNoEditBtn');
+    if (_btn) _btn.click();
+  }
+}
 function closeOnOutside(e,id) {
   if(e.target.id===id){
     if(id==='modalOverlay')closeModal();
@@ -3079,6 +3087,12 @@ async function saveCase() {
   const siteName=document.getElementById('f_siteName').value.trim();
   const caseNo=document.getElementById('f_caseNo').value.trim();
   if(!caseNo){showToast('案件番号が生成されていません');return;}
+  // v111: 案件番号の重複チェック（手動編集時の安全策。editingId 以外で同一 caseNo が存在しないこと）
+  const _dup = cases.find(function(x){ return x.caseNo === caseNo && !x.deleted && x.id !== editingId; });
+  if (_dup) {
+    showToast('⚠ 案件番号「'+caseNo+'」はすでに別案件で使用されています（'+(_dup.siteName||_dup.customerName||'')+'）');
+    return;
+  }
   const _ct=document.getElementById('f_caseType')?.value||'通常';
   if((_ct==='追加'||_ct==='延長')&&!document.getElementById('f_parentCaseNo')?.value.trim()){showToast('元案件番号を入力してください');return;}
   if(!siteName){showToast('現場名を入力してください');return;}
@@ -3806,6 +3820,41 @@ function appendSurveyTimestamp(){
   try { ta.setSelectionRange(len, len); } catch(_) {}
   // 末尾までスクロール
   ta.scrollTop = ta.scrollHeight;
+}
+// v111: 案件番号の手動編集トグル（既存案件の番号付け替え用）
+let _caseNoManualEdit = false;
+function toggleCaseNoEdit(){
+  var inp = document.getElementById('f_caseNo');
+  var btn = document.getElementById('caseNoEditBtn');
+  if (!inp || !btn) return;
+  if (!_caseNoManualEdit) {
+    // 編集モードへ
+    if (!confirm('案件番号を手動で編集します。\n\n他案件と重複する番号は登録できません。\n保存時に変更が反映されます。\n\n続行しますか？')) return;
+    _caseNoManualEdit = true;
+    inp.removeAttribute('readonly');
+    inp.style.background = '#fef3c7';
+    inp.style.borderColor = '#f59e0b';
+    inp.style.color = '#92400e';
+    inp.style.fontWeight = '700';
+    btn.textContent = '🔒 編集をロック';
+    btn.style.background = '#fef3c7';
+    btn.style.color = '#92400e';
+    btn.style.borderColor = '#fde68a';
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch(_){}
+  } else {
+    // 編集モード解除
+    _caseNoManualEdit = false;
+    inp.setAttribute('readonly','');
+    inp.style.background = '';
+    inp.style.borderColor = '';
+    inp.style.color = '';
+    inp.style.fontWeight = '';
+    btn.textContent = '✏ 手動編集';
+    btn.style.background = '#f3f4f6';
+    btn.style.color = '#374151';
+    btn.style.borderColor = '#d1d5db';
+  }
 }
 // v111: 詳細パネルの「調査メモ」折りたたみトグル
 function toggleSurveyMemo(headerEl){
