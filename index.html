@@ -958,6 +958,16 @@
           <div class="form-group span-3"><label>現場住所</label><input type="text" id="f_siteAddress" placeholder="住所を入力"></div>
         </div>
       </div>
+      <!-- v111: 現地調査時の電話メモなど。依頼情報の上に配置 -->
+      <div class="form-section" style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:#92400e">
+          <span>📞 調査メモ <span style="font-weight:400;font-size:10px;color:#a16207">電話・現地調査の聞き取り内容を自由に記入</span></span>
+          <button type="button" onclick="appendSurveyTimestamp()" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">🕐 今の日時を追記</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group span-3"><textarea id="f_surveyMemo" placeholder="例: 空き台数 3台 / 月額 ¥18,000 / 礼金 1ヶ月 / 担当 田中さん 090-xxxx-xxxx" style="min-height:96px;resize:vertical;font-family:inherit"></textarea></div>
+        </div>
+      </div>
       <div class="form-section">
         <div class="form-section-title">依頼情報</div>
         <div class="form-grid">
@@ -2883,7 +2893,8 @@ function populateCustomerSelectOnly() {
 const FORM_FIELDS=['f_caseNo','f_siteName','f_siteAddress','f_requestUnits','f_requestNote',
   'f_receptionDate','f_requestStart','f_requestEnd','f_proposalDate','f_estSales','f_estPurchase','f_estProfit',
   'f_orderDate','f_contractStart','f_contractEnd','f_fixedSales','f_fixedPurchase','f_fixedProfit',
-  'f_taxIncludedSales','f_fixedUnits','f_invoiceDate','f_paymentDue','f_paymentDate','f_paymentAmount','f_caseNote'];
+  'f_taxIncludedSales','f_fixedUnits','f_invoiceDate','f_paymentDue','f_paymentDate','f_paymentAmount','f_caseNote',
+  'f_surveyMemo'/* v111: 調査メモ */];
 function clearForm() {
   FORM_FIELDS.forEach(fid=>{const el=document.getElementById(fid);if(el){el.value='';el.style.color='';}});
   document.getElementById('f_status').value='未調査';
@@ -2947,6 +2958,8 @@ function populateForm(c) {
   document.getElementById('f_paymentDate').value=c.paymentDate||'';
   document.getElementById('f_paymentAmount').value=c.paymentAmount!=null?c.paymentAmount:'';
   document.getElementById('f_caseNote').value=c.caseNote||'';
+  // v111: 調査メモ
+  var _smEl=document.getElementById('f_surveyMemo'); if(_smEl)_smEl.value=c.surveyMemo||'';
   const ctEl2=document.getElementById('f_caseType');if(ctEl2)ctEl2.value=c.caseType||'通常';
   populateBranchSelector(c.branchId||'');
   populateOurStaffSelector(c.ourStaffId||'');
@@ -3108,6 +3121,7 @@ async function saveCase() {
     feeBreakdownLabel: document.getElementById('f_feeBreakdownLabel')?.value || '業者費用',
     agencyFeeUnit: (function(){var v=parseInt(document.getElementById('f_agencyFeeUnit')?.value);return isNaN(v)?null:v;})(),
     caseNote:document.getElementById('f_caseNote').value.trim(),
+    surveyMemo:(document.getElementById('f_surveyMemo')?document.getElementById('f_surveyMemo').value:''), // v111: 調査メモ（前後空白はあえて削らない＝追記日時の整形をユーザに任せる）
     caseType:document.getElementById('f_caseType')?.value||'通常',
     branchId:document.getElementById('f_branchId')?.value||'',
     ourStaffId:document.getElementById('f_ourStaffId')?.value||'',
@@ -3227,6 +3241,20 @@ function openDetail(id) {
     html += '</div></div>';
   }
   if(c.caseNote){html+='<div class="detail-section"><div class="detail-section-title">案件メモ</div><div style="font-size:13px;color:var(--gray-700);line-height:1.7;white-space:pre-wrap">'+esc(c.caseNote)+'</div></div>';}
+  // v111: 調査メモ（折りたたみ可・localStorage で状態記憶。デフォルト=開）
+  if(c.surveyMemo && c.surveyMemo.trim()){
+    var _smCollapsed = false;
+    try { _smCollapsed = localStorage.getItem('detailSurveyMemoCollapsed') === '1'; } catch(_) {}
+    var _smArrow = _smCollapsed ? '▶' : '▼';
+    var _smHidden = _smCollapsed ? ' style="display:none"' : ' style=""';
+    html+='<div class="detail-section" style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px">'+
+      '<div class="detail-section-title" onclick="toggleSurveyMemo(this)" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;color:#92400e;border-bottom-color:#fde68a">'+
+        '<span>📞 調査メモ</span>'+
+        '<span class="sm-arrow" style="font-size:12px;color:#a16207">'+_smArrow+'</span>'+
+      '</div>'+
+      '<div class="sm-body"'+_smHidden+'><div style="font-size:13px;color:#451a03;line-height:1.7;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace">'+esc(c.surveyMemo)+'</div></div>'+
+    '</div>';
+  }
   if(c.statusHistory&&c.statusHistory.length){
     // v111: 折りたたみ対応（localStorage で状態を記憶。デフォルト=開）
     var _shCollapsed = false;
@@ -3762,6 +3790,32 @@ function toggleStatusHistory(headerEl){
   body.style.display = nowHidden ? 'none' : '';
   arrow.textContent = nowHidden ? '▶' : '▼';
   try { localStorage.setItem('detailStatusHistoryCollapsed', nowHidden ? '1' : '0'); } catch(_) {}
+}
+// v111: 調査メモへ「現在の日時」を末尾に追記（電話メモ用）
+function appendSurveyTimestamp(){
+  var ta = document.getElementById('f_surveyMemo');
+  if (!ta) return;
+  var now = new Date();
+  var pad = function(n){return (n<10?'0':'')+n;};
+  var stamp = now.getFullYear()+'/'+pad(now.getMonth()+1)+'/'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+': ';
+  var prefix = ta.value && ta.value.length ? (ta.value.replace(/\s+$/,'') + '\n\n') : '';
+  ta.value = prefix + stamp;
+  ta.focus();
+  // カーソルを末尾に
+  var len = ta.value.length;
+  try { ta.setSelectionRange(len, len); } catch(_) {}
+  // 末尾までスクロール
+  ta.scrollTop = ta.scrollHeight;
+}
+// v111: 詳細パネルの「調査メモ」折りたたみトグル
+function toggleSurveyMemo(headerEl){
+  var body = headerEl.parentElement.querySelector('.sm-body');
+  var arrow = headerEl.querySelector('.sm-arrow');
+  if (!body || !arrow) return;
+  var nowHidden = body.style.display !== 'none';
+  body.style.display = nowHidden ? 'none' : '';
+  arrow.textContent = nowHidden ? '▶' : '▼';
+  try { localStorage.setItem('detailSurveyMemoCollapsed', nowHidden ? '1' : '0'); } catch(_) {}
 }
 function updateParkingCardTitle(i){
   const card=i.closest('.parking-card');
