@@ -3208,7 +3208,20 @@ function openDetail(id) {
   const sections=[
     {title:'基本情報',rows:[['顧客名',c.customerName],['拠点名',c.baseName],['拠点電話',base?.phone],['支払サイト',base?.paymentSite],['請求書送付',base?.invoiceMethod],['担当者名',c.staffName],['担当者電話',staff?.phone],['担当者メール',staff?.email],['現場名',c.siteName],['現場住所',c.siteAddress]]},
     {title:'依頼情報',rows:[['依頼開始日',fmtDate(c.requestStart)],['依頼終了日',fmtDate(c.requestEnd)],['依頼台数',c.requestUnits!=null?c.requestUnits+' 台':''],['依頼備考',c.requestNote]]},
-    {title:'見積情報',rows:[['提案日',fmtDate(c.proposalDate)],['見積売上（税別）',c.estSales!=null?'&#165;'+fmt(c.estSales):''],['見積仕入（税別）',c.estPurchase!=null?'&#165;'+fmt(c.estPurchase):''],['見積粗利（税別）',c.estProfit!=null?'&#165;'+fmt(c.estProfit):'',c.estProfit]]},
+    (function(){
+      // v111: 見積台数 = 駐車場ごとの estimateUnits の合計（lump案件は1としてカウント、件数を追記）
+      var _lots = c.parkingLots || [];
+      var _estU = 0, _lumpN = 0, _has = false;
+      _lots.forEach(function(pl){
+        var u = parseInt(pl.estimateUnits);
+        if (!isNaN(u) && u > 0) { _estU += u; _has = true; }
+        if (pl.rentMode === 'lump') { _lumpN += 1; _has = true; }
+      });
+      var estUnitsLabel = _has
+        ? (_estU + ' 台' + (_lumpN ? '（うち土地一括 ' + _lumpN + ' 件）' : ''))
+        : '';
+      return {title:'見積情報',rows:[['提案日',fmtDate(c.proposalDate)],['見積売上（税別）',c.estSales!=null?'&#165;'+fmt(c.estSales):''],['見積仕入（税別）',c.estPurchase!=null?'&#165;'+fmt(c.estPurchase):''],['見積粗利（税別）',c.estProfit!=null?'&#165;'+fmt(c.estProfit):'',c.estProfit],['見積台数',estUnitsLabel]]};
+    })(),
     {title:'受注・確定情報',rows:[['受注日',fmtDate(c.orderDate)],['契約開始日',fmtDate(c.contractStart)],['契約終了日',fmtDate(c.contractEnd)],['確定売上（税別）',c.fixedSales!=null?'&#165;'+fmt(c.fixedSales):''],['確定売上（税込）',c.taxIncludedSales!=null?'&#165;'+fmt(c.taxIncludedSales):(c.fixedSales!=null?'&#165;'+fmt(Math.round(c.fixedSales*1.1)):'')],['確定仕入（税別）',c.fixedPurchase!=null?'&#165;'+fmt(c.fixedPurchase):''],['確定粗利（税別）',c.fixedProfit!=null?'&#165;'+fmt(c.fixedProfit):'',c.fixedProfit],['確定台数',c.fixedUnits!=null?c.fixedUnits+' 台':'']]},
     {title:'請求・入金情報',rows:[['請求日',fmtDate(c.invoiceDate)],['入金日',fmtDate(c.paymentDate)],['入金額（税込）',c.paymentAmount!=null?'&#165;'+fmt(c.paymentAmount):'']]},
   ];
