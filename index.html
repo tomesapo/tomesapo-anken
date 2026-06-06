@@ -6271,20 +6271,59 @@ async function _saveMailToQueue(caseId, mailData) {
   return id;
 }
 
-// mailto: で OS の既定メールクライアント（Outlookデスクトップ等）を起動
-// 宛先・件名・本文をすべて反映した新規メール作成画面が開く
+// v111: Outlook (mailto:) は本文をプレーンテキスト扱い→Segoe UI 12ptで開いてしまう仕様回避
+// 本文を HTML 書式 (Noto Sans JP 11pt) でクリップボードへ書き出し、mailto: は宛先+件名のみ起動
+// ユーザは Outlook 本文欄で Ctrl+V → Noto Sans JP 11pt で貼り付く
 // ※関数名は互換性のため _openGmailCompose のまま
 function _openGmailCompose(to, subject, body) {
+  // 1) 空 mailto: で Outlook を起動（宛先・件名のみ）
   const url = 'mailto:' + (to || '') +
-    '?subject=' + encodeURIComponent(subject || '') +
-    '&body=' + encodeURIComponent(body || '');
-  // 隠しアンカーで mailto: を起動（ページ離脱を回避）
+    '?subject=' + encodeURIComponent(subject || '');
   const a = document.createElement('a');
   a.href = url;
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   setTimeout(function(){ a.remove(); }, 100);
+
+  // 2) 本文を HTML 書式 (Noto Sans JP 11pt) でクリップボードへコピー
+  if (!body) {
+    return; // 本文なしのときは何もしない
+  }
+  const esc = function(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  };
+  const htmlBody = '<div style="font-family:\'Noto Sans JP\',\'Hiragino Sans\',\'Yu Gothic\',sans-serif;font-size:11pt;line-height:1.55;color:#000000">' +
+    esc(body).replace(/\r\n|\r|\n/g, '<br>') +
+    '</div>';
+
+  // ClipboardItem (HTML+text/plain 同時) を試行 → 非対応環境は text/plain のみ
+  function _copyTextFallback(){
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(body).then(
+        function(){ showToast('📋 本文（テキスト）をコピーしました。Outlookで Ctrl+V を押してください', 6000); },
+        function(){ showToast('⚠ クリップボードへのコピーに失敗しました。手動で本文を貼り付けてください', 5000); }
+      );
+    } else {
+      showToast('⚠ ブラウザがクリップボード書き込みに非対応です', 5000);
+    }
+  }
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      const htmlBlob = new Blob([htmlBody], { type: 'text/html' });
+      const textBlob = new Blob([body], { type: 'text/plain' });
+      const item = new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob });
+      navigator.clipboard.write([item]).then(
+        function(){ showToast('📋 本文をコピーしました（Noto Sans JP 11pt）。Outlookで Ctrl+V を押してください', 6000); },
+        function(err){ console.warn('clipboard.write failed:', err); _copyTextFallback(); }
+      );
+    } else {
+      _copyTextFallback();
+    }
+  } catch(e) {
+    console.warn('Clipboard write threw:', e);
+    _copyTextFallback();
+  }
 }
 
 // メール下書きから既定メーラーで再オープン
