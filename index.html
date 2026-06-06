@@ -6763,12 +6763,12 @@ async function openApplicationFaxMail(data) {
 
 
 // ── 月次レポート（期別） ──
-// 第1期: 2026年8月〜2027年7月、以降1年ずつ
-var FISCAL_START_MONTH = 7;  // 0-indexed: 7 = 8月
+// 第1期: 2026年6月〜2027年5月、以降1年ずつ（v111: 期初を8月→6月へ変更）
+var FISCAL_START_MONTH = 5;  // 0-indexed: 5 = 6月
 var FISCAL_BASE_YEAR   = 2026; // 第1期開始年
 
 function calcPeriod(y, m) {
-  // m: 0-indexed。8月以降はその年の期、1〜7月は前年の期
+  // m: 0-indexed。期初月（6月）以降はその年の期、それ以前は前年の期
   return m >= FISCAL_START_MONTH ? (y - FISCAL_BASE_YEAR + 1) : (y - FISCAL_BASE_YEAR);
 }
 function periodStartYear(p) { return FISCAL_BASE_YEAR + (p - 1); }
@@ -6789,7 +6789,7 @@ function changeMonthlyYear(delta) {
 }
 
 function buildMonthlyData(period) {
-  // 当期の12ヶ月リスト: 開始年8月〜翌年7月
+  // 当期の12ヶ月リスト: 開始年6月〜翌年5月
   var sy = periodStartYear(period);
   var periodMonths = [];
   for (var i = FISCAL_START_MONTH; i <= 11; i++) periodMonths.push({y: sy,     m: i});
@@ -6895,7 +6895,7 @@ function renderMonthlyReport() {
   var sy = periodStartYear(monthlyPeriod);
   var ey = sy + 1;
   document.getElementById('monthlyYearLabel').textContent =
-    '第' + monthlyPeriod + '期　(' + sy + '年8月〜' + ey + '年7月)';
+    '第' + monthlyPeriod + '期　(' + sy + '年6月〜' + ey + '年5月)';
 
   var data = buildMonthlyData(monthlyPeriod);
   var total = {sales:0, purchase:0, profit:0, units:0, lumpCount:0};
@@ -6921,8 +6921,8 @@ function renderMonthlyReport() {
   });
   var custs = Object.keys(custSet).sort();
 
-  // 8月〜翌7月の順
-  var mths = ['8月','9月','10月','11月','12月','1月','2月','3月','4月','5月','6月','7月'];
+  // 6月〜翌5月の順
+  var mths = ['6月','7月','8月','9月','10月','11月','12月','1月','2月','3月','4月','5月'];
 
   function fmtY(v) {
     if (!v) return '—';
@@ -6992,7 +6992,7 @@ function exportMonthlyReportExcel() {
   var sy = periodStartYear(monthlyPeriod);
   var ey = sy + 1;
   var periodLabel = '第' + monthlyPeriod + '期';
-  var rangeLabel  = sy + '年8月〜' + ey + '年7月';
+  var rangeLabel  = sy + '年6月〜' + ey + '年5月';
 
   var data  = buildMonthlyData(monthlyPeriod);
   var total = {sales:0, purchase:0, profit:0, units:0};
@@ -7002,7 +7002,7 @@ function exportMonthlyReportExcel() {
   data.forEach(function(mo){ Object.keys(mo.byCustomer).forEach(function(k){ if(mo.byCustomer[k]) custSet[k]=true; }); });
   var custs = Object.keys(custSet).sort();
 
-  var mths = ['8月','9月','10月','11月','12月','1月','2月','3月','4月','5月','6月','7月'];
+  var mths = ['6月','7月','8月','9月','10月','11月','12月','1月','2月','3月','4月','5月'];
 
   // ─── スタイル定義 ───
   var F = 'Noto Sans JP';
@@ -8007,14 +8007,14 @@ function svPeriods() {
 
 function periodLabel(p) {
   const yStart = periodStartYear(p);
-  return p + '期（' + yStart + '年8月〜' + (yStart+1) + '年7月）';
+  return p + '期（' + yStart + '年6月〜' + (yStart+1) + '年5月）';
 }
 
 function renderSalesView() {
   const body = document.getElementById('svBody');
   const periods = svPeriods();
   const periodOpts = '<option value="">全期間</option>' + periods.map(p => `<option value="${p}" ${String(_svPeriod)===String(p)?'selected':''}>${periodLabel(p)}</option>`).join('');
-  const filterHtml = `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_svPeriod=this.value;renderSalesView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（8月〜翌7月）で絞り込み</span></div>`;
+  const filterHtml = `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_svPeriod=this.value;renderSalesView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（6月〜翌5月）で絞り込み</span></div>`;
 
   if (_svTab === 'customer') body.innerHTML = filterHtml + renderSalesCustomer();
   else body.innerHTML = filterHtml + renderSalesSite();
@@ -8646,7 +8646,7 @@ function avFilteredCases() {
 function avFilterBar() {
   const periods = svPeriods();
   const periodOpts = '<option value="">全期間</option>' + periods.map(p => `<option value="${p}" ${String(_avPeriod)===String(p)?'selected':''}>${periodLabel(p)}</option>`).join('');
-  return `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_avPeriod=this.value;_avDetailKey=null;renderAnalyticsView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（8月〜翌7月）で絞り込み</span></div>`;
+  return `<div class="sv-filter-row"><label style="font-size:13px;color:#374151">期間：</label><select onchange="_avPeriod=this.value;_avDetailKey=null;renderAnalyticsView()">${periodOpts}</select><span style="font-size:12px;color:#9ca3af;margin-left:4px">事業年度（6月〜翌5月）で絞り込み</span></div>`;
 }
 
 function renderAnalyticsView() {
