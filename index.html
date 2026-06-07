@@ -2781,67 +2781,30 @@ function calcPlPurchase(el){
   updateCaseFixedPurchase();
 }
 function updateCaseFixedPurchase(){
-  let totalP=0,totalS=0,totalU=0,hasAny=false;
-  document.querySelectorAll('#parkingLotCards .parking-card').forEach(card=>{
-    const g=n=>card.querySelector('[name="'+n+'"]');
-    const start=g('pl_contractStart')?g('pl_contractStart').value:'';
-    const end=g('pl_contractEnd')?g('pl_contractEnd').value:'';
-    const units=parseInt(g('pl_units')?g('pl_units').value:0)||0;
-    const months=calcPlMonths(start,end);
-    // 確定仕入・確定売上・確定台数（契約期間＋台数がある駐車場のみ集計）
-    if(months&&units){
-      const rt=g('pl_rateType')?g('pl_rateType').value:'monthly';
-      const startProRate=(g('pl_startProRate')?g('pl_startProRate').value:'')==='true';
-      const endProRate  =(g('pl_endProRate')?g('pl_endProRate').value:'')==='true';
-      // 仕入価格（コスト側）
-      const monthlyRent=parseFloat(g('pl_monthlyRent')?.value)||0;
-      const dailyRent  =parseFloat(g('pl_dailyRent')?.value)||0;
-      const adminFee   =parseFloat(g('pl_adminFee')?.value)||0;
-      const keyMoney   =parseFloat(g('pl_keyMoney')?.value)||0;
-      const adjustment =parseFloat(g('pl_adjustmentAmount')?.value)||0;
-      // 税区分（地主/管理会社）
-      const ownerT=(g('pl_ownerTaxable')?.value)==='true';
-      const managerT=(g('pl_managerTaxable')?.value)==='true';
-      // 見積価格（売上側）
-      const quoteMonthly=(parseFloat(g('pl_quoteMonthlyRent')?.value)||0)||monthlyRent;
-      const quoteDailyRent=(parseFloat(g('pl_quoteDailyRent')?.value)||0)||dailyRent;
-      const quoteKey=(parseFloat(g('pl_quoteKeyMoney')?.value)||0)||keyMoney;
-      const quoteAdmin=(parseFloat(g('pl_quoteAdminFee')?.value)||0)||adminFee;
-      // 仕入合計を税抜でライブ計算（賃料・礼金は地主税区分、手数料は管理会社税区分で /1.1 を適用）
-      let costRentTaxInc=0;
-      if(rt==='daily'){
-        const days=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
-        costRentTaxInc=dailyRent*units*days;
-      }else{
-        const period=calcPlPeriod(start,end,startProRate,endProRate);
-        const dailyRate=Math.floor(monthlyRent/30);
-        costRentTaxInc=monthlyRent*units*period.months+dailyRate*units*period.days;
-      }
-      const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
-      const costAdminExTax=managerT?Math.round(adminFee*units/1.1):adminFee*units;
-      const costKeyExTax=ownerT?Math.round(keyMoney*units/1.1):keyMoney*units;
-      // adjustment はそのまま税抜扱い（手入力値）
-      const costExTax=costRentExTax+costAdminExTax+costKeyExTax+adjustment;
-      totalP+=costExTax;
-      // 売上合計（税別）も同じロジックで
-      if(rt==='daily'){
-        const totDays=start&&end?Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1:0;
-        totalS+=quoteDailyRent*units*totDays+(quoteKey+quoteAdmin)*units;
-      }else{
-        const period=calcPlPeriod(start,end,startProRate,endProRate);
-        const quoteDailyRate=Math.floor(quoteMonthly/30);
-        totalS+=quoteMonthly*units*period.months+quoteDailyRate*units*period.days+(quoteKey+quoteAdmin)*units;
-      }
-      totalU+=units;
-      hasAny=true;
-    }
+  // v111: 業者費用任意金額モード+封鎖手数料を反映させるため、
+  // calcParkingLotFixed を活用する形に統一（独自計算は廃止）
+  let totalP=0,totalS=0,totalU=0;
+  // フォームから現在の駐車場リスト + 業者費用モード/金額を取得
+  const lots = (typeof getParkingLotsFromForm === 'function') ? getParkingLotsFromForm() : [];
+  const _feeModeNow = document.querySelector('input[name="feeMode"]:checked')?.value || 'none';
+  const _agencyFeeUnitNow = parseFloat(document.getElementById('f_agencyFeeUnit')?.value)||0;
+  const _caseShape = { feeMode:_feeModeNow, agencyFeeUnit:_agencyFeeUnitNow, parkingLots:lots };
+  lots.forEach(function(pl, idx){
+    if (!pl.contractStart || !pl.contractEnd || !pl.units) return;
+    const r = (typeof calcParkingLotFixed === 'function')
+      ? calcParkingLotFixed(pl, _caseShape, idx)
+      : null;
+    if (!r) return;
+    totalS += r.fixedSales; // 業者費用按分・封鎖手数料を含む税別売上
+    totalP += r.costTotal;  // 税抜き仕入合計
+    totalU += parseInt(pl.units) || 0;
   });
   // hasAny の有無にかかわらず常に更新（古い値を残さない）
   const fp=document.getElementById('f_fixedPurchase');
   const fs=document.getElementById('f_fixedSales');
   const fu=document.getElementById('f_fixedUnits');
   if(fp)fp.value=totalP?fmt(Math.round(totalP)):'';
-  if(fs)fs.value=totalS?fmt(totalS):'';
+  if(fs)fs.value=totalS?fmt(Math.round(totalS)):'';
   if(fu)fu.value=totalU||'';
   calcFixedProfit();
   updateContractDateDisplay();
@@ -6852,7 +6815,7 @@ function buildMonthlyData(period) {
             }
           }
 
-          // 契約開始月に一時金（礼金・事務手数料・調整金）を加算
+          // 契約開始月に一時金（礼金・事務手数料・調整金・封鎖手数料・業者費用按分）を加算
           if (isF) {
             var quoteAdmin = pl.quoteAdminFee || 0;
             var quoteKey   = pl.quoteKeyMoney || 0;
@@ -6866,6 +6829,12 @@ function buildMonthlyData(period) {
             var costBlocking  = pl.blockingFee || 0;
             salesAmt += quoteBlocking;
             costAmt  += costBlocking;
+            // v111: 業者費用「任意金額」モードの按分を売上に加算（仕入には影響しない＝粗利が増える方向）
+            if (typeof calcAgencyFeeShare === 'function') {
+              var _plIndex = (c.parkingLots || []).indexOf(pl);
+              var _agencyShare = calcAgencyFeeShare(c, _plIndex) || 0;
+              salesAmt += _agencyShare;
+            }
           }
 
           // 駐車場の課税区分に応じて税抜化を分岐（非課税駐車場は元から税なし）
