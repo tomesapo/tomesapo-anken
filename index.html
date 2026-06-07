@@ -2672,8 +2672,9 @@ function calcParkingLotFixed(pl, caseObj, plIdx) {
   const costAdjExTax=(pl.taxCategory==='nontaxable')?_adj:Math.round(_adj/1.1);
   const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax+costAdjExTax;
   // v111: 業者費用「任意金額」モードの按分を確定売上に加算（仕入には影響しない）
+  //       useContractedOnly=true: 失注駐車場を除外＋契約台数で比例縮小
   if (caseObj && plIdx!=null && typeof calcAgencyFeeShare==='function'){
-    var _agency = calcAgencyFeeShare(caseObj, plIdx) || 0;
+    var _agency = calcAgencyFeeShare(caseObj, plIdx, true) || 0;
     fixedSales += _agency;
   }
   const profit=fixedSales-costTotal;
@@ -3472,25 +3473,72 @@ function onFeeModeChange(){
   if (grp) grp.style.display = (sel === 'manual') ? '' : 'none';
 }
 // 業者費用「任意金額」モードの台数按分（最終駐車場で端数吸収）
-function calcAgencyFeeShare(c, plIdx){
+// v111: useContractedOnly=true で「失注駐車場除外＋業者費用を契約台数比で比例縮小」
+//   - 見積13台で60,000円のレートに対して、契約9台なら 60,000×9/13 ≒ 41,538円
+//   - 失注(契約データなし)の駐車場は按分対象外
+// useContractedOnly=false(既定) は従来通り全駐車場で按分（見積フェーズ）
+function calcAgencyFeeShare(c, plIdx, useContractedOnly){
   var fm = c.feeMode || (c.feeBreakdownMode ? 'auto' : 'none');
   if (fm !== 'manual') return 0;
   var total = c.agencyFeeUnit || 0;
   if (!total) return 0;
   var lots = c.parkingLots || [];
   if (!lots.length) return 0;
+
+  if (useContractedOnly) {
+    // 失注判定: 契約開始日・終了日・台数が揃っている駐車場のみ「契約済」とみなす
+    var isContracted = function(pl){
+      return !!(pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0) > 0);
+    };
+    var pl = lots[plIdx];
+    if (!isContracted(pl)) return 0; // 失注駐車場には按分しない
+
+    // 見積総台数（按分母となる原数）
+    var allEstUnits = lots.reduce(function(s,l){return s + (l.estimateUnits || l.units || 1);}, 0);
+    if (!allEstUnits) return 0;
+
+    // 契約済の総台数
+    var contractedUnits = lots.reduce(function(s,l){
+      return s + (isContracted(l) ? (parseInt(l.units)||0) : 0);
+    }, 0);
+    if (!contractedUnits) return 0;
+
+    // 比例縮小: 業者費用 × (契約台数 ÷ 見積台数)
+    var scaledTotal = Math.round(total * contractedUnits / allEstUnits);
+
+    // 契約済駐車場のうち、最後のインデックスを探す（端数吸収用）
+    var lastContractedIdx = -1;
+    for (var i = 0; i < lots.length; i++) {
+      if (isContracted(lots[i])) lastContractedIdx = i;
+    }
+
+    if (plIdx === lastContractedIdx) {
+      // 最終契約駐車場で端数吸収
+      var allocated = 0;
+      for (var j = 0; j < plIdx; j++) {
+        if (isContracted(lots[j])) {
+          allocated += Math.floor(scaledTotal * (parseInt(lots[j].units)||0) / contractedUnits);
+        }
+      }
+      return scaledTotal - allocated;
+    } else {
+      return Math.floor(scaledTotal * (parseInt(pl.units)||0) / contractedUnits);
+    }
+  }
+
+  // 既存ロジック（見積フェーズ）: 全駐車場で按分
   var totalUnits = lots.reduce(function(s,l){return s + (l.estimateUnits || l.units || 1);}, 0);
   if (!totalUnits) return 0;
   if (plIdx === lots.length - 1) {
-    var allocated = 0;
+    var allocated2 = 0;
     for (var i = 0; i < plIdx; i++) {
       var u = (lots[i].estimateUnits || lots[i].units || 1);
-      allocated += Math.floor(total * u / totalUnits);
+      allocated2 += Math.floor(total * u / totalUnits);
     }
-    return total - allocated;
+    return total - allocated2;
   } else {
-    var u = (lots[plIdx].estimateUnits || lots[plIdx].units || 1);
-    return Math.floor(total * u / totalUnits);
+    var u2 = (lots[plIdx].estimateUnits || lots[plIdx].units || 1);
+    return Math.floor(total * u2 / totalUnits);
   }
 }
 
@@ -6037,8 +6085,8 @@ async function generateKakuteiMeisai(caseId,plId){
       if(agencyFeeK<0){showToast('⚠ '+(pl.name||'')+'：'+feeLabel+'がマイナスです（仕入＞見積）');}
       extras.push({label:feeLabel,period:"-",unitPrice:agencyFeeK,amount:agencyFeeK,isAgency:true});
     } else if(feeMode==='manual' && agencyFeeUnit>0){
-      // 任意金額: 案件全体「一式金額」を駐車場の台数で按分
-      var shareK = calcAgencyFeeShare(c, plIdx);
+      // 任意金額: 案件全体「一式金額」を駐車場の台数で按分（確定フェーズ: 失注駐車場除外＋比例縮小）
+      var shareK = calcAgencyFeeShare(c, plIdx, true);
       if (shareK !== 0) {
         extras.push({label:feeLabel,period:"-",unitPrice:shareK,amount:shareK,isAgency:true});
       }
@@ -6836,10 +6884,10 @@ function buildMonthlyData(period) {
             var quoteBlocking = pl.quoteBlockingFee || 0;
             salesAmt += quoteBlocking;
             blockingCostInc = pl.blockingFee || 0;
-            // v111: 業者費用「任意金額」モードの按分を売上に加算（仕入には影響しない＝粗利が増える方向）
+            // v111: 業者費用「任意金額」モードの按分を売上に加算（確定フェーズ＝失注駐車場除外＋比例縮小）
             if (typeof calcAgencyFeeShare === 'function') {
               var _plIndex = (c.parkingLots || []).indexOf(pl);
-              var _agencyShare = calcAgencyFeeShare(c, _plIndex) || 0;
+              var _agencyShare = calcAgencyFeeShare(c, _plIndex, true) || 0;
               salesAmt += _agencyShare;
             }
           }
@@ -7515,8 +7563,16 @@ async function _genInvoiceFromTemplate(c, sealMode) {
 
   // 'manual'モード: 案件全体に1行で業者費用を追加（最後にまとめて）
   if (feeMode === 'manual' && agencyFeeUnit > 0) {
-    subtotalExTax += agencyFeeUnit;
-    dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: agencyFeeUnit, amt: agencyFeeUnit, isAgency: true });
+    // v111: 失注駐車場除外＋契約台数比で比例縮小した総額を計上
+    //       per-lot share の合計＝縮小後の総額（端数は最終駐車場で吸収済み）
+    var scaledAgencyTotal = 0;
+    (c.parkingLots || []).forEach(function(_pl, _idx){
+      scaledAgencyTotal += (calcAgencyFeeShare(c, _idx, true) || 0);
+    });
+    if (scaledAgencyTotal > 0) {
+      subtotalExTax += scaledAgencyTotal;
+      dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: scaledAgencyTotal, amt: scaledAgencyTotal, isAgency: true });
+    }
   }
   const taxAmt   = Math.round(subtotalExTax * 0.1);
   const totalAmt = subtotalExTax + taxAmt;
