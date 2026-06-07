@@ -10611,6 +10611,22 @@ window.addEventListener('DOMContentLoaded', initApp);
 })();
 </script>
 
+<!-- v111: 数値入力欄でホイール操作による値変更を抑止 -->
+<script>
+(function(){
+  // フォーカス中の input[type=number] でホイール操作時に値が変わらないようイベントを抑止
+  // passive:false で preventDefault を有効にする
+  document.addEventListener('wheel', function(e){
+    var t = e.target;
+    if (t && t.tagName === 'INPUT' && t.type === 'number' && document.activeElement === t) {
+      e.preventDefault();
+      // フォーカスを外してホイール操作を本来のスクロールに戻すアプローチも可だが
+      // 入力中の利便性を優先してフォーカス維持
+    }
+  }, { passive: false });
+})();
+</script>
+
 <!-- PWA: Service Worker 登録 -->
 <script>
 if ('serviceWorker' in navigator) {
