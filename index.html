@@ -2667,7 +2667,10 @@ function calcParkingLotFixed(pl, caseObj, plIdx) {
   const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
   // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
   const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
-  const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
+  // v111: 調整金額（税込・手入力）も taxCategory に準じて税抜化して仕入に含める
+  const _adj = pl.adjustmentAmount || 0;
+  const costAdjExTax=(pl.taxCategory==='nontaxable')?_adj:Math.round(_adj/1.1);
+  const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax+costAdjExTax;
   // v111: 業者費用「任意金額」モードの按分を確定売上に加算（仕入には影響しない）
   if (caseObj && plIdx!=null && typeof calcAgencyFeeShare==='function'){
     var _agency = calcAgencyFeeShare(caseObj, plIdx) || 0;
@@ -6791,7 +6794,13 @@ function buildMonthlyData(period) {
           var dim = new Date(y, m + 1, 0).getDate();
           var isF = (y === start.getFullYear() && m === start.getMonth());
           var isL = (y === ey && m === em);
-          var salesAmt = 0, costAmt = 0;
+          var salesAmt = 0;
+          // v111: 仕入を成分別に保持し、項目別に税抜換算（calcParkingLotFixed と同じロジック）
+          var rentCostInc = 0;    // 賃料の月按分(税込)
+          var adminCostInc = 0;   // 手数料(税込) — 始月のみ
+          var keyCostInc = 0;     // 礼金(税込) — 始月のみ
+          var blockingCostInc = 0;// 封鎖手数料(税込) — 始月のみ
+          var adjCostInc = 0;     // 調整金額(税込) — 始月のみ
 
           if (pl.rateType === 'daily') {
             var ds = (isF && isL) ? (end.getDate() - start.getDate() + 1)
@@ -6799,19 +6808,19 @@ function buildMonthlyData(period) {
                    : isL ? end.getDate()
                    : dim;
             salesAmt = units * ds * quoteRate;
-            costAmt  = units * ds * costRateInc;
+            rentCostInc = units * ds * costRateInc;
           } else {
             if (isF && start.getDate() > 1 && pl.startProRate) {
               var days = dim - start.getDate() + 1;
               salesAmt = units * days * Math.floor(quoteRate / 30);
-              costAmt  = units * days * Math.floor(costRateInc / 30);
+              rentCostInc = units * days * Math.floor(costRateInc / 30);
             } else if (isL && end.getDate() < dim && pl.endProRate) {
               var days = end.getDate();
               salesAmt = units * days * Math.floor(quoteRate / 30);
-              costAmt  = units * days * Math.floor(costRateInc / 30);
+              rentCostInc = units * days * Math.floor(costRateInc / 30);
             } else {
               salesAmt = units * quoteRate;
-              costAmt  = units * costRateInc;
+              rentCostInc = units * costRateInc;
             }
           }
 
@@ -6819,16 +6828,14 @@ function buildMonthlyData(period) {
           if (isF) {
             var quoteAdmin = pl.quoteAdminFee || 0;
             var quoteKey   = pl.quoteKeyMoney || 0;
-            var costAdmin  = pl.adminFee || 0;
-            var costKey    = pl.keyMoney || 0;
             salesAmt += units * (quoteAdmin + quoteKey);
-            costAmt  += units * (costAdmin  + costKey);
-            if (pl.adjustmentAmount) costAmt += pl.adjustmentAmount;
+            adminCostInc = units * (pl.adminFee || 0);
+            keyCostInc   = units * (pl.keyMoney || 0);
+            adjCostInc   = pl.adjustmentAmount || 0;
             // v111: コインP封鎖手数料(一式・台数を掛けない・始月一括計上)
             var quoteBlocking = pl.quoteBlockingFee || 0;
-            var costBlocking  = pl.blockingFee || 0;
             salesAmt += quoteBlocking;
-            costAmt  += costBlocking;
+            blockingCostInc = pl.blockingFee || 0;
             // v111: 業者費用「任意金額」モードの按分を売上に加算（仕入には影響しない＝粗利が増える方向）
             if (typeof calcAgencyFeeShare === 'function') {
               var _plIndex = (c.parkingLots || []).indexOf(pl);
@@ -6837,10 +6844,19 @@ function buildMonthlyData(period) {
             }
           }
 
-          // 駐車場の課税区分に応じて税抜化を分岐（非課税駐車場は元から税なし）
-          var costExcl = (pl.taxCategory === 'nontaxable')
-            ? Math.round(costAmt)
-            : Math.round(costAmt / 1.1);
+          // v111: 項目別税抜換算（calcParkingLotFixed と同じ判定）
+          //   - 賃料・礼金: 地主税区分(ownerTaxable)
+          //   - 手数料:    管理会社税区分(managerTaxable)
+          //   - 封鎖・調整: 駐車場の課税区分(taxCategory)
+          var _ownerT   = !!pl.ownerTaxable;
+          var _managerT = !!pl.managerTaxable;
+          var _isNT     = (pl.taxCategory === 'nontaxable');
+          var _rentEx  = _ownerT   ? Math.round(rentCostInc / 1.1)  : rentCostInc;
+          var _adminEx = _managerT ? Math.round(adminCostInc / 1.1) : adminCostInc;
+          var _keyEx   = _ownerT   ? Math.round(keyCostInc / 1.1)   : keyCostInc;
+          var _blkEx   = _isNT     ? blockingCostInc                : Math.round(blockingCostInc / 1.1);
+          var _adjEx   = _isNT     ? adjCostInc                     : Math.round(adjCostInc / 1.1);
+          var costExcl = _rentEx + _adminEx + _keyEx + _blkEx + _adjEx;
           result[idx].sales    += salesAmt;
           result[idx].purchase += costExcl;
           result[idx].profit   += (salesAmt - costExcl);
