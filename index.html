@@ -4524,7 +4524,9 @@ function generateEstimate(caseId,plId){
   (br.postalCode?'<div>〒'+e(br.postalCode)+'</div>':'')+
   (br.address?'<div>'+e(br.address)+'</div>':'')+
   (br.email?'<div>✉：'+e(br.email)+'</div>':'')+
-  (br.tel?'<div>☎：'+e(br.tel)+'</div>':'');})()+
+  (br.tel?'<div>☎：'+e(br.tel)+'</div>':'')+
+  /* v111: 適格請求書発行事業者の登録番号（インボイス制度対応） */
+  (br.invoiceRegNo?'<div style="font-size:10px;color:#374151">登録番号：T'+e(String(br.invoiceRegNo).replace(/^T/i,''))+'</div>':'');})()+
   '</div></div>'+
   '<p style="font-size:11px;margin-bottom:6px">下記の通りお見積り申し上げます。</p>'+
   '<div class="ab"><span class="at">お見積金額(税込)</span><span class="an">'+fmtN(total)+'円</span></div>'+
@@ -4878,7 +4880,7 @@ async function generateParkingMapExcel(){
     sc('A5',''); // A5のマップ文字を消す
     // A47・A48 を自社拠点マスタから動的生成（noStyleでテンプレート書式を保持）
     sc('A47', (ed.branchName||'') + (ed.branchAddress?'｜'+ed.branchAddress:''));
-    sc('A48', '✉：' + (ed.branchEmail||''));
+    sc('A48', '✉：' + (ed.branchEmail||'') + (ed.branchInvoiceRegNo?'　登録番号：T'+String(ed.branchInvoiceRegNo).replace(/^T/i,''):''));
 
     // ── xlsx-js-style 書式設定 ──
     var F='Noto Sans JP';
@@ -5679,7 +5681,7 @@ async function generateProposalDocument(caseId){
       caseNo:c.caseNo||'',siteName:c.siteName||'',siteAddress:c.siteAddress||'',
       customerName:c.customerName||'',requestStart:c.requestStart||'',requestEnd:c.requestEnd||'',
       requestUnits:c.requestUnits!=null?c.requestUnits:'',createdAt:todayStr,
-      branchName:_br.name||'',branchAddress:_br.address||'',branchEmail:_br.email||'',branchTel:_br.tel||'',branchPostalCode:_br.postalCode||'',
+      branchName:_br.name||'',branchAddress:_br.address||'',branchEmail:_br.email||'',branchTel:_br.tel||'',branchPostalCode:_br.postalCode||'',branchInvoiceRegNo:_br.invoiceRegNo||'',
       lots:lots.map(function(pl,idx){
         var rm=pl.rateType!=='daily';
         var rent=rm?(pl.quoteMonthlyRent||0):(pl.quoteDailyRent||0);
@@ -6104,6 +6106,11 @@ async function generateKakuteiMeisai(caseId,plId){
     s1=setStr(s1,"E9",pl.address||"");
     s1=setStr(s1,"E10",startFmt);
     s1=setStr(s1,"L10",endFmt);
+    // v111: \u9069\u683c\u8acb\u6c42\u66f8\u767a\u884c\u4e8b\u696d\u8005\u306e\u767b\u9332\u756a\u53f7\uff08\u30a4\u30f3\u30dc\u30a4\u30b9\u5bfe\u5fdc\uff09
+    var _branchK = (typeof getCaseBranch==='function') ? getCaseBranch(c) : {};
+    if (_branchK && _branchK.invoiceRegNo) {
+      s1 = setStr(s1, "Y4", "\u767b\u9332\u756a\u53f7\uff1aT" + String(_branchK.invoiceRegNo).replace(/^T/i,''));
+    }
     s1=setNum(s1,"H13",totalK);
     allRowsK.forEach(function(row,i){
       if(i>=15)return;
@@ -7470,6 +7477,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   if (branch.postalCode) setV('U9', '〒' + branch.postalCode);
   if (branch.address)    setV('U10', branch.address);
   if (branch.email)      setV('U11', '✉：' + branch.email);
+  // v111: 適格請求書発行事業者の登録番号（インボイス制度上、請求書には必須）
+  if (branch.invoiceRegNo) setV('U12', '登録番号：T' + String(branch.invoiceRegNo).replace(/^T/i,''));
 
   setV('Y16', fmtD(c.paymentDue || ''));
 
