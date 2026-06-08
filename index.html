@@ -5528,6 +5528,9 @@ async function generateEstimateExcel(caseId){
       shxml=ss(shxml,"U12",_brPostal);
       shxml=ss(shxml,"U13",_brAddr);
       shxml=ss(shxml,"U14",_brEmail);
+      // v111: 適格請求書発行事業者の登録番号（インボイス対応）
+      var _brInvoiceReg = _branch.invoiceRegNo ? ("登録番号：T" + String(_branch.invoiceRegNo).replace(/^T/i,'')) : "";
+      shxml=ss(shxml,"U15",_brInvoiceReg);
       // U12/U13/U14 のフォントをNoto Sans JPに変更（styles.xmlを更新）
       var _stXml = await zip2.file("xl/styles.xml").async("string");
       var _notoIdx = -1;
@@ -5569,6 +5572,7 @@ async function generateEstimateExcel(caseId){
       shxml = _replaceCellStyle(shxml, "U12", _notoXfIdx);
       shxml = _replaceCellStyle(shxml, "U13", _notoXfIdx);
       shxml = _replaceCellStyle(shxml, "U14", _notoXfIdx);
+      shxml = _replaceCellStyle(shxml, "U15", _notoXfIdx);
       // ロゴ画像をU8:AD10に差し込み（draw)
       zip2.file("xl/media/image_logo.png", _logoPngBytes);
       var _drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
