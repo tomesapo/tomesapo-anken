@@ -617,6 +617,7 @@
         <button onclick="openAnalyticsView();closeHbMenus()">📈 取引分析</button>
         <button onclick="openSalesView();closeHbMenus()">📊 売上集計</button>
         <button onclick="openMonthlyReport();closeHbMenus()">📋 月次レポート</button>
+        <button onclick="openCashflowView();closeHbMenus()">💰 資金繰り予測</button>
         <button onclick="openDepositView();closeHbMenus()">💰 保証金</button>
       </div>
     </div>
@@ -854,6 +855,20 @@
       <button class="monthly-close-btn" onclick="closeMonthlyReport()">&#10005; 閉じる</button>
     </div>
     <div class="monthly-body" id="monthlyBody"></div>
+  </div>
+</div>
+
+<!-- v111: 💰 資金繰り予測ビュー -->
+<div class="monthly-overlay" id="cashflowOverlay">
+  <div class="monthly-panel">
+    <div class="monthly-header">
+      <h2>&#128176; 資金繰り予測</h2>
+      <div style="flex:1;font-size:11px;color:rgba(255,255,255,.85);margin-left:14px;line-height:1.4">
+        提案済・未申込・契約中の案件を対象に、依頼開始日から仕入支払予定月（前月）・顧客入金予定月（当月末）を推計
+      </div>
+      <button class="monthly-close-btn" onclick="closeCashflowView()">&#10005; 閉じる</button>
+    </div>
+    <div class="monthly-body" id="cashflowBody"></div>
   </div>
 </div>
 
@@ -6827,6 +6842,131 @@ function periodStartYear(p) { return FISCAL_BASE_YEAR + (p - 1); }
 
 var monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
 
+// v111: 資金繰り予測ビュー
+// 対象: 提案済・未申込・契約中の案件
+// 仕入予定月 = 依頼開始月の前月、入金予定月 = 依頼開始月の月末
+const CASHFLOW_TARGET_STATUSES = ['提案済','未申込','契約中'];
+function openCashflowView() {
+  document.getElementById('cashflowOverlay').classList.add('open');
+  renderCashflowView();
+}
+function closeCashflowView() {
+  document.getElementById('cashflowOverlay').classList.remove('open');
+}
+function buildCashflowForecast() {
+  // 月キー: "YYYY-MM"
+  var map = {}; // ym -> { out:{total,items:[]}, in:{total,items:[]} }
+  function _bucket(ym) {
+    if (!map[ym]) map[ym] = { ym: ym, out: { total: 0, items: [] }, in: { total: 0, items: [] } };
+    return map[ym];
+  }
+  function _pad(n) { return (n<10?'0':'') + n; }
+  function _prevMonthYM(d) {
+    var y = d.getFullYear(), m = d.getMonth(); // m: 0-indexed
+    // 前月
+    if (m === 0) { y -= 1; m = 11; } else { m -= 1; }
+    return y + '-' + _pad(m+1);
+  }
+  function _ymOf(d) {
+    return d.getFullYear() + '-' + _pad(d.getMonth()+1);
+  }
+  cases.forEach(function(c) {
+    if (!CASHFLOW_TARGET_STATUSES.includes(c.status)) return;
+    if (!c.requestStart) return; // 依頼開始日がなければ予測不可
+    var start = new Date(c.requestStart + 'T00:00:00');
+    if (isNaN(start.getTime())) return;
+    // 仕入予定月 = 依頼開始月の前月
+    var outYM = _prevMonthYM(start);
+    // 入金予定月 = 依頼開始月（月末イメージ、ymベース）
+    var inYM = _ymOf(start);
+    // 仕入予定額 = 各駐車場の purchaseAmount の合計（税込）
+    var outAmt = 0;
+    (c.parkingLots || []).forEach(function(pl) {
+      outAmt += (parseFloat(pl.purchaseAmount) || 0);
+    });
+    // 入金予定額 = 税込確定売上 (なければ確定売上×1.1、なければ見積売上×1.1)
+    var inAmt = 0;
+    if (c.taxIncludedSales) inAmt = parseFloat(c.taxIncludedSales) || 0;
+    else if (c.fixedSales) inAmt = Math.round((parseFloat(c.fixedSales) || 0) * 1.1);
+    else if (c.estSales) inAmt = Math.round((parseFloat(c.estSales) || 0) * 1.1);
+    if (outAmt > 0) {
+      var b1 = _bucket(outYM);
+      b1.out.total += outAmt;
+      b1.out.items.push({ caseNo: c.caseNo, status: c.status, customerName: c.customerName||'', siteName: c.siteName||'', amount: outAmt });
+    }
+    if (inAmt > 0) {
+      var b2 = _bucket(inYM);
+      b2.in.total += inAmt;
+      b2.in.items.push({ caseNo: c.caseNo, status: c.status, customerName: c.customerName||'', siteName: c.siteName||'', amount: inAmt });
+    }
+  });
+  // ym 順に並べる
+  var rows = Object.keys(map).sort().map(function(k){ return map[k]; });
+  return rows;
+}
+function renderCashflowView() {
+  var rows = buildCashflowForecast();
+  var body = document.getElementById('cashflowBody');
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9ca3af">提案済・未申込・契約中の案件で、依頼開始日が入力されたものがありません</div>';
+    return;
+  }
+  // 全体サマリ
+  var totalOut = 0, totalIn = 0;
+  rows.forEach(function(r){ totalOut += r.out.total; totalIn += r.in.total; });
+  var net = totalIn - totalOut;
+  var f = function(v){ return '¥' + Math.round(v||0).toLocaleString('ja-JP'); };
+  var fYM = function(ym){ var p=ym.split('-'); return p[0]+'年'+parseInt(p[1])+'月'; };
+  var html = '';
+  // 全体サマリカード
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:14px">';
+  html += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px"><div style="font-size:11px;color:#991b1b;font-weight:700">予定支出合計</div><div style="font-size:20px;font-weight:700;color:#dc2626;margin-top:2px">'+f(totalOut)+'</div></div>';
+  html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px"><div style="font-size:11px;color:#166534;font-weight:700">予定入金合計</div><div style="font-size:20px;font-weight:700;color:#16a34a;margin-top:2px">'+f(totalIn)+'</div></div>';
+  html += '<div style="background:'+(net>=0?'#eff6ff':'#fef2f2')+';border:1px solid '+(net>=0?'#bfdbfe':'#fecaca')+';border-radius:8px;padding:12px"><div style="font-size:11px;color:'+(net>=0?'#1e40af':'#991b1b')+';font-weight:700">予測差額（入金−支出）</div><div style="font-size:20px;font-weight:700;color:'+(net>=0?'#1e40af':'#dc2626')+';margin-top:2px">'+(net>=0?'+':'')+f(net)+'</div></div>';
+  html += '</div>';
+  // 月別テーブル
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#1e3a5f;color:white">';
+  html += '<th style="padding:10px;text-align:left">月</th>';
+  html += '<th style="padding:10px;text-align:right">予定支出（仕入先）</th>';
+  html += '<th style="padding:10px;text-align:right">予定入金（顧客）</th>';
+  html += '<th style="padding:10px;text-align:right">月別差額</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(function(r, idx){
+    var diff = r.in.total - r.out.total;
+    var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+    html += '<tr style="background:'+rowBg+';border-bottom:1px solid #e5e7eb;cursor:pointer" onclick="_toggleCashflowDetail(\''+r.ym+'\')">';
+    html += '<td style="padding:10px;font-weight:700;color:#1e3a5f">▶ '+fYM(r.ym)+'</td>';
+    html += '<td style="padding:10px;text-align:right;color:#dc2626;font-weight:600">'+(r.out.total?'-'+f(r.out.total):'—')+'</td>';
+    html += '<td style="padding:10px;text-align:right;color:#16a34a;font-weight:600">'+(r.in.total?'+'+f(r.in.total):'—')+'</td>';
+    html += '<td style="padding:10px;text-align:right;font-weight:700;color:'+(diff>=0?'#1e40af':'#dc2626')+'">'+(diff>=0?'+':'')+f(diff)+'</td>';
+    html += '</tr>';
+    // 内訳（折りたたみ）
+    html += '<tr id="_cfDetail_'+r.ym+'" style="display:none"><td colspan="4" style="padding:0 16px 12px 30px;background:'+rowBg+'">';
+    if (r.out.items.length) {
+      html += '<div style="margin-top:6px"><div style="font-size:11px;color:#991b1b;font-weight:700;margin-bottom:4px">＜支出予定 内訳＞</div>';
+      r.out.items.forEach(function(it){
+        html += '<div style="font-size:12px;padding:3px 0;color:#374151">・<span style="color:#1e3a5f;font-weight:600">'+esc(it.caseNo)+'</span>  <span style="color:#6b7280">['+esc(it.status)+']</span>  '+esc(it.customerName)+' / '+esc(it.siteName)+'  <span style="float:right;color:#dc2626;font-weight:600">-'+f(it.amount)+'</span></div>';
+      });
+      html += '</div>';
+    }
+    if (r.in.items.length) {
+      html += '<div style="margin-top:8px"><div style="font-size:11px;color:#166534;font-weight:700;margin-bottom:4px">＜入金予定 内訳＞</div>';
+      r.in.items.forEach(function(it){
+        html += '<div style="font-size:12px;padding:3px 0;color:#374151">・<span style="color:#1e3a5f;font-weight:600">'+esc(it.caseNo)+'</span>  <span style="color:#6b7280">['+esc(it.status)+']</span>  '+esc(it.customerName)+' / '+esc(it.siteName)+'  <span style="float:right;color:#16a34a;font-weight:600">+'+f(it.amount)+'</span></div>';
+      });
+      html += '</div>';
+    }
+    html += '</td></tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+function _toggleCashflowDetail(ym) {
+  var el = document.getElementById('_cfDetail_' + ym);
+  if (!el) return;
+  el.style.display = (el.style.display === 'none') ? '' : 'none';
+}
 function openMonthlyReport() {
   monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
   document.getElementById('monthlyOverlay').classList.add('open');
@@ -10654,14 +10794,10 @@ window.addEventListener('DOMContentLoaded', initApp);
 <!-- v111: 数値入力欄でホイール操作による値変更を抑止 -->
 <script>
 (function(){
-  // フォーカス中の input[type=number] でホイール操作時に値が変わらないようイベントを抑止
-  // passive:false で preventDefault を有効にする
   document.addEventListener('wheel', function(e){
     var t = e.target;
     if (t && t.tagName === 'INPUT' && t.type === 'number' && document.activeElement === t) {
       e.preventDefault();
-      // フォーカスを外してホイール操作を本来のスクロールに戻すアプローチも可だが
-      // 入力中の利便性を優先してフォーカス維持
     }
   }, { passive: false });
 })();
