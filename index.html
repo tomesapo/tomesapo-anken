@@ -864,7 +864,8 @@
     <div class="monthly-header">
       <h2>&#128176; 資金繰り予測</h2>
       <div style="flex:1;font-size:11px;color:rgba(255,255,255,.85);margin-left:14px;line-height:1.4">
-        提案済・未申込・契約中の案件を対象に、依頼開始日から仕入支払予定月（前月）・顧客入金予定月（当月末）を推計
+        提案済案件のみ対象 ／ 見積仕入（前月支払予定・税別）・見積売上（依頼開始月入金予定・税別）<br>
+        資金ショート回避・追加融資タイミングの把握用
       </div>
       <button class="monthly-close-btn" onclick="closeCashflowView()">&#10005; 閉じる</button>
     </div>
@@ -6843,9 +6844,11 @@ function periodStartYear(p) { return FISCAL_BASE_YEAR + (p - 1); }
 var monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
 
 // v111: 資金繰り予測ビュー
-// 対象: 提案済・未申込・契約中の案件
-// 仕入予定月 = 依頼開始月の前月、入金予定月 = 依頼開始月の月末
-const CASHFLOW_TARGET_STATUSES = ['提案済','未申込','契約中'];
+// 目的: 資金ショート防止のため、追加融資タイミングを把握する
+// 対象: 提案済のみ（未申込・契約中は既に確定数字が見えるので除外）
+// 仕入予定月 = 依頼開始月の前月、入金予定月 = 依頼開始月
+// 金額源: 見積売上 (c.estSales) / 見積仕入 (c.estPurchase) ※税別
+const CASHFLOW_TARGET_STATUSES = ['提案済'];
 function openCashflowView() {
   document.getElementById('cashflowOverlay').classList.add('open');
   renderCashflowView();
@@ -6879,16 +6882,9 @@ function buildCashflowForecast() {
     var outYM = _prevMonthYM(start);
     // 入金予定月 = 依頼開始月（月末イメージ、ymベース）
     var inYM = _ymOf(start);
-    // 仕入予定額 = 各駐車場の purchaseAmount の合計（税込）
-    var outAmt = 0;
-    (c.parkingLots || []).forEach(function(pl) {
-      outAmt += (parseFloat(pl.purchaseAmount) || 0);
-    });
-    // 入金予定額 = 税込確定売上 (なければ確定売上×1.1、なければ見積売上×1.1)
-    var inAmt = 0;
-    if (c.taxIncludedSales) inAmt = parseFloat(c.taxIncludedSales) || 0;
-    else if (c.fixedSales) inAmt = Math.round((parseFloat(c.fixedSales) || 0) * 1.1);
-    else if (c.estSales) inAmt = Math.round((parseFloat(c.estSales) || 0) * 1.1);
+    // v111: 提案済フェーズ → 見積売上・見積仕入ベース（税別）
+    var outAmt = parseFloat(c.estPurchase) || 0;
+    var inAmt  = parseFloat(c.estSales) || 0;
     if (outAmt > 0) {
       var b1 = _bucket(outYM);
       b1.out.total += outAmt;
@@ -6909,7 +6905,7 @@ function renderCashflowView() {
   var body = document.getElementById('cashflowBody');
   if (!body) return;
   if (!rows.length) {
-    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9ca3af">提案済・未申込・契約中の案件で、依頼開始日が入力されたものがありません</div>';
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9ca3af">提案済の案件で、依頼開始日が入力されたものがありません</div>';
     return;
   }
   // 全体サマリ
