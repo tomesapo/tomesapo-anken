@@ -3435,6 +3435,18 @@ function renderStats(){
   const totalFP=ordered.reduce((s,c)=>s+(c.fixedProfit||0),0);
   const totalTI=ordered.reduce((s,c)=>s+(c.taxIncludedSales||0),0);
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
+  // v111: 仕入未振込駐車場の件数（受注以降のステータスで pl.units あり かつ supplierPaymentDate 未入力）
+  const PAY_TARGET_STATUSES = ['契約中','未請求','請求済','入金済'];
+  let supplierUnpaidCount = 0;
+  cases.forEach(c => {
+    if (!PAY_TARGET_STATUSES.includes(c.status)) return;
+    (c.parkingLots || []).forEach(pl => {
+      // 契約済み駐車場（contractStart/End/units あり）で支払日が未入力ならカウント
+      if (pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0) > 0 && !pl.supplierPaymentDate) {
+        supplierUnpaidCount++;
+      }
+    });
+  });
   function _isAct(a){return activeStatuses&&JSON.stringify(activeStatuses)===JSON.stringify(a);}
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
@@ -3447,7 +3459,9 @@ function renderStats(){
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+(totalFP>=0?'var(--success)':'var(--danger)')+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     (function(){var sst=_calcSiteUnitPrice(ordered);return '<div class="stat-card"><div class="stat-label">現場単価 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(Math.round(sst.avgPerSite))+'</div><div class="stat-sub">'+sst.siteCount+'現場の平均</div></div>';})()+
-    '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>';
+    '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>'+
+    /* v111: 仕入未振込駐車場（地主・管理会社への振込未完了） */
+    '<div class="stat-card"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>';
 }
 function updateYearFilter(){
   const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
@@ -3792,7 +3806,9 @@ function addParkingLotCard(pl={}) {
           '<div class="form-group"><label>契約台数'+(pl.rentMode==='lump'?' <span class="auto-tag" style="background:#fef3c7;color:#92400e">土地一括</span>':'')+'</label><input type="number" name="pl_units" min="1" placeholder="0" value="'+(pl.rentMode==='lump'?'1':(pl.units||''))+'" '+(pl.rentMode==='lump'?'readonly style="background:#f3f4f6;color:#6b7280"':'')+' onchange="calcPlPurchase(this)"></div>' +
           '<div class="form-group"><label>調整金額 <span class="auto-tag">税込</span></label><input type="number" name="pl_adjustmentAmount" placeholder="0" value="'+(pl.adjustmentAmount!=null?pl.adjustmentAmount:'')+'" onchange="calcPlPurchase(this)"></div>' +
           '<div class="form-group"><label>仕入金額（自動計算） <span class="auto-tag">税込</span></label><input type="text" name="pl_purchaseAmount" readonly class="readonly-calc" placeholder="自動計算" value="'+(pl.purchaseAmount!=null?fmt(pl.purchaseAmount):'')+'"></div>' +
-          '<div class="form-group span-2"><label>請求額（自動計算） <span class="auto-tag">税込・保証金含む</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
+          '<div class="form-group"><label>請求額（自動計算） <span class="auto-tag">税込・保証金含む</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
+          /* v111: 仕入先への振込日（地主・管理会社への一括支払日） */
+          '<div class="form-group"><label>仕入支払日 <span class="auto-tag">地主・管理会社へ振込</span></label><input type="date" name="pl_supplierPaymentDate" value="'+(pl.supplierPaymentDate||'')+'"></div>' +
         '</div></div>' +
         '<div class="form-group"><label>保証金 <span class="auto-tag">1台あたり</span></label><input type="number" name="pl_deposit" min="0" placeholder="0" value="'+(pl.deposit!=null?pl.deposit:'')+'" onchange="calcPlPurchase(this)"></div>' +
         '<div class="form-group"><label>開始月日割</label>' +
@@ -4290,6 +4306,7 @@ function getParkingLotsFromForm(){
       contractStart:g('pl_contractStart')?g('pl_contractStart').value||'':'',
       contractEnd:g('pl_contractEnd')?g('pl_contractEnd').value||'':'',
       adjustmentAmount:g('pl_adjustmentAmount')?(parseFloat(g('pl_adjustmentAmount').value)||0):0,
+      supplierPaymentDate:g('pl_supplierPaymentDate')?g('pl_supplierPaymentDate').value||'':'', // v111: 仕入先(地主・管理会社)への振込日
       purchaseAmount:g('pl_purchaseAmount')?(parseFloat((g('pl_purchaseAmount').value||'').replace(/,/g,''))||null):null,
       invoiceAmount:g('pl_invoiceAmount')?(parseFloat((g('pl_invoiceAmount').value||'').replace(/,/g,''))||null):null,
       photo:pa?(pa.dataset.photo||''):'',
@@ -4377,6 +4394,16 @@ function renderParkingLotsDetail(c){
         h+='<div><div style="font-size:9px;color:var(--gray-500)">確定粗利</div><div style="font-weight:700;font-size:12px;color:'+pc+'">¥'+fmt(fx.profit)+'</div></div>';
         h+='<div><div style="font-size:9px;color:var(--gray-500)">粗利率</div><div style="font-weight:700;font-size:12px;color:'+pc+'">'+fx.margin.toFixed(1)+'%</div></div>';
         h+='</div></div>';
+        // v111: 仕入先（地主・管理会社）への振込日
+        var _spd = pl.supplierPaymentDate || '';
+        var _spdLabel = _spd ? ('✓ ' + _spd.replace(/-/g,'/')) : '✗ 未振込';
+        var _spdColor = _spd ? '#16a34a' : '#dc2626';
+        var _spdBg    = _spd ? '#f0fdf4' : '#fef2f2';
+        var _spdBd    = _spd ? '#bbf7d0' : '#fecaca';
+        h+='<div style="margin-top:4px;background:'+_spdBg+';border:1px solid '+_spdBd+';border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'+
+          '<div style="font-size:10px;font-weight:700;color:'+_spdColor+'">💸 仕入支払日</div>'+
+          '<div style="font-size:12px;font-weight:700;color:'+_spdColor+'">'+_spdLabel+'</div>'+
+        '</div>';
       }
     }
     h+='</div>';
