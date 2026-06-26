@@ -6965,6 +6965,10 @@ function _toggleCashflowDetail(ym) {
   el.style.display = (el.style.display === 'none') ? '' : 'none';
 }
 // v111: 資金繰り予測の Excel 出力
+// シンプルな構成で xlsx-js-style の修復警告を回避
+//   - null 値の代わりに「—」文字列を使用
+//   - 各セルに t:'n' / t:'s' を明示
+//   - 複雑な numFmt（条件付き）は使わず単純な #,##0 のみ
 async function exportCashflowExcel() {
   if (typeof XLSX === 'undefined') { await waitXLSX(); }
   var rows = buildCashflowForecast();
@@ -6972,56 +6976,59 @@ async function exportCashflowExcel() {
 
   var F = 'Noto Sans JP';
   var bdr = {top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}};
-  var sTitle    = {font:{name:F,bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center',vertical:'center'}};
-  var sSubtitle = {font:{name:F,sz:10,color:{rgb:'6B7280'}}, alignment:{horizontal:'left',vertical:'center'}};
-  var sHdr      = {font:{name:F,bold:true,sz:11,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
-  var sMonth    = {font:{name:F,bold:true,sz:11,color:{rgb:'1E3A5F'}}, fill:{fgColor:{rgb:'F3F4F6'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
-  var sOut      = {font:{name:F,sz:11,color:{rgb:'DC2626'}}, numFmt:'#,##0;-#,##0;"—"', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sIn       = {font:{name:F,sz:11,color:{rgb:'16A34A'}}, numFmt:'#,##0;-#,##0;"—"', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sNetPos   = {font:{name:F,bold:true,sz:11,color:{rgb:'1E40AF'}}, numFmt:'+#,##0;-#,##0;0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sNetNeg   = {font:{name:F,bold:true,sz:11,color:{rgb:'DC2626'}}, numFmt:'+#,##0;-#,##0;0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sTotal    = {font:{name:F,bold:true,sz:12}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sTotalLbl = {font:{name:F,bold:true,sz:12}, fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
-  var sDetailLbl= {font:{name:F,bold:true,sz:10,color:{rgb:'6B7280'}}, fill:{fgColor:{rgb:'F9FAFB'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
-  var sDetail   = {font:{name:F,sz:10}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
-  var sDetailNumOut = {font:{name:F,sz:10,color:{rgb:'DC2626'}}, numFmt:'-#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
-  var sDetailNumIn  = {font:{name:F,sz:10,color:{rgb:'16A34A'}}, numFmt:'+#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTitle      = {font:{name:F,bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center',vertical:'center'}};
+  var sSubtitle   = {font:{name:F,sz:10,color:{rgb:'6B7280'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sHdr        = {font:{name:F,bold:true,sz:11,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sMonth      = {font:{name:F,bold:true,sz:11,color:{rgb:'1E3A5F'}}, fill:{fgColor:{rgb:'F3F4F6'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+  var sOutNum     = {font:{name:F,sz:11,color:{rgb:'DC2626'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sInNum      = {font:{name:F,sz:11,color:{rgb:'16A34A'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sNetPosNum  = {font:{name:F,bold:true,sz:11,color:{rgb:'1E40AF'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sNetNegNum  = {font:{name:F,bold:true,sz:11,color:{rgb:'DC2626'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sEmpty      = {font:{name:F,sz:11,color:{rgb:'9CA3AF'}}, alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTotalLbl   = {font:{name:F,bold:true,sz:12}, fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+  var sTotalOut   = {font:{name:F,bold:true,sz:12,color:{rgb:'DC2626'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTotalIn    = {font:{name:F,bold:true,sz:12,color:{rgb:'16A34A'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTotalNetP  = {font:{name:F,bold:true,sz:12,color:{rgb:'1E40AF'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sTotalNetN  = {font:{name:F,bold:true,sz:12,color:{rgb:'DC2626'}}, fill:{fgColor:{rgb:'E5E7EB'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sDetLblOut  = {font:{name:F,bold:true,sz:10,color:{rgb:'DC2626'}}, fill:{fgColor:{rgb:'F9FAFB'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sDetLblIn   = {font:{name:F,bold:true,sz:10,color:{rgb:'16A34A'}}, fill:{fgColor:{rgb:'F9FAFB'}}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
+  var sDetail     = {font:{name:F,sz:10}, alignment:{horizontal:'left',vertical:'center'}, border:bdr};
+  var sDetailOut  = {font:{name:F,sz:10,color:{rgb:'DC2626'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
+  var sDetailIn   = {font:{name:F,sz:10,color:{rgb:'16A34A'}}, numFmt:'#,##0', alignment:{horizontal:'right',vertical:'center'}, border:bdr};
 
   var fYM = function(ym){ var p=ym.split('-'); return p[0]+'年'+parseInt(p[1])+'月'; };
   var today = new Date();
   var todayStr = today.getFullYear()+'/'+(today.getMonth()+1)+'/'+today.getDate();
 
-  // 月別合計データ
   var totalOut = 0, totalIn = 0;
   rows.forEach(function(r){ totalOut += r.out.total; totalIn += r.in.total; });
   var net = totalIn - totalOut;
 
   // ─── シート1: 月別合計 ───
   var aoa1 = [];
-  aoa1.push([ {v:'資金繰り予測（提案済案件・税別）', s:sTitle}, '', '', '' ]);
-  aoa1.push([ {v:'出力日：'+todayStr+'　／　対象：提案済ステータスのみ　／　仕入予定月＝依頼開始月の前月、入金予定月＝依頼開始月', s:sSubtitle}, '', '', '' ]);
+  aoa1.push([ {v:'資金繰り予測(提案済案件・税別)', t:'s', s:sTitle}, '', '', '' ]);
+  aoa1.push([ {v:'出力日:'+todayStr+'  /  対象:提案済ステータスのみ  /  仕入予定月=依頼開始月の前月、入金予定月=依頼開始月', t:'s', s:sSubtitle}, '', '', '' ]);
   aoa1.push(['','','','']);
   aoa1.push([
-    {v:'月', s:sHdr},
-    {v:'予定支出（仕入先）', s:sHdr},
-    {v:'予定入金（顧客）', s:sHdr},
-    {v:'月別差額', s:sHdr}
+    {v:'月', t:'s', s:sHdr},
+    {v:'予定支出(仕入先)', t:'s', s:sHdr},
+    {v:'予定入金(顧客)', t:'s', s:sHdr},
+    {v:'月別差額', t:'s', s:sHdr}
   ]);
   rows.forEach(function(r){
     var diff = r.in.total - r.out.total;
     aoa1.push([
-      {v:fYM(r.ym), s:sMonth},
-      {v: r.out.total ? -r.out.total : null, s:sOut},
-      {v: r.in.total  ?  r.in.total  : null, s:sIn},
-      {v: diff, s: (diff>=0 ? sNetPos : sNetNeg)}
+      {v:fYM(r.ym), t:'s', s:sMonth},
+      r.out.total ? {v: -r.out.total, t:'n', s:sOutNum} : {v: '—', t:'s', s:sEmpty},
+      r.in.total  ? {v: r.in.total,   t:'n', s:sInNum}  : {v: '—', t:'s', s:sEmpty},
+      {v: diff, t:'n', s: (diff>=0 ? sNetPosNum : sNetNegNum)}
     ]);
   });
-  // 合計行
   aoa1.push([
-    {v:'合計', s:sTotalLbl},
-    {v: -totalOut, s:Object.assign({},sTotal,{font:{name:F,bold:true,sz:12,color:{rgb:'DC2626'}}})},
-    {v: totalIn,   s:Object.assign({},sTotal,{font:{name:F,bold:true,sz:12,color:{rgb:'16A34A'}}})},
-    {v: net,       s:Object.assign({},sTotal,{font:{name:F,bold:true,sz:12,color:{rgb:(net>=0?'1E40AF':'DC2626')}}})}
+    {v:'合計', t:'s', s:sTotalLbl},
+    {v: -totalOut, t:'n', s:sTotalOut},
+    {v: totalIn,   t:'n', s:sTotalIn},
+    {v: net,       t:'n', s: (net>=0 ? sTotalNetP : sTotalNetN)}
   ]);
 
   var ws1 = XLSX.utils.aoa_to_sheet(aoa1);
@@ -7034,37 +7041,37 @@ async function exportCashflowExcel() {
 
   // ─── シート2: 案件内訳 ───
   var aoa2 = [];
-  aoa2.push([ {v:'資金繰り予測 案件内訳', s:sTitle}, '', '', '', '', '' ]);
-  aoa2.push([ {v:'出力日：'+todayStr, s:sSubtitle}, '', '', '', '', '' ]);
+  aoa2.push([ {v:'資金繰り予測 案件内訳', t:'s', s:sTitle}, '', '', '', '', '' ]);
+  aoa2.push([ {v:'出力日:'+todayStr, t:'s', s:sSubtitle}, '', '', '', '', '' ]);
   aoa2.push(['','','','','','']);
   aoa2.push([
-    {v:'月', s:sHdr},
-    {v:'区分', s:sHdr},
-    {v:'案件番号', s:sHdr},
-    {v:'ステータス', s:sHdr},
-    {v:'顧客名／現場名', s:sHdr},
-    {v:'金額', s:sHdr}
+    {v:'月', t:'s', s:sHdr},
+    {v:'区分', t:'s', s:sHdr},
+    {v:'案件番号', t:'s', s:sHdr},
+    {v:'ステータス', t:'s', s:sHdr},
+    {v:'顧客名/現場名', t:'s', s:sHdr},
+    {v:'金額', t:'s', s:sHdr}
   ]);
   rows.forEach(function(r){
     var monthLabel = fYM(r.ym);
     r.out.items.forEach(function(it){
       aoa2.push([
-        {v:monthLabel, s:sMonth},
-        {v:'支出', s:Object.assign({},sDetailLbl,{font:{name:F,bold:true,sz:10,color:{rgb:'DC2626'}}})},
-        {v:it.caseNo, s:sDetail},
-        {v:it.status, s:sDetail},
-        {v:(it.customerName||'')+' / '+(it.siteName||''), s:sDetail},
-        {v:-it.amount, s:sDetailNumOut}
+        {v:monthLabel, t:'s', s:sMonth},
+        {v:'支出', t:'s', s:sDetLblOut},
+        {v:String(it.caseNo||''), t:'s', s:sDetail},
+        {v:String(it.status||''), t:'s', s:sDetail},
+        {v:String((it.customerName||'')+' / '+(it.siteName||'')), t:'s', s:sDetail},
+        {v:-it.amount, t:'n', s:sDetailOut}
       ]);
     });
     r.in.items.forEach(function(it){
       aoa2.push([
-        {v:monthLabel, s:sMonth},
-        {v:'入金', s:Object.assign({},sDetailLbl,{font:{name:F,bold:true,sz:10,color:{rgb:'16A34A'}}})},
-        {v:it.caseNo, s:sDetail},
-        {v:it.status, s:sDetail},
-        {v:(it.customerName||'')+' / '+(it.siteName||''), s:sDetail},
-        {v:it.amount, s:sDetailNumIn}
+        {v:monthLabel, t:'s', s:sMonth},
+        {v:'入金', t:'s', s:sDetLblIn},
+        {v:String(it.caseNo||''), t:'s', s:sDetail},
+        {v:String(it.status||''), t:'s', s:sDetail},
+        {v:String((it.customerName||'')+' / '+(it.siteName||'')), t:'s', s:sDetail},
+        {v:it.amount, t:'n', s:sDetailIn}
       ]);
     });
   });
@@ -7076,7 +7083,6 @@ async function exportCashflowExcel() {
   ];
   ws2['!rows'] = [{hpt:28},{hpt:22}];
 
-  // ─── ブック組み立て＋ダウンロード ───
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws1, '月別合計');
   XLSX.utils.book_append_sheet(wb, ws2, '案件内訳');
