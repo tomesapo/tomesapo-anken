@@ -7633,10 +7633,10 @@ async function _buildCoverLetterExcel(c, branch, sealMode) {
   aoa.push(['', '', '', '', '', {v: todayStr, t:'s', s:sDate}]);
   // Row 2: 空行
   aoa.push(['','','','','','']);
-  // Row 3: 宛先（顧客会社名）
-  aoa.push([ {v: customerName + '　御中', t:'s', s:sCustomer}, '', '', '', '', '' ]);
-  // Row 4: 宛先（担当者名）
-  aoa.push([ {v: (staffName ? staffName + '　様' : ''), t:'s', s:sCustSub}, '', '', '', '', '' ]);
+  // Row 3: 宛先（顧客会社名）— v111: 半角スペースに統一
+  aoa.push([ {v: customerName + ' 御中', t:'s', s:sCustomer}, '', '', '', '', '' ]);
+  // Row 4: 宛先（担当者名）— v111: 半角スペースに統一
+  aoa.push([ {v: (staffName ? staffName + ' 様' : ''), t:'s', s:sCustSub}, '', '', '', '', '' ]);
   // Row 5: 空行
   aoa.push(['','','','','','']);
   // Row 6-11: 自社情報（右寄せ）
@@ -7670,7 +7670,8 @@ async function _buildCoverLetterExcel(c, branch, sealMode) {
   aoa.push([ {v: '以上', t:'s', s:sIjo}, '', '', '', '', '' ]);
 
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:16},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
+  // v111: A4縦1ページに収まるよう列幅縮小（合計 約80 chars 幅）
+  ws['!cols'] = [{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:18}];
   // タイトル行と記行はセル結合
   ws['!merges'] = [
     {s:{r:2,c:0},e:{r:2,c:4}},   // 宛先会社名
@@ -7715,18 +7716,23 @@ async function _buildCoverLetterExcel(c, branch, sealMode) {
     {hpt:14}, // 空
     {hpt:22}  // 以上
   ];
-  // 印刷設定（A4縦・余白・センタリング）
-  ws['!margins'] = { left:0.7, right:0.7, top:0.75, bottom:0.75, header:0.3, footer:0.3 };
-  ws['!pageSetup'] = { orientation:'portrait', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:1 };
-  ws['!printOptions'] = { horizontalCentered:true };
+  // v111: 印刷設定（A4縦・余白狭め・センタリング・強制1ページ）
+  ws['!margins'] = { left:0.5, right:0.5, top:0.5, bottom:0.5, header:0.3, footer:0.3 };
+  ws['!pageSetup'] = { orientation:'portrait', paperSize:9, fitToWidth:1, fitToHeight:1, scale:100 };
+  ws['!printOptions'] = { horizontalCentered:true, verticalCentered:false };
+  // sheetPr で fitToPage を有効化（xlsx-js-style はこの階層で扱う）
+  ws['!sheetPr'] = { pageSetUpPr: { fitToPage: true } };
 
   // ─── ブック組み立て ───
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '送付状');
 
+  // v111: xlsx-js-style は fitToPage 系を正しく出力しないため、XML 直接編集で強制
+  var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  wbout = await _forceCoverLetterOnePage(wbout);
+
   // ─── 電子印挿入（印鑑あり指定時） ───
   //   ExcelJS を使わず XLSX + JSZip でシンプルに実装（画像1枚のみ）
-  var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
   if (sealMode === 'seal') {
     try {
       var sealB64 = getBranchSealBase64(branch, 'square');
@@ -7763,6 +7769,38 @@ function _b64ToBytesLocal(b64) {
   var arr = new Uint8Array(raw.length);
   for (var i=0; i<raw.length; i++) arr[i] = raw.charCodeAt(i);
   return arr;
+}
+// v111: 送付状シートに fitToPage 系設定を強制注入（A4縦 1ページ）
+async function _forceCoverLetterOnePage(wboutBuf) {
+  var zip = await JSZip.loadAsync(wboutBuf);
+  var sXmlPath = 'xl/worksheets/sheet1.xml';
+  var sXml = await zip.file(sXmlPath).async('string');
+  // 1) <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr> を追加
+  if (!/<sheetPr[\s>]/.test(sXml)) {
+    sXml = sXml.replace(/(<worksheet[^>]*>)/, '$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  } else if (!/pageSetUpPr/.test(sXml)) {
+    sXml = sXml.replace(/<sheetPr([^>\/]*)>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/>');
+  }
+  // 2) <pageSetup> を A4縦 1ページ設定に置換／追加
+  var psTag = '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="1"/>';
+  if (/<pageSetup\s/.test(sXml)) {
+    sXml = sXml.replace(/<pageSetup[^>]*\/>/g, psTag);
+  } else if (/<pageMargins[^\/]*\/>/.test(sXml)) {
+    sXml = sXml.replace(/(<pageMargins[^\/]*\/>)/, '$1' + psTag);
+  } else {
+    sXml = sXml.replace('</worksheet>', psTag + '</worksheet>');
+  }
+  // 3) <printOptions horizontalCentered="1"/> を追加
+  var poTag = '<printOptions horizontalCentered="1"/>';
+  if (!/<printOptions/.test(sXml)) {
+    if (/<pageMargins/.test(sXml)) {
+      sXml = sXml.replace(/(<pageMargins)/, poTag + '$1');
+    } else {
+      sXml = sXml.replace('</worksheet>', poTag + '</worksheet>');
+    }
+  }
+  zip.file(sXmlPath, sXml);
+  return await zip.generateAsync({ type:'arraybuffer', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 async function _injectSealToCoverLetter(wboutBuf, sealBytes) {
   // wbout（ArrayBuffer/Uint8Array）→ JSZip で開いて画像挿入 → 再パック
