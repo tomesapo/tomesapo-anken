@@ -2598,7 +2598,8 @@ function restoreCascade(customerName, baseName, staffName) {
   const cust = getCustomerByName(customerName);
   const cS = document.getElementById('f_customer');
   cS.innerHTML = '<option value="">── 顧客を選択 ──</option>';
-  masterData.customers.forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; if(c.id===(cust&&cust.id))o.selected=true; cS.appendChild(o); });
+  // v111: 削除済み(ゴミ箱移動)顧客はドロップダウンから除外
+  masterData.customers.filter(c=>!c.deleted).forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; if(c.id===(cust&&cust.id))o.selected=true; cS.appendChild(o); });
   const bS = document.getElementById('f_base');
   const sS = document.getElementById('f_staff');
   bS.innerHTML = '<option value="">── 拠点を選択 ──</option>';
@@ -2884,7 +2885,8 @@ function closeOnOutside(e,id) {
 function populateCustomerSelectOnly() {
   const sel=document.getElementById('f_customer');
   sel.innerHTML='<option value="">── 顧客を選択 ──</option>';
-  masterData.customers.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
+  // v111: 削除済み(ゴミ箱移動)顧客はドロップダウンから除外
+  masterData.customers.filter(c=>!c.deleted).forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
 }
 const FORM_FIELDS=['f_caseNo','f_siteName','f_siteAddress','f_requestUnits','f_requestNote',
   'f_receptionDate','f_requestStart','f_requestEnd','f_proposalDate','f_estSales','f_estPurchase','f_estProfit',
