@@ -7591,10 +7591,9 @@ async function generateCoverLetterExcel(c) {
   if (!c) { showToast('案件データが見つかりません'); return; }
   if (!window.XLSX) { showToast('Excelライブラリ読み込み中です。しばらくしてお試しください。'); return; }
   const branch = getCaseBranch(c);
-  const sealMode = await chooseSealMode(branch, 'square'); // 送付状 → 角印（請求書と同じ）
-  if (sealMode === null) return;
+  // v111: 送付状には印鑑を入れない（請求書側に既に押印されているため）
   try {
-    await _buildCoverLetterExcel(c, branch, sealMode);
+    await _buildCoverLetterExcel(c, branch, 'noseal');
   } catch(e) {
     console.error(e);
     showToast('送付状の生成に失敗しました: ' + e.message);
@@ -7639,14 +7638,14 @@ async function _buildCoverLetterExcel(c, branch, sealMode) {
   aoa.push([ {v: (staffName ? staffName + ' 様' : ''), t:'s', s:sCustSub}, '', '', '', '', '' ]);
   // Row 5: 空行
   aoa.push(['','','','','','']);
-  // Row 6-11: 自社情報（右寄せ）
-  aoa.push(['', '', '', '', '', {v: brName, t:'s', s:sSenderName}]);
-  aoa.push(['', '', '', '', '', {v: brPostal, t:'s', s:sSender}]);
-  aoa.push(['', '', '', '', '', {v: brAddress, t:'s', s:sSender}]);
-  aoa.push(['', '', '', '', '', {v: brTel, t:'s', s:sSender}]);
-  aoa.push(['', '', '', '', '', {v: brEmail, t:'s', s:sSender}]);
-  aoa.push(['', '', '', '', '', {v: brInvoiceReg, t:'s', s:sSender}]);
-  aoa.push(['', '', '', '', '', {v: (ourStaffName ? '担当：' + ourStaffName : ''), t:'s', s:sSender}]);
+  // Row 6-12: 自社情報（D-F 3列結合・右寄せ）— v111: 見切れ防止のため広く
+  aoa.push(['', '', '', {v: brName, t:'s', s:sSenderName}, '', '']);
+  aoa.push(['', '', '', {v: brPostal, t:'s', s:sSender}, '', '']);
+  aoa.push(['', '', '', {v: brAddress, t:'s', s:sSender}, '', '']);
+  aoa.push(['', '', '', {v: brTel, t:'s', s:sSender}, '', '']);
+  aoa.push(['', '', '', {v: brEmail, t:'s', s:sSender}, '', '']);
+  aoa.push(['', '', '', {v: brInvoiceReg, t:'s', s:sSender}, '', '']);
+  aoa.push(['', '', '', {v: (ourStaffName ? '担当：' + ourStaffName : ''), t:'s', s:sSender}, '', '']);
   // Row 13: 空行
   aoa.push(['','','','','','']);
   // Row 14: タイトル（大きく、中央）
@@ -7670,12 +7669,20 @@ async function _buildCoverLetterExcel(c, branch, sealMode) {
   aoa.push([ {v: '以上', t:'s', s:sIjo}, '', '', '', '', '' ]);
 
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  // v111: A4縦1ページに収まるよう列幅縮小（合計 約80 chars 幅）
-  ws['!cols'] = [{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:18}];
-  // タイトル行と記行はセル結合
+  // v111: A4縦1ページに収まるよう列幅を最適化（合計 約82 chars 幅）
+  ws['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:14},{wch:14},{wch:22}];
+  // タイトル行・記行・自社情報行はセル結合（自社情報は D-F 3列分を使って右寄せ）
   ws['!merges'] = [
     {s:{r:2,c:0},e:{r:2,c:4}},   // 宛先会社名
     {s:{r:3,c:0},e:{r:3,c:4}},   // 宛先担当者名
+    // v111: 自社情報を D-F の 3列結合で右寄せ表示（長い住所や登録番号でも見切れないよう）
+    {s:{r:5,c:3},e:{r:5,c:5}},   // 自社: 社名
+    {s:{r:6,c:3},e:{r:6,c:5}},   // 自社: 郵便番号
+    {s:{r:7,c:3},e:{r:7,c:5}},   // 自社: 住所
+    {s:{r:8,c:3},e:{r:8,c:5}},   // 自社: TEL
+    {s:{r:9,c:3},e:{r:9,c:5}},   // 自社: Email
+    {s:{r:10,c:3},e:{r:10,c:5}}, // 自社: 登録番号
+    {s:{r:11,c:3},e:{r:11,c:5}}, // 自社: 担当者
     {s:{r:13,c:0},e:{r:13,c:5}}, // タイトル「書類送付のご案内」
     {s:{r:15,c:0},e:{r:15,c:5}}, // 挨拶文1
     {s:{r:16,c:0},e:{r:16,c:5}}, // 挨拶文2
