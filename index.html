@@ -1096,6 +1096,10 @@
       <button class="btn btn-outline" id="invoiceBtn" style="display:none" onclick="generateInvoiceExcel(cases.find(c=>c.id===detailId))">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>請求書出力
       </button>
+      <!-- v111: 送付状（頭紙）出力ボタン - 請求書と同じ表示制御 -->
+      <button class="btn btn-outline" id="coverLetterBtn" style="display:none" onclick="generateCoverLetterExcel(cases.find(c=>c.id===detailId))">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>送付状
+      </button>
       <button class="btn btn-danger" onclick="deleteFromDetail()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>削除</button>
     </div>
   </div>
@@ -3184,6 +3188,9 @@ function openDetail(id) {
   // 請求書出力ボタンの表示制御（未請求・請求済・入金済のみ）
   const invoiceBtn = document.getElementById('invoiceBtn');
   if (invoiceBtn) invoiceBtn.style.display = ['未請求','請求済','入金済'].includes(c.status) ? '' : 'none';
+  // v111: 送付状（頭紙）ボタンも同じ表示制御
+  const coverLetterBtn = document.getElementById('coverLetterBtn');
+  if (coverLetterBtn) coverLetterBtn.style.display = ['未請求','請求済','入金済'].includes(c.status) ? '' : 'none';
   document.getElementById('detail_caseNo').textContent=c.caseNo;
   document.getElementById('detail_status').innerHTML='<span class="status-badge s-'+c.status+'">'+c.status+'</span>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+(c.parentCaseNo?'<span style="font-size:12px;color:var(--gray-500);margin-left:10px">元案件：'+esc(c.parentCaseNo)+'</span>':'');
   const cust=getCustomerByName(c.customerName);
@@ -7577,6 +7584,260 @@ async function deleteFile(caseId,fileName){
 }
 
 // ═══════════════════════════════════════════════
+// ── 送付状（頭紙）Excel出力 ──
+// v111: 郵送用の送付状。請求書と一緒に印刷して送るためのビジネス文書
+// ═══════════════════════════════════════════════
+async function generateCoverLetterExcel(c) {
+  if (!c) { showToast('案件データが見つかりません'); return; }
+  if (!window.XLSX) { showToast('Excelライブラリ読み込み中です。しばらくしてお試しください。'); return; }
+  const branch = getCaseBranch(c);
+  const sealMode = await chooseSealMode(branch, 'square'); // 送付状 → 角印（請求書と同じ）
+  if (sealMode === null) return;
+  try {
+    await _buildCoverLetterExcel(c, branch, sealMode);
+  } catch(e) {
+    console.error(e);
+    showToast('送付状の生成に失敗しました: ' + e.message);
+  }
+}
+async function _buildCoverLetterExcel(c, branch, sealMode) {
+  var F = 'Noto Sans JP';
+  // ─── スタイル定義 ───
+  var sTitleBig  = {font:{name:F,bold:true,sz:22,color:{rgb:'000000'}}, alignment:{horizontal:'center',vertical:'center'}};
+  var sDate      = {font:{name:F,sz:11,color:{rgb:'000000'}}, alignment:{horizontal:'right',vertical:'center'}};
+  var sCustomer  = {font:{name:F,bold:true,sz:14,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sCustSub   = {font:{name:F,sz:11,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sSender    = {font:{name:F,sz:11,color:{rgb:'000000'}}, alignment:{horizontal:'right',vertical:'center'}};
+  var sSenderName= {font:{name:F,bold:true,sz:13,color:{rgb:'000000'}}, alignment:{horizontal:'right',vertical:'center'}};
+  var sBody      = {font:{name:F,sz:11,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center', wrapText:true}};
+  var sBodyKi    = {font:{name:F,bold:true,sz:14,color:{rgb:'000000'}}, alignment:{horizontal:'center',vertical:'center'}};
+  var sListItem  = {font:{name:F,sz:12,color:{rgb:'000000'}}, alignment:{horizontal:'center',vertical:'center'}};
+  var sIjo       = {font:{name:F,bold:true,sz:12,color:{rgb:'000000'}}, alignment:{horizontal:'right',vertical:'center'}};
+
+  // ─── 日付・宛先・自社情報 ───
+  var today = new Date();
+  var todayStr = today.getFullYear() + '年' + (today.getMonth()+1) + '月' + today.getDate() + '日';
+  var customerName = c.customerName || '';
+  var staffName = c.staffName || '';
+  var brName = branch.name || '株式会社 TomeSapo';
+  var brPostal = branch.postalCode ? ('〒' + branch.postalCode) : '';
+  var brAddress = branch.address || '';
+  var brTel = branch.tel ? ('TEL：' + branch.tel) : '';
+  var brEmail = branch.email ? ('Email：' + branch.email) : '';
+  var brInvoiceReg = branch.invoiceRegNo ? ('登録番号：T' + String(branch.invoiceRegNo).replace(/^T/i,'')) : '';
+  var ourStaffName = c.ourStaffName || '';
+
+  // ─── AOA 組み立て ───
+  var aoa = [];
+  // Row 1: 日付（右寄せ）
+  aoa.push(['', '', '', '', '', {v: todayStr, t:'s', s:sDate}]);
+  // Row 2: 空行
+  aoa.push(['','','','','','']);
+  // Row 3: 宛先（顧客会社名）
+  aoa.push([ {v: customerName + '　御中', t:'s', s:sCustomer}, '', '', '', '', '' ]);
+  // Row 4: 宛先（担当者名）
+  aoa.push([ {v: (staffName ? staffName + '　様' : ''), t:'s', s:sCustSub}, '', '', '', '', '' ]);
+  // Row 5: 空行
+  aoa.push(['','','','','','']);
+  // Row 6-11: 自社情報（右寄せ）
+  aoa.push(['', '', '', '', '', {v: brName, t:'s', s:sSenderName}]);
+  aoa.push(['', '', '', '', '', {v: brPostal, t:'s', s:sSender}]);
+  aoa.push(['', '', '', '', '', {v: brAddress, t:'s', s:sSender}]);
+  aoa.push(['', '', '', '', '', {v: brTel, t:'s', s:sSender}]);
+  aoa.push(['', '', '', '', '', {v: brEmail, t:'s', s:sSender}]);
+  aoa.push(['', '', '', '', '', {v: brInvoiceReg, t:'s', s:sSender}]);
+  aoa.push(['', '', '', '', '', {v: (ourStaffName ? '担当：' + ourStaffName : ''), t:'s', s:sSender}]);
+  // Row 13: 空行
+  aoa.push(['','','','','','']);
+  // Row 14: タイトル（大きく、中央）
+  aoa.push([ {v: '書類送付のご案内', t:'s', s:sTitleBig}, '', '', '', '', '' ]);
+  // Row 15: 空行
+  aoa.push(['','','','','','']);
+  // Row 16: 挨拶文
+  aoa.push([ {v: '拝啓　時下ますますご清栄のこととお慶び申し上げます。', t:'s', s:sBody}, '', '', '', '', '' ]);
+  aoa.push([ {v: '平素は格別のお引き立てを賜り、厚く御礼申し上げます。', t:'s', s:sBody}, '', '', '', '', '' ]);
+  aoa.push(['','','','','','']);
+  aoa.push([ {v: 'さて、下記の書類をお送りいたしますので、ご査収の程よろしくお願い申し上げます。', t:'s', s:sBody}, '', '', '', '', '' ]);
+  aoa.push(['','','','','','']);
+  aoa.push([ {v: '敬具', t:'s', s:sIjo}, '', '', '', '', '' ]);
+  aoa.push(['','','','','','']);
+  // 記
+  aoa.push([ {v: '記', t:'s', s:sBodyKi}, '', '', '', '', '' ]);
+  aoa.push(['','','','','','']);
+  aoa.push([ {v: '請求書　　１部', t:'s', s:sListItem}, '', '', '', '', '' ]);
+  aoa.push(['','','','','','']);
+  aoa.push(['','','','','','']);
+  aoa.push([ {v: '以上', t:'s', s:sIjo}, '', '', '', '', '' ]);
+
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:16},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
+  // タイトル行と記行はセル結合
+  ws['!merges'] = [
+    {s:{r:2,c:0},e:{r:2,c:4}},   // 宛先会社名
+    {s:{r:3,c:0},e:{r:3,c:4}},   // 宛先担当者名
+    {s:{r:13,c:0},e:{r:13,c:5}}, // タイトル「書類送付のご案内」
+    {s:{r:15,c:0},e:{r:15,c:5}}, // 挨拶文1
+    {s:{r:16,c:0},e:{r:16,c:5}}, // 挨拶文2
+    {s:{r:18,c:0},e:{r:18,c:5}}, // 本文
+    {s:{r:20,c:0},e:{r:20,c:5}}, // 敬具
+    {s:{r:22,c:0},e:{r:22,c:5}}, // 記
+    {s:{r:24,c:0},e:{r:24,c:5}}, // 請求書1部
+    {s:{r:27,c:0},e:{r:27,c:5}}  // 以上
+  ];
+  // 行の高さ
+  ws['!rows'] = [
+    {hpt:22}, // 日付
+    {hpt:10}, // 空
+    {hpt:24}, // 宛先会社
+    {hpt:20}, // 宛先担当
+    {hpt:10}, // 空
+    {hpt:20}, // 自社1
+    {hpt:18}, // 自社2
+    {hpt:18}, // 自社3
+    {hpt:18}, // 自社4
+    {hpt:18}, // 自社5
+    {hpt:18}, // 自社6
+    {hpt:18}, // 自社7
+    {hpt:20}, // 空
+    {hpt:42}, // タイトル
+    {hpt:20}, // 空
+    {hpt:22}, // 挨拶1
+    {hpt:22}, // 挨拶2
+    {hpt:14}, // 空
+    {hpt:22}, // 本文
+    {hpt:14}, // 空
+    {hpt:22}, // 敬具
+    {hpt:14}, // 空
+    {hpt:32}, // 記
+    {hpt:14}, // 空
+    {hpt:24}, // 請求書1部
+    {hpt:14}, // 空
+    {hpt:14}, // 空
+    {hpt:22}  // 以上
+  ];
+  // 印刷設定（A4縦・余白・センタリング）
+  ws['!margins'] = { left:0.7, right:0.7, top:0.75, bottom:0.75, header:0.3, footer:0.3 };
+  ws['!pageSetup'] = { orientation:'portrait', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:1 };
+  ws['!printOptions'] = { horizontalCentered:true };
+
+  // ─── ブック組み立て ───
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '送付状');
+
+  // ─── 電子印挿入（印鑑あり指定時） ───
+  //   ExcelJS を使わず XLSX + JSZip でシンプルに実装（画像1枚のみ）
+  var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  if (sealMode === 'seal') {
+    try {
+      var sealB64 = getBranchSealBase64(branch, 'square');
+      var sealUrl = getBranchSealUrl(branch, 'square');
+      var sealBytes = null;
+      if (sealB64) {
+        sealBytes = _b64ToBytesLocal(sealB64);
+      } else if (sealUrl && !sealUrl.startsWith('data:')) {
+        // Storage URL からfetch
+        var ab = await _fetchImageAsArrayBuffer(sealUrl);
+        if (ab) sealBytes = new Uint8Array(ab);
+      }
+      if (sealBytes) {
+        wbout = await _injectSealToCoverLetter(wbout, sealBytes);
+      }
+    } catch (e) {
+      console.warn('送付状への印鑑挿入に失敗しました:', e);
+    }
+  }
+
+  // ─── ダウンロード ───
+  var blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var siteName = (c.siteName || '案件').replace(/[\\\/:\*\?"<>\|]/g, '_');
+  a.download = '送付状_' + siteName + '_' + today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0') + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  showToast('送付状を出力しました');
+}
+function _b64ToBytesLocal(b64) {
+  var raw = atob(b64);
+  var arr = new Uint8Array(raw.length);
+  for (var i=0; i<raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function _injectSealToCoverLetter(wboutBuf, sealBytes) {
+  // wbout（ArrayBuffer/Uint8Array）→ JSZip で開いて画像挿入 → 再パック
+  var zip = await JSZip.loadAsync(wboutBuf);
+  // 1) 画像を追加
+  zip.file('xl/media/image1.png', sealBytes);
+  // 2) drawing1.xml を作成（自社担当者名の右あたり: 列7,行10 付近）
+  var drawing = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<xdr:twoCellAnchor editAs="oneCell">' +
+        '<xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>10</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+        '<xdr:to><xdr:col>7</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>12</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>' +
+        '<xdr:pic>' +
+          '<xdr:nvPicPr><xdr:cNvPr id="1" name="CompanySeal"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>' +
+          '<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
+          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>' +
+        '</xdr:pic><xdr:clientData/>' +
+      '</xdr:twoCellAnchor>' +
+    '</xdr:wsDr>';
+  zip.file('xl/drawings/drawing1.xml', drawing);
+  // 3) drawing rels
+  var drawingRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>' +
+    '</Relationships>';
+  zip.file('xl/drawings/_rels/drawing1.xml.rels', drawingRels);
+  // 4) sheet1.xml.rels に drawing 参照を追加
+  var sheetRelsPath = 'xl/worksheets/_rels/sheet1.xml.rels';
+  var sheetRelsFile = zip.file(sheetRelsPath);
+  var sheetRels;
+  if (sheetRelsFile) {
+    sheetRels = await sheetRelsFile.async('string');
+    // rId の最大値を取得して +1
+    var maxRid = 0;
+    (sheetRels.match(/Id="rId(\d+)"/g)||[]).forEach(function(m){
+      var n = parseInt(m.match(/\d+/)[0]);
+      if (n > maxRid) maxRid = n;
+    });
+    var newRid = maxRid + 1;
+    sheetRels = sheetRels.replace('</Relationships>',
+      '<Relationship Id="rId'+newRid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+    zip.file(sheetRelsPath, sheetRels);
+    // sheet1.xml に drawing 参照を追加
+    var sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    if (!/<drawing\s/.test(sheetXml)) {
+      sheetXml = sheetXml.replace('</worksheet>', '<drawing r:id="rId'+newRid+'"/></worksheet>');
+      zip.file('xl/worksheets/sheet1.xml', sheetXml);
+    }
+  } else {
+    // sheet1.xml.rels が無い場合は新規作成
+    sheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' +
+      '</Relationships>';
+    zip.file(sheetRelsPath, sheetRels);
+    var sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    if (!/<drawing\s/.test(sheetXml)) {
+      sheetXml = sheetXml.replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>');
+      zip.file('xl/worksheets/sheet1.xml', sheetXml);
+    }
+  }
+  // 5) [Content_Types].xml に drawing と png を追加
+  var ctPath = '[Content_Types].xml';
+  var ct = await zip.file(ctPath).async('string');
+  if (ct.indexOf('image/png') < 0) {
+    ct = ct.replace('</Types>', '<Default Extension="png" ContentType="image/png"/></Types>');
+  }
+  if (ct.indexOf('/xl/drawings/drawing1.xml') < 0) {
+    ct = ct.replace('</Types>', '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+  }
+  zip.file(ctPath, ct);
+  var out = await zip.generateAsync({ type:'arraybuffer', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return out;
+}
+
 // ── 請求書出力 ──
 // ═══════════════════════════════════════════════
 async function generateInvoiceExcel(c) {
