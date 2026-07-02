@@ -2649,7 +2649,9 @@ function calcParkingLotProfit(pl, contractStart, contractEnd, caseObj, plIdx) {
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
-  const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
+  // v111: 礼金の課税区分（keyMoneyTaxCategory='nontaxable' なら税抜化しない＝保証委託料等）
+  const _keyNonTax=(pl.keyMoneyTaxCategory==='nontaxable');
+  const costKeyExTax=_keyNonTax?units*costKeyMoney:(ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney);
   // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
   const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
   const costTotal=costRentExTax+costAdminExTax+costKeyExTax+costBlockingExTax;
@@ -2686,7 +2688,9 @@ function calcParkingLotFixed(pl, caseObj, plIdx) {
   const costRentTaxInc=cRows.reduce((s,r)=>s+r.amount,0);
   const costRentExTax=ownerT?Math.round(costRentTaxInc/1.1):costRentTaxInc;
   const costAdminExTax=managerT?Math.round(units*costAdminFee/1.1):units*costAdminFee;
-  const costKeyExTax=ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney;
+  // v111: 礼金の課税区分（keyMoneyTaxCategory='nontaxable' なら税抜化しない＝保証委託料等）
+  const _keyNonTax=(pl.keyMoneyTaxCategory==='nontaxable');
+  const costKeyExTax=_keyNonTax?units*costKeyMoney:(ownerT?Math.round(units*costKeyMoney/1.1):units*costKeyMoney);
   // 封鎖手数料の仕入: 駐車場の課税区分（taxCategory）に準じて税抜化（非課税は元から税なし）
   const costBlockingExTax=(pl.taxCategory==='nontaxable')?costBlockingFee:Math.round(costBlockingFee/1.1);
   // v111: 調整金額（税込・手入力）も taxCategory に準じて税抜化して仕入に含める
@@ -3814,6 +3818,8 @@ function addParkingLotCard(pl={}) {
             '<div class="form-group rate-group-daily"'+(rm?' style="display:none"':'')+'><label>仕入日額賃料 <span class="auto-tag">税込</span></label><input type="number" name="pl_dailyRent" min="0" placeholder="0" value="'+(pl.dailyRent!=null?pl.dailyRent:'')+'"></div>' +
             '<div class="form-group"><label>仕入手数料 <span class="auto-tag">税込</span></label><input type="number" name="pl_adminFee" min="0" placeholder="0" value="'+(pl.adminFee!=null?pl.adminFee:'')+'"></div>' +
             '<div class="form-group"><label>仕入礼金 <span class="auto-tag">税込</span></label><input type="number" name="pl_keyMoney" min="0" placeholder="0" value="'+(pl.keyMoney!=null?pl.keyMoney:'')+'" onchange="calcPlPurchase(this)"></div>' +
+            /* v111: 礼金の税区分（保証委託料など課税対象外の項目に対応） */
+            '<div class="form-group"><label>礼金の課税区分 <span class="auto-tag">税抜計算用</span></label><select name="pl_keyMoneyTaxCategory" onchange="calcPlPurchase(this)"><option value="taxable"'+((pl.keyMoneyTaxCategory||"taxable")==="taxable"?" selected":"")+'>課税（地主税区分に準じる）</option><option value="nontaxable"'+(pl.keyMoneyTaxCategory==="nontaxable"?" selected":"")+'>課税対象外（保証委託料など）</option></select></div>' +
             '<div class="form-group"><label>仕入封鎖手数料 <span class="auto-tag">税込・一式</span></label><input type="number" name="pl_blockingFee" min="0" placeholder="0" value="'+(pl.blockingFee!=null?pl.blockingFee:'')+'" onchange="calcPlPurchase(this)" title="コインPのフラップ封鎖/解除など、台数に依らず一式で発生する費用"></div>' +
           '</div>' +
         '</div>' +
@@ -4323,6 +4329,7 @@ function getParkingLotsFromForm(){
       monthlyRent:rt==='monthly'?(parseFloat(g('pl_monthlyRent').value)||null):null,
       dailyRent:rt==='daily'?(parseFloat(g('pl_dailyRent').value)||null):null,
       adminFee:parseFloat(g('pl_adminFee').value)||null,keyMoney:parseFloat(g('pl_keyMoney').value)||null,deposit:parseFloat(g('pl_deposit').value)||null,
+      keyMoneyTaxCategory:g('pl_keyMoneyTaxCategory')?g('pl_keyMoneyTaxCategory').value:'taxable', // v111: 礼金の課税区分（保証委託料など課税対象外に対応）
       blockingFee:g('pl_blockingFee')?(parseFloat(g('pl_blockingFee').value)||null):null, // v111: コインP封鎖手数料(税込・一式)
       quoteMonthlyRent:rt==='monthly'?(parseFloat(g('pl_quoteMonthlyRent').value)||null):null,
       quoteDailyRent:rt==='daily'?(parseFloat(g('pl_quoteDailyRent').value)||null):null,
@@ -7212,7 +7219,9 @@ function buildMonthlyData(period) {
           var _isNT     = (pl.taxCategory === 'nontaxable');
           var _rentEx  = _ownerT   ? Math.round(rentCostInc / 1.1)  : rentCostInc;
           var _adminEx = _managerT ? Math.round(adminCostInc / 1.1) : adminCostInc;
-          var _keyEx   = _ownerT   ? Math.round(keyCostInc / 1.1)   : keyCostInc;
+          // v111: 礼金の課税区分（keyMoneyTaxCategory='nontaxable' なら税抜化しない＝保証委託料等）
+          var _keyNonTax = (pl.keyMoneyTaxCategory === 'nontaxable');
+          var _keyEx   = _keyNonTax ? keyCostInc : (_ownerT ? Math.round(keyCostInc / 1.1) : keyCostInc);
           var _blkEx   = _isNT     ? blockingCostInc                : Math.round(blockingCostInc / 1.1);
           var _adjEx   = _isNT     ? adjCostInc                     : Math.round(adjCostInc / 1.1);
           var costExcl = _rentEx + _adminEx + _keyEx + _blkEx + _adjEx;
