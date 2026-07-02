@@ -2801,11 +2801,41 @@ function calcPlPurchase(el){
       // 封鎖手数料は「一式」のため units を掛けず加算
       const purchase=rentPart+adminFee*units+keyMoney*units+adjustment+blockingFee;
       pa.value=fmt(purchase);
-      const effectiveKey=quoteKeyMoney||keyMoney;
-      const effectiveBlocking=quoteBlockingFee||blockingFee;
-      // 請求額 = 仕入 − 仕入礼金×台 + 見積礼金×台 + 保証金×台 − 仕入封鎖 + 見積封鎖
-      const invoice=purchase-keyMoney*units+effectiveKey*units+deposit*units-blockingFee+effectiveBlocking;
-      if(ia)ia.value=fmt(invoice);
+      // v111: 請求額（税込）を「見積側の税別合計 × 1.1 + 保証金×台数」に修正
+      //       従来: 仕入ベースで礼金/封鎖だけ見積に差替 → 賃料/手数料の markup が反映されない不具合
+      if(ia){
+        // 見積側の値（税別。未入力なら仕入側を採用＝マージン0の後方互換）
+        const quoteMonthlyRent=parseFloat(g('pl_quoteMonthlyRent')?g('pl_quoteMonthlyRent').value:0)||monthlyRent;
+        const quoteAdminFee  =parseFloat(g('pl_quoteAdminFee')?g('pl_quoteAdminFee').value:0)||adminFee;
+        const effectiveKey   =quoteKeyMoney||keyMoney;
+        const effectiveBlocking=quoteBlockingFee||blockingFee;
+        // 見積側の賃料（税別）
+        const period=calcPlPeriod(start,end,startProRate,endProRate);
+        const quoteDailyRate=Math.floor(quoteMonthlyRent/30);
+        const quoteRentPart=quoteMonthlyRent*units*period.months+quoteDailyRate*units*period.days;
+        // 見積側 税別合計
+        let salesExTax = quoteRentPart + quoteAdminFee*units + effectiveKey*units + effectiveBlocking;
+        // 業者費用「任意金額」モードの按分（この駐車場の分）を売上に加算
+        try {
+          const _fm = document.querySelector('input[name="feeMode"]:checked')?.value || 'none';
+          if (_fm === 'manual') {
+            const _agencyTotal = parseFloat(document.getElementById('f_agencyFeeUnit')?.value)||0;
+            if (_agencyTotal > 0 && typeof getParkingLotsFromForm === 'function' && typeof calcAgencyFeeShare === 'function') {
+              const _lots = getParkingLotsFromForm();
+              const _plId = card.dataset.plid;
+              const _idx = _lots.findIndex(pl => pl.id === _plId);
+              if (_idx >= 0) {
+                const _caseShape = { feeMode:'manual', agencyFeeUnit:_agencyTotal, parkingLots:_lots };
+                salesExTax += (calcAgencyFeeShare(_caseShape, _idx, true) || 0);
+              }
+            }
+          }
+        } catch(_e) { /* 静かに無視 */ }
+        // 税込化＋保証金加算（保証金は非課税想定）
+        const salesInclTax = Math.round(salesExTax * 1.1);
+        const invoice = salesInclTax + deposit*units;
+        ia.value = fmt(invoice);
+      }
     }else{pa.value='';if(ia)ia.value='';}
   }
   updateCaseFixedPurchase();
