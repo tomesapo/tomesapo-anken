@@ -7647,8 +7647,9 @@ function chooseEnvelopeSize() {
           '<span style="font-size:11px;color:#6b7280">プリンタが封筒印刷対応なら直接印刷、非対応なら紙に印刷して貼付が可能です。</span>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">'+
-          '<button data-size="naga3" style="padding:14px 16px;background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#1e3a5f;font-weight:600">📮 長3封筒（120×235mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">A4三つ折り用・標準ビジネス封筒</div></button>'+
-          '<button data-size="kaku2" style="padding:14px 16px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#166534;font-weight:600">📮 角2封筒（240×332mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">A4折らず用・大型封筒</div></button>'+
+          '<button data-size="label12" style="padding:14px 16px;background:#fef3c7;border:2px solid #fde68a;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#92400e;font-weight:600">📋 宛名ラベル A-one 12面（A4）<div style="font-size:11px;font-weight:400;color:#78716c;margin-top:2px">封筒印刷非対応プリンタでも使える（推奨）／84.7×42.3mm</div></button>'+
+          '<button data-size="naga3" style="padding:14px 16px;background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#1e3a5f;font-weight:600">📮 長3封筒（120×235mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">封筒直接印刷用・縦向き</div></button>'+
+          '<button data-size="kaku2" style="padding:14px 16px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#166534;font-weight:600">📮 角2封筒（240×332mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">封筒直接印刷用・縦向き</div></button>'+
         '</div>'+
         '<div style="text-align:right"><button data-size="cancel" style="padding:8px 16px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px">キャンセル</button></div>'+
       '</div>';
@@ -7702,9 +7703,35 @@ async function generateEnvelopeAddressExcel(c, size) {
   var sRecipStaff = {font:{name:F,sz:15,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
 
   var isNaga3 = (size === 'naga3');
+  var isLabel = (size === 'label12');
   var aoa = [];
 
-  if (isNaga3) {
+  if (isLabel) {
+    // v111: A-one 12面 宛名ラベル (A4、2列×6行、各84.7×42.3mm)
+    //       1枚目(左上)に宛名、残り11面は空白
+    var addressText = ('〒' + customerPostal + '\n' +
+                       customerAddress + '\n' +
+                       '\n' +
+                       customerName + '　御中\n' +
+                       (staffName ? '　　' + staffName + '　様' : ''));
+    var sLabelText = {
+      font:{name:F,sz:12,color:{rgb:'000000'}},
+      alignment:{horizontal:'left',vertical:'center', wrapText:true, indent:1}
+    };
+    var sBlank = { font:{name:F,sz:9}, alignment:{horizontal:'center',vertical:'center'} };
+    // 8行: 上余白 + 6ラベル行 + 下余白
+    aoa.push(['','','','','']);
+    for (var _r=0; _r<6; _r++) {
+      aoa.push([
+        '',
+        {v: (_r===0) ? addressText : '', t:'s', s: (_r===0 ? sLabelText : sBlank)},
+        '',
+        {v:'', t:'s', s: sBlank},
+        ''
+      ]);
+    }
+    aoa.push(['','','','','']);
+  } else if (isNaga3) {
     // v111: 長3封筒は縦向き(120×235mm portrait)が本来の使用法
     //       郵便番号=上部、宛先=中央大きめ、差出人=下部小さめ（プリント済み封筒でも見切れないよう小さく）
     aoa.push(['','','']);                                                             // Row 0: 上余白
@@ -7739,7 +7766,24 @@ async function generateEnvelopeAddressExcel(c, size) {
   }
   var ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  if (isNaga3) {
+  if (isLabel) {
+    // v111: A-one 12面 宛名ラベル(A4) の物理レイアウト
+    //   Col: 左余白(18.4mm) | ラベル1(84.7mm) | 間隔(3.8mm) | ラベル2(84.7mm) | 右余白(18.4mm)
+    //   Row: 上余白(21.6mm) | ラベル×6行(各42.3mm) | 下余白(21.6mm)
+    ws['!cols'] = [{wch:9},{wch:44},{wch:2},{wch:44},{wch:9}];
+    ws['!rows'] = [
+      {hpt:60},   // 上余白 21.6mm
+      {hpt:120},  // ラベル行1 42.3mm
+      {hpt:120},  // ラベル行2
+      {hpt:120},  // ラベル行3
+      {hpt:120},  // ラベル行4
+      {hpt:120},  // ラベル行5
+      {hpt:120},  // ラベル行6
+      {hpt:60}    // 下余白 21.6mm
+    ];
+    ws['!margins'] = { left:0.2, right:0.2, top:0.15, bottom:0.15, header:0.1, footer:0.1 };
+    ws['!pageSetup'] = { paperSize:9, orientation:'portrait', fitToWidth:1, fitToHeight:1 };
+  } else if (isNaga3) {
     // v111: 長3 縦向き (120×235mm portrait) 3列レイアウト
     //       左余白 | メインコンテンツ | 右余白
     ws['!cols'] = [{wch:4},{wch:32},{wch:4}];
@@ -7787,15 +7831,16 @@ async function generateEnvelopeAddressExcel(c, size) {
   XLSX.utils.book_append_sheet(wb, ws, '宛名');
   var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
   // fitToPage 系を強制注入（xlsx-js-style が正しく出力しない補完）
-  // v111: 長3・角2 とも縦向き（portrait）で印刷（長3は縦長の封筒として使用）
-  wbout = await _forceEnvelopeOnePage(wbout, isNaga3 ? 43 : 45, 'portrait');
+  // v111: 用紙サイズを判定 - ラベル=A4(9)、長3=43、角2=45、すべて縦向き
+  var _paperSize = isLabel ? 9 : (isNaga3 ? 43 : 45);
+  wbout = await _forceEnvelopeOnePage(wbout, _paperSize, 'portrait');
 
   var blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
   var safeName = (c.customerName || '案件').replace(/[\\\/:\*\?"<>\|]/g,'_');
-  var sizeLabel = isNaga3 ? '長3' : '角2';
+  var sizeLabel = isLabel ? 'ラベル12面' : (isNaga3 ? '長3' : '角2');
   a.download = '宛名_' + sizeLabel + '_' + safeName + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
