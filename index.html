@@ -7681,14 +7681,16 @@ async function generateEnvelopeAddressExcel(c, size) {
   var branch = getCaseBranch(c);
   var cust = (typeof getCustomerByName === 'function') ? getCustomerByName(c.customerName) : null;
   var base = (cust && cust.bases) ? cust.bases.find(function(b){return b.name===c.baseName;}) : null;
-  var customerPostal = (base && base.postalCode) || (cust && cust.postalCode) || '';
+  // v111: 顧客拠点の郵便番号は zipCode フィールドに保存されている（postalCode ではない）
+  var customerPostal = (base && (base.zipCode || base.postalCode)) || (cust && (cust.zipCode || cust.postalCode)) || '';
   var customerAddress = (base && base.address) || (cust && cust.address) || c.siteAddress || '';
   var customerName = c.customerName || '';
   var staffName = c.staffName || '';
   var senderPostal = branch.postalCode || '';
   var senderAddress = branch.address || '';
   var senderName = branch.name || '株式会社 TomeSapo';
-  var ourStaffName = c.ourStaffName || '';
+  // v111: 差出人側に自社担当は入れない仕様に変更（顧客に伝わる情報は会社名のみでシンプルに）
+  // var ourStaffName = c.ourStaffName || '';
   var F = 'Noto Sans JP';
 
   // スタイル定義
@@ -7705,7 +7707,7 @@ async function generateEnvelopeAddressExcel(c, size) {
   if (isNaga3) {
     // 長3 (横向き 235×120mm): 左上に差出人、右側中央に宛先
     aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '', '', '' ]);
-    aoa.push([ {v: senderName + (ourStaffName ? '　担当：' + ourStaffName : ''), t:'s', s:sSenderName}, '', '', '', '', '' ]);
+    aoa.push([ {v: senderName, t:'s', s:sSenderName}, '', '', '', '', '' ]);
     aoa.push(['','','','','','']);
     aoa.push(['','','','','','']);
     aoa.push(['', '', {v:'〒' + customerPostal, t:'s', s:sRecipPost}, '', '', '']);
@@ -7715,7 +7717,7 @@ async function generateEnvelopeAddressExcel(c, size) {
   } else {
     // 角2 (縦向き 240×332mm): 上部に差出人、中央に宛先
     aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '' ]);
-    aoa.push([ {v: senderName + (ourStaffName ? '　担当：' + ourStaffName : ''), t:'s', s:sSenderName}, '', '', '' ]);
+    aoa.push([ {v: senderName, t:'s', s:sSenderName}, '', '', '' ]);
     aoa.push(['','','','']);
     aoa.push(['','','','']);
     aoa.push(['','','','']);
