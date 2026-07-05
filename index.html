@@ -7767,10 +7767,10 @@ async function generateEnvelopeAddressExcel(c, size) {
   var ws = XLSX.utils.aoa_to_sheet(aoa);
 
   if (isLabel) {
-    // v111: A-one 12面 宛名ラベル(A4) の物理レイアウト
-    //   Col: 左余白(18.4mm) | ラベル1(84.7mm) | 間隔(3.8mm) | ラベル2(84.7mm) | 右余白(18.4mm)
+    // v111: A-one 31256（12面・86.4×42.3mm）の物理レイアウト
+    //   Col: 左余白(≈14mm) | ラベル1(86.4mm) | 間隔(≈4mm) | ラベル2(86.4mm) | 右余白(≈14mm)
     //   Row: 上余白(21.6mm) | ラベル×6行(各42.3mm) | 下余白(21.6mm)
-    ws['!cols'] = [{wch:9},{wch:44},{wch:2},{wch:44},{wch:9}];
+    ws['!cols'] = [{wch:7},{wch:46},{wch:2},{wch:46},{wch:7}];
     ws['!rows'] = [
       {hpt:60},   // 上余白 21.6mm
       {hpt:120},  // ラベル行1 42.3mm
