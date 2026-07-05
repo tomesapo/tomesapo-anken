@@ -1100,6 +1100,10 @@
       <button class="btn btn-outline" id="coverLetterBtn" style="display:none" onclick="generateCoverLetterExcel(cases.find(c=>c.id===detailId))">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>送付状
       </button>
+      <!-- v111: 宛名 Excel 出力ボタン（長3・角2 選択式） -->
+      <button class="btn btn-outline" id="envelopeBtn" style="display:none" onclick="chooseAndGenerateEnvelope(cases.find(c=>c.id===detailId))">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1"/><polyline points="3 8 12 14 21 8"/></svg>宛名
+      </button>
       <button class="btn btn-danger" onclick="deleteFromDetail()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>削除</button>
     </div>
   </div>
@@ -3227,6 +3231,9 @@ function openDetail(id) {
   // v111: 送付状（頭紙）ボタンも同じ表示制御
   const coverLetterBtn = document.getElementById('coverLetterBtn');
   if (coverLetterBtn) coverLetterBtn.style.display = ['未請求','請求済','入金済'].includes(c.status) ? '' : 'none';
+  // v111: 宛名 Excel ボタンも同じ表示制御
+  const envelopeBtn = document.getElementById('envelopeBtn');
+  if (envelopeBtn) envelopeBtn.style.display = ['未請求','請求済','入金済'].includes(c.status) ? '' : 'none';
   document.getElementById('detail_caseNo').textContent=c.caseNo;
   document.getElementById('detail_status').innerHTML='<span class="status-badge s-'+c.status+'">'+c.status+'</span>'+(c.caseType&&c.caseType!=='通常'?'<span class="type-badge '+c.caseType+'">'+c.caseType+'</span>':'')+(c.parentCaseNo?'<span style="font-size:12px;color:var(--gray-500);margin-left:10px">元案件：'+esc(c.parentCaseNo)+'</span>':'');
   const cust=getCustomerByName(c.customerName);
@@ -7625,6 +7632,179 @@ async function deleteFile(caseId,fileName){
 }
 
 // ═══════════════════════════════════════════════
+// ── 宛名 Excel 出力（封筒直接印刷用） ──
+// v111: 長3封筒(120×235mm)・角2封筒(240×332mm) の実寸で宛名Excelを生成
+// ═══════════════════════════════════════════════
+function chooseEnvelopeSize() {
+  return new Promise(function(resolve){
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML =
+      '<div style="background:white;border-radius:12px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,.2)">'+
+        '<div style="font-size:16px;font-weight:700;color:#1e3a5f;margin-bottom:14px">📮 宛名 Excel 出力</div>'+
+        '<div style="font-size:13px;color:#4b5563;margin-bottom:14px;line-height:1.5">'+
+          '封筒サイズを選択してください。<br>'+
+          '<span style="font-size:11px;color:#6b7280">プリンタが封筒印刷対応なら直接印刷、非対応なら紙に印刷して貼付が可能です。</span>'+
+        '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">'+
+          '<button data-size="naga3" style="padding:14px 16px;background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#1e3a5f;font-weight:600">📮 長3封筒（120×235mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">A4三つ折り用・標準ビジネス封筒</div></button>'+
+          '<button data-size="kaku2" style="padding:14px 16px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;text-align:left;cursor:pointer;font-size:14px;color:#166534;font-weight:600">📮 角2封筒（240×332mm）<div style="font-size:11px;font-weight:400;color:#6b7280;margin-top:2px">A4折らず用・大型封筒</div></button>'+
+        '</div>'+
+        '<div style="text-align:right"><button data-size="cancel" style="padding:8px 16px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px">キャンセル</button></div>'+
+      '</div>';
+    overlay.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-size]');
+      if (btn) {
+        document.body.removeChild(overlay);
+        resolve(btn.dataset.size === 'cancel' ? null : btn.dataset.size);
+      } else if (e.target === overlay) {
+        document.body.removeChild(overlay);
+        resolve(null);
+      }
+    });
+    document.body.appendChild(overlay);
+  });
+}
+async function chooseAndGenerateEnvelope(c) {
+  if (!c) { showToast('案件データが見つかりません'); return; }
+  var size = await chooseEnvelopeSize();
+  if (!size) return;
+  try {
+    await generateEnvelopeAddressExcel(c, size);
+  } catch(e) {
+    console.error(e);
+    showToast('宛名の生成に失敗しました: ' + e.message);
+  }
+}
+async function generateEnvelopeAddressExcel(c, size) {
+  if (!window.XLSX) { showToast('Excelライブラリ読み込み中'); return; }
+  var branch = getCaseBranch(c);
+  var cust = (typeof getCustomerByName === 'function') ? getCustomerByName(c.customerName) : null;
+  var base = (cust && cust.bases) ? cust.bases.find(function(b){return b.name===c.baseName;}) : null;
+  var customerPostal = (base && base.postalCode) || (cust && cust.postalCode) || '';
+  var customerAddress = (base && base.address) || (cust && cust.address) || c.siteAddress || '';
+  var customerName = c.customerName || '';
+  var staffName = c.staffName || '';
+  var senderPostal = branch.postalCode || '';
+  var senderAddress = branch.address || '';
+  var senderName = branch.name || '株式会社 TomeSapo';
+  var ourStaffName = c.ourStaffName || '';
+  var F = 'Noto Sans JP';
+
+  // スタイル定義
+  var sSenderLine = {font:{name:F,sz:9,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sSenderName = {font:{name:F,sz:10,bold:true,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sRecipPost  = {font:{name:F,sz:16,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sRecipAddr  = {font:{name:F,sz:13,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center', wrapText:true}};
+  var sRecipComp  = {font:{name:F,sz:20,bold:true,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+  var sRecipStaff = {font:{name:F,sz:15,color:{rgb:'000000'}}, alignment:{horizontal:'left',vertical:'center'}};
+
+  var isNaga3 = (size === 'naga3');
+  var aoa = [];
+
+  if (isNaga3) {
+    // 長3 (横向き 235×120mm): 左上に差出人、右側中央に宛先
+    aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '', '', '' ]);
+    aoa.push([ {v: senderName + (ourStaffName ? '　担当：' + ourStaffName : ''), t:'s', s:sSenderName}, '', '', '', '', '' ]);
+    aoa.push(['','','','','','']);
+    aoa.push(['','','','','','']);
+    aoa.push(['', '', {v:'〒' + customerPostal, t:'s', s:sRecipPost}, '', '', '']);
+    aoa.push(['', '', {v: customerAddress, t:'s', s:sRecipAddr}, '', '', '']);
+    aoa.push(['', '', {v: customerName + '　御中', t:'s', s:sRecipComp}, '', '', '']);
+    aoa.push(['', '', {v: (staffName ? staffName + '　様' : ''), t:'s', s:sRecipStaff}, '', '', '']);
+  } else {
+    // 角2 (縦向き 240×332mm): 上部に差出人、中央に宛先
+    aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '' ]);
+    aoa.push([ {v: senderName + (ourStaffName ? '　担当：' + ourStaffName : ''), t:'s', s:sSenderName}, '', '', '' ]);
+    aoa.push(['','','','']);
+    aoa.push(['','','','']);
+    aoa.push(['','','','']);
+    aoa.push([ '', {v:'〒' + customerPostal, t:'s', s:sRecipPost}, '', '' ]);
+    aoa.push([ '', {v: customerAddress, t:'s', s:sRecipAddr}, '', '' ]);
+    aoa.push(['','','','']);
+    aoa.push([ '', {v: customerName + '　御中', t:'s', s:sRecipComp}, '', '' ]);
+    aoa.push([ '', {v: (staffName ? staffName + '　様' : ''), t:'s', s:sRecipStaff}, '', '' ]);
+  }
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  if (isNaga3) {
+    // 長3 横向き: 6列で左に差出人、右に宛先エリア
+    ws['!cols'] = [{wch:26},{wch:10},{wch:40},{wch:6},{wch:6},{wch:6}];
+    ws['!rows'] = [{hpt:16},{hpt:18},{hpt:8},{hpt:8},{hpt:24},{hpt:24},{hpt:36},{hpt:30}];
+    // 宛先セルをマージ（見やすさのため）
+    ws['!merges'] = [
+      {s:{r:0,c:0},e:{r:0,c:5}},   // 差出人 postal+address
+      {s:{r:1,c:0},e:{r:1,c:5}},   // 差出人 name
+      {s:{r:4,c:2},e:{r:4,c:5}},
+      {s:{r:5,c:2},e:{r:5,c:5}},
+      {s:{r:6,c:2},e:{r:6,c:5}},
+      {s:{r:7,c:2},e:{r:7,c:5}}
+    ];
+    ws['!margins'] = { left:0.35, right:0.35, top:0.35, bottom:0.35, header:0.1, footer:0.1 };
+    ws['!pageSetup'] = { paperSize:43, orientation:'landscape', fitToWidth:1, fitToHeight:1 };
+  } else {
+    // 角2 縦向き: 4列
+    ws['!cols'] = [{wch:8},{wch:40},{wch:8},{wch:8}];
+    ws['!rows'] = [{hpt:18},{hpt:20},{hpt:10},{hpt:10},{hpt:10},{hpt:30},{hpt:28},{hpt:16},{hpt:44},{hpt:36}];
+    ws['!merges'] = [
+      {s:{r:0,c:0},e:{r:0,c:3}},   // 差出人 postal+address
+      {s:{r:1,c:0},e:{r:1,c:3}},   // 差出人 name
+      {s:{r:5,c:1},e:{r:5,c:3}},
+      {s:{r:6,c:1},e:{r:6,c:3}},
+      {s:{r:8,c:1},e:{r:8,c:3}},
+      {s:{r:9,c:1},e:{r:9,c:3}}
+    ];
+    ws['!margins'] = { left:0.5, right:0.5, top:0.5, bottom:0.5, header:0.1, footer:0.1 };
+    ws['!pageSetup'] = { paperSize:45, orientation:'portrait', fitToWidth:1, fitToHeight:1 };
+  }
+  ws['!printOptions'] = { horizontalCentered:true, verticalCentered:false };
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '宛名');
+  var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  // fitToPage 系を強制注入（xlsx-js-style が正しく出力しない補完）
+  wbout = await _forceEnvelopeOnePage(wbout, isNaga3 ? 43 : 45, isNaga3 ? 'landscape' : 'portrait');
+
+  var blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var safeName = (c.customerName || '案件').replace(/[\\\/:\*\?"<>\|]/g,'_');
+  var sizeLabel = isNaga3 ? '長3' : '角2';
+  a.download = '宛名_' + sizeLabel + '_' + safeName + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  showToast('宛名 Excel（' + sizeLabel + '）を出力しました');
+}
+async function _forceEnvelopeOnePage(wboutBuf, paperSize, orientation) {
+  var zip = await JSZip.loadAsync(wboutBuf);
+  var sPath = 'xl/worksheets/sheet1.xml';
+  var sXml = await zip.file(sPath).async('string');
+  if (!/<sheetPr[\s>]/.test(sXml)) {
+    sXml = sXml.replace(/(<worksheet[^>]*>)/, '$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  } else if (!/pageSetUpPr/.test(sXml)) {
+    sXml = sXml.replace(/<sheetPr([^>\/]*)>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/>');
+  }
+  var psTag = '<pageSetup paperSize="' + paperSize + '" orientation="' + orientation + '" fitToWidth="1" fitToHeight="1"/>';
+  if (/<pageSetup\s/.test(sXml)) {
+    sXml = sXml.replace(/<pageSetup[^>]*\/>/g, psTag);
+  } else if (/<pageMargins[^\/]*\/>/.test(sXml)) {
+    sXml = sXml.replace(/(<pageMargins[^\/]*\/>)/, '$1' + psTag);
+  } else {
+    sXml = sXml.replace('</worksheet>', psTag + '</worksheet>');
+  }
+  if (!/<printOptions/.test(sXml)) {
+    var poTag = '<printOptions horizontalCentered="1"/>';
+    if (/<pageMargins/.test(sXml)) {
+      sXml = sXml.replace(/(<pageMargins)/, poTag + '$1');
+    } else {
+      sXml = sXml.replace('</worksheet>', poTag + '</worksheet>');
+    }
+  }
+  zip.file(sPath, sXml);
+  return await zip.generateAsync({ type:'arraybuffer', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
 // ── 送付状（頭紙）Excel出力 ──
 // v111: 郵送用の送付状。請求書と一緒に印刷して送るためのビジネス文書
 // ═══════════════════════════════════════════════
@@ -11065,93 +11245,6 @@ window.addEventListener('DOMContentLoaded', initApp);
         </div>
       </div>
       <div class="pmf-section-title">賃料・費用</div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>月額賃料（税込）</label>
-          <input type="number" id="pmf_rentMonthly" placeholder="例：50000" min="0">
-        </div>
-        <div class="pmf-group">
-          <label>日額賃料（税込）</label>
-          <input type="number" id="pmf_rentDaily" placeholder="例：2000" min="0">
-        </div>
-      </div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>手数料（税込）</label>
-          <input type="number" id="pmf_fee" placeholder="例：10000" min="0">
-        </div>
-        <div class="pmf-group">
-          <label>礼金（税込）</label>
-          <input type="number" id="pmf_keyMoney" placeholder="例：50000" min="0">
-        </div>
-      </div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>保証金（税込）</label>
-          <input type="number" id="pmf_deposit" placeholder="例：100000" min="0">
-        </div>
-        <div class="pmf-group">
-          <label>対応車両</label>
-          <select id="pmf_vehicleType">
-            <option value="">（未選択）</option>
-            <option value="軽自動車のみ">軽自動車のみ</option>
-            <option value="普通車まで">普通車まで</option>
-            <option value="普通車・工事関係車両(ﾊｲｴｰｽ程度)">普通車・工事関係車両(ﾊｲｴｰｽ程度)</option>
-            <option value="工事関係車両可(条件有り)">工事関係車両可(条件有り)</option>
-          </select>
-        </div>
-      </div>
-      <div class="pmf-section-title">仕入先情報</div>
-      <div class="pmf-group">
-        <label>仕入先名 <button type="button" onclick="openSupplierPickerForPM()" style="margin-left:8px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">📚 マスタから選択</button></label>
-        <input type="text" id="pmf_supplierName" placeholder="例：〇〇不動産">
-      </div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>電話番号</label>
-          <input type="tel" id="pmf_tel" placeholder="例：0586-12-3456">
-        </div>
-        <div class="pmf-group">
-          <label>FAX番号</label>
-          <input type="tel" id="pmf_fax" placeholder="例：0586-12-3457">
-        </div>
-      </div>
-      <div class="pmf-group">
-        <label>メールアドレス</label>
-        <input type="email" id="pmf_email" placeholder="例：contact@example.com">
-      </div>
-      <div class="pmf-section-title">契約書記載情報</div>
-      <div class="pmf-group">
-        <label>貸主住所</label>
-        <input type="text" id="pmf_lessorAddress" placeholder="貸主の住所（押印欄に記載）">
-      </div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>地主税区分 <span style="font-size:10px;color:#9ca3af">賃料・礼金</span></label>
-          <select id="pmf_ownerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_ownerInvoiceRegNo')">
-            <option value="false">免税事業者</option>
-            <option value="true">課税事業者</option>
-          </select>
-        </div>
-        <div class="pmf-group">
-          <label>管理会社税区分 <span style="font-size:10px;color:#9ca3af">手数料</span></label>
-          <select id="pmf_managerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_managerInvoiceRegNo')">
-            <option value="false">免税/該当なし</option>
-            <option value="true">課税事業者</option>
-          </select>
-        </div>
-      </div>
-      <div class="pmf-row">
-        <div class="pmf-group">
-          <label>地主インボイス番号 <span style="font-size:10px;color:#9ca3af">管理者契約書に転記</span></label>
-          <input type="text" id="pmf_ownerInvoiceRegNo" placeholder="1234567890123">
-        </div>
-        <div class="pmf-group">
-          <label>管理会社インボイス番号 <span style="font-size:10px;color:#9ca3af">経理用</span></label>
-          <input type="text" id="pmf_managerInvoiceRegNo" placeholder="1234567890123">
-        </div>
-      </div>
-      <div class="pmf-section-title">日割条件</div>
       <div class="pmf-row">
         <div class="pmf-group">
           <label>開始月日割</label>
