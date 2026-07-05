@@ -7705,15 +7705,25 @@ async function generateEnvelopeAddressExcel(c, size) {
   var aoa = [];
 
   if (isNaga3) {
-    // 長3 (横向き 235×120mm): 左上に差出人、右側中央に宛先
-    aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '', '', '' ]);
-    aoa.push([ {v: senderName, t:'s', s:sSenderName}, '', '', '', '', '' ]);
-    aoa.push(['','','','','','']);
-    aoa.push(['','','','','','']);
-    aoa.push(['', '', {v:'〒' + customerPostal, t:'s', s:sRecipPost}, '', '', '']);
-    aoa.push(['', '', {v: customerAddress, t:'s', s:sRecipAddr}, '', '', '']);
-    aoa.push(['', '', {v: customerName + '　御中', t:'s', s:sRecipComp}, '', '', '']);
-    aoa.push(['', '', {v: (staffName ? staffName + '　様' : ''), t:'s', s:sRecipStaff}, '', '', '']);
+    // v111: 長3封筒は縦向き(120×235mm portrait)が本来の使用法
+    //       郵便番号=上部、宛先=中央大きめ、差出人=下部小さめ（プリント済み封筒でも見切れないよう小さく）
+    aoa.push(['','','']);                                                             // Row 0: 上余白
+    aoa.push(['', {v:'〒' + customerPostal, t:'s', s:sRecipPost}, '']);                // Row 1: 宛先郵便番号
+    aoa.push(['','','']);                                                             // Row 2: 空
+    aoa.push(['', {v: customerAddress, t:'s', s:sRecipAddr}, '']);                    // Row 3: 宛先住所
+    aoa.push(['','','']);                                                             // Row 4: 空
+    aoa.push(['','','']);                                                             // Row 5: 空
+    aoa.push(['', {v: customerName + '　御中', t:'s', s:sRecipComp}, '']);             // Row 6: 会社名
+    aoa.push(['','','']);                                                             // Row 7: 空
+    aoa.push(['', {v: (staffName ? '　　' + staffName + '　様' : ''), t:'s', s:sRecipStaff}, '']); // Row 8: 担当者名
+    aoa.push(['','','']);                                                             // Row 9-14: 中間余白
+    aoa.push(['','','']);
+    aoa.push(['','','']);
+    aoa.push(['','','']);
+    aoa.push(['','','']);
+    aoa.push([{v:'〒' + senderPostal, t:'s', s:sSenderLine}, '', '']);                 // Row 14: 差出人〒
+    aoa.push([{v: senderAddress, t:'s', s:sSenderLine}, '', '']);                     // Row 15: 差出人住所
+    aoa.push([{v: senderName, t:'s', s:sSenderName}, '', '']);                        // Row 16: 差出人社名
   } else {
     // 角2 (縦向き 240×332mm): 上部に差出人、中央に宛先
     aoa.push([ {v:'〒' + senderPostal + '　' + senderAddress, t:'s', s:sSenderLine}, '', '', '' ]);
@@ -7730,20 +7740,32 @@ async function generateEnvelopeAddressExcel(c, size) {
   var ws = XLSX.utils.aoa_to_sheet(aoa);
 
   if (isNaga3) {
-    // 長3 横向き: 6列で左に差出人、右に宛先エリア
-    ws['!cols'] = [{wch:26},{wch:10},{wch:40},{wch:6},{wch:6},{wch:6}];
-    ws['!rows'] = [{hpt:16},{hpt:18},{hpt:8},{hpt:8},{hpt:24},{hpt:24},{hpt:36},{hpt:30}];
-    // 宛先セルをマージ（見やすさのため）
-    ws['!merges'] = [
-      {s:{r:0,c:0},e:{r:0,c:5}},   // 差出人 postal+address
-      {s:{r:1,c:0},e:{r:1,c:5}},   // 差出人 name
-      {s:{r:4,c:2},e:{r:4,c:5}},
-      {s:{r:5,c:2},e:{r:5,c:5}},
-      {s:{r:6,c:2},e:{r:6,c:5}},
-      {s:{r:7,c:2},e:{r:7,c:5}}
+    // v111: 長3 縦向き (120×235mm portrait) 3列レイアウト
+    //       左余白 | メインコンテンツ | 右余白
+    ws['!cols'] = [{wch:4},{wch:32},{wch:4}];
+    // Rows: 上余白, 宛先郵便番号, 空, 住所, 空, 空, 会社名, 空, 担当者, 中間×5, 差出人3行
+    ws['!rows'] = [
+      {hpt:26},   // Row 0: 上余白
+      {hpt:22},   // Row 1: 宛先郵便番号
+      {hpt:10},   // Row 2: 空
+      {hpt:24},   // Row 3: 住所
+      {hpt:10},   // Row 4: 空
+      {hpt:14},   // Row 5: 空
+      {hpt:34},   // Row 6: 会社名(大)
+      {hpt:10},   // Row 7: 空
+      {hpt:26},   // Row 8: 担当者
+      {hpt:20},   // Row 9-13: 中間余白
+      {hpt:20},
+      {hpt:20},
+      {hpt:20},
+      {hpt:20},
+      {hpt:14},   // Row 14: 差出人〒
+      {hpt:14},   // Row 15: 差出人住所
+      {hpt:16}    // Row 16: 差出人社名
     ];
-    ws['!margins'] = { left:0.35, right:0.35, top:0.35, bottom:0.35, header:0.1, footer:0.1 };
-    ws['!pageSetup'] = { paperSize:43, orientation:'landscape', fitToWidth:1, fitToHeight:1 };
+    // メインコンテンツを1列に集約するためのマージなし（Col 1に直接値を配置）
+    ws['!margins'] = { left:0.4, right:0.4, top:0.35, bottom:0.35, header:0.1, footer:0.1 };
+    ws['!pageSetup'] = { paperSize:43, orientation:'portrait', fitToWidth:1, fitToHeight:1 };
   } else {
     // 角2 縦向き: 4列
     ws['!cols'] = [{wch:8},{wch:40},{wch:8},{wch:8}];
@@ -7765,7 +7787,8 @@ async function generateEnvelopeAddressExcel(c, size) {
   XLSX.utils.book_append_sheet(wb, ws, '宛名');
   var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
   // fitToPage 系を強制注入（xlsx-js-style が正しく出力しない補完）
-  wbout = await _forceEnvelopeOnePage(wbout, isNaga3 ? 43 : 45, isNaga3 ? 'landscape' : 'portrait');
+  // v111: 長3・角2 とも縦向き（portrait）で印刷（長3は縦長の封筒として使用）
+  wbout = await _forceEnvelopeOnePage(wbout, isNaga3 ? 43 : 45, 'portrait');
 
   var blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   var url = URL.createObjectURL(blob);
