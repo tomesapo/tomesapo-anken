@@ -8133,7 +8133,16 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   const dataRows = [];
   const CIRC = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
 
-  (c.parkingLots || []).forEach((pl, idx) => {
+  // v111: 失注駐車場（契約データなし）は請求書から除外
+  //       契約開始日・終了日・契約台数のいずれかが未入力の駐車場はスキップ
+  const _invoicedLots = (c.parkingLots || []).filter(function(pl){
+    return !!(pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0) > 0);
+  });
+  if (!_invoicedLots.length) {
+    showToast('契約済みの駐車場がありません（契約開始日・終了日・契約台数を入力してください）');
+    return;
+  }
+  _invoicedLots.forEach((pl, idx) => {
     const isLumpInv = (pl.rentMode === 'lump'); // v111: 土地一括
     const units  = pl.units || pl.estimateUnits || 0;
     const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
