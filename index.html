@@ -11519,20 +11519,14 @@ window.addEventListener('DOMContentLoaded', initApp);
 })();
 </script>
 
-<!-- PWA: Service Worker 登録 -->
+<!-- 数値入力欄でホイール回転による値変化を抑制 -->
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('./sw.js').catch(function(err){
-      console.warn('SW register failed:', err);
-    });
-  });
-}
-</script>
-
-</body>
-</html>
-     e.preventDefault();
+(function(){
+  document.addEventListener('wheel', function(e){
+    var t = e.target;
+    if (t && t.tagName === 'INPUT' && t.type === 'number' && document.activeElement === t) {
+      e.preventDefault();
+      t.blur();
     }
   }, { passive: false });
 })();
