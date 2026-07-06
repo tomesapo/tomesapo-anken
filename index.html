@@ -11317,6 +11317,42 @@ window.addEventListener('DOMContentLoaded', initApp);
       <div class="pmf-section-title">賃料・費用</div>
       <div class="pmf-row">
         <div class="pmf-group">
+          <label>月額賃料（税込・1台）</label>
+          <input type="number" id="pmf_rentMonthly" min="0" placeholder="例：15000">
+        </div>
+        <div class="pmf-group">
+          <label>日極賃料（税込・1台）</label>
+          <input type="number" id="pmf_rentDaily" min="0" placeholder="例：500">
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>手数料（税込・1台）</label>
+          <input type="number" id="pmf_fee" min="0" placeholder="例：1500">
+        </div>
+        <div class="pmf-group">
+          <label>対応車両</label>
+          <select id="pmf_vehicleType">
+            <option value="">（未選択）</option>
+            <option value="軽自動車のみ">軽自動車のみ</option>
+            <option value="普通車まで">普通車まで</option>
+            <option value="普通車・工事関係車両(ﾊｲｴｰｽ程度)">普通車・工事関係車両(ﾊｲｴｰｽ程度)</option>
+            <option value="工事関係車両可(条件有り)">工事関係車両可(条件有り)</option>
+          </select>
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>礼金（税込・1台）</label>
+          <input type="number" id="pmf_keyMoney" min="0" placeholder="例：0">
+        </div>
+        <div class="pmf-group">
+          <label>保証金（1台・返還あり）</label>
+          <input type="number" id="pmf_deposit" min="0" placeholder="例：0">
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
           <label>開始月日割</label>
           <select id="pmf_startProRate">
             <option value="">未設定</option>
@@ -11333,6 +11369,55 @@ window.addEventListener('DOMContentLoaded', initApp);
             <option value="不可">不可</option>
             <option value="要相談">要相談</option>
           </select>
+        </div>
+      </div>
+      <div class="pmf-section-title">仕入先・貸主情報</div>
+      <div class="pmf-group">
+        <label>仕入先名 <button type="button" onclick="openSupplierPickerForPM()" style="margin-left:6px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">📚 マスタから選択</button></label>
+        <input type="text" id="pmf_supplierName" placeholder="○○不動産">
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>TEL</label>
+          <input type="tel" id="pmf_tel" placeholder="03-0000-0000">
+        </div>
+        <div class="pmf-group">
+          <label>FAX</label>
+          <input type="tel" id="pmf_fax" placeholder="03-0000-0000">
+        </div>
+      </div>
+      <div class="pmf-group">
+        <label>メール</label>
+        <input type="email" id="pmf_email" placeholder="info@example.co.jp">
+      </div>
+      <div class="pmf-group">
+        <label>貸主住所（契約書用）</label>
+        <input type="text" id="pmf_lessorAddress" placeholder="貸主の住所">
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>地主税区分（賃料・礼金）</label>
+          <select id="pmf_ownerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_ownerInvoiceRegNo')">
+            <option value="false">免税事業者</option>
+            <option value="true">課税事業者</option>
+          </select>
+        </div>
+        <div class="pmf-group">
+          <label>管理会社税区分（手数料）</label>
+          <select id="pmf_managerTaxable" onchange="_syncInvoiceFieldDisabled(this,'pmf_managerInvoiceRegNo')">
+            <option value="false">免税/該当なし</option>
+            <option value="true">課税事業者</option>
+          </select>
+        </div>
+      </div>
+      <div class="pmf-row">
+        <div class="pmf-group">
+          <label>地主インボイス番号</label>
+          <input type="text" id="pmf_ownerInvoiceRegNo" placeholder="T1234567890123">
+        </div>
+        <div class="pmf-group">
+          <label>管理会社インボイス番号</label>
+          <input type="text" id="pmf_managerInvoiceRegNo" placeholder="T1234567890123">
         </div>
       </div>
       <div class="pmf-section-title">駐車場写真</div>
@@ -11366,7 +11451,7 @@ window.addEventListener('DOMContentLoaded', initApp);
   </div>
 </div>
 
-<!-- ═══ 🔧 DEBUGパネル（Ctrl+Shift+D で開閉） ═══ -->
+<!-- 🔧 DEBUGパネル（Ctrl+Shift+D で開閉） -->
 <div id="dbgPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
      background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:11px;padding:12px;">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -11434,13 +11519,20 @@ window.addEventListener('DOMContentLoaded', initApp);
 })();
 </script>
 
-<!-- v111: 数値入力欄でホイール操作による値変更を抑止 -->
+<!-- PWA: Service Worker 登録 -->
 <script>
-(function(){
-  document.addEventListener('wheel', function(e){
-    var t = e.target;
-    if (t && t.tagName === 'INPUT' && t.type === 'number' && document.activeElement === t) {
-      e.preventDefault();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(err){
+      console.warn('SW register failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
+     e.preventDefault();
     }
   }, { passive: false });
 })();
