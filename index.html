@@ -9022,9 +9022,9 @@ async function generateCostCalcSheet(caseId, plIdx) {
     } catch(_e) {}
 
     // ファイル名
-    const safeOwner = (ownerName || '地主').replace(/[\\/:*?"<>|]/g,'').substring(0,20);
+    const safeLotName = ((pl.name || '駐車場').replace(/[\\/:*?"<>|]/g,'').substring(0,20));
     const ymd = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
-    const filename = '費用計算書_' + (c.caseNo||caseId) + '_' + safeOwner + '_' + ymd + '.xlsx';
+    const filename = '費用計算書_' + (c.caseNo||caseId) + '_' + safeLotName + '_' + ymd + '.xlsx';
 
     const blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
