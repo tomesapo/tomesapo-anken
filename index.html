@@ -8840,36 +8840,41 @@ async function generateCostCalcSheet(caseId, plIdx) {
     ownerBoxLines.push(ownerName ? (ownerName + '　様') : '＿＿＿＿＿＿＿＿＿＿ 様');
     ownerBoxLines.push(ownerAddress || '＿＿＿＿＿＿＿＿＿＿＿＿');
     ownerBoxLines.push(ownerTel ? ('TEL: ' + ownerTel) : 'TEL: ＿＿＿＿＿＿＿＿');
-    if (ownerTaxable) ownerBoxLines.push(ownerInvoice ? ('登録番号: ' + ownerInvoice) : '登録番号: ＿＿＿＿＿＿');
+    if (ownerTaxable) {
+      // 「T」プレフィックスを付与（既に付いていれば重複させない）
+      let regNo = ownerInvoice ? String(ownerInvoice).trim() : '';
+      if (regNo && !/^T/i.test(regNo)) regNo = 'T' + regNo;
+      ownerBoxLines.push(regNo ? ('登録番号: ' + regNo) : '登録番号: T＿＿＿＿＿＿＿');
+    }
     ownerBoxLines.push('');
     ownerBoxLines.push('           [ 押印 ]');
     aoa.push([bl(),bl(),bl(),T(ownerBoxLines.join('\n'), sBox),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:3, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:3, c2:5});
     // 行10: 空白
     aoa.push([bl(),bl(),bl(),bl(),bl(),bl()]);
 
     // ── 対象駐車場セクション ──
     // タイトル（B:E マージ）
     aoa.push([bl(),T('  対象駐車場', sSecTitle),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     // 駐車場名
     aoa.push([bl(),T('駐車場名', sLabel),T(pl.name||'', sVal),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
     // 所在地
     aoa.push([bl(),T('所在地', sLabel),T(pl.address||'', sVal),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
     // 契約期間
     aoa.push([bl(),T('契約期間', sLabel),T(contractStartStr+' 〜 '+contractEndStr, sVal),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
     // 契約台数
     aoa.push([bl(),T('契約台数', sLabel),T(units+'台', sVal),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
     // 空白
     aoa.push([bl(),bl(),bl(),bl(),bl(),bl()]);
 
     // ── 内訳セクション ──
     aoa.push([bl(),T('  内訳', sSecTitle),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     // ヘッダー行
     aoa.push([bl(),T('項目', sHdr),T('単価', sHdr),T('数量', sHdr),T('金額', sHdr),bl()]);
 
@@ -8911,16 +8916,16 @@ async function generateCostCalcSheet(caseId, plIdx) {
     // ── 保証金セクション ──
     if (depositAmt > 0) {
       aoa.push([bl(),T('  保証金（返還対象）', sSecTitle),bl(),bl(),bl(),bl()]);
-      mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+      mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
       aoa.push([bl(),T('保証金', sVal),N(deposit),T(units+'台', sValC),N(depositAmt),bl()]);
       aoa.push([bl(),T('※ 契約終了時にご返還ください（下記当社口座）', sNote),bl(),bl(),bl(),bl()]);
-      mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+      mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
       aoa.push([bl(),bl(),bl(),bl(),bl(),bl()]);
     }
 
     // ── ご請求金額セクション ──
     aoa.push([bl(),T('  ご請求金額', sSecTitle),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     pushSumRow('賃料等（税込）', rentTotalIncTax);
     if (depositAmt > 0) pushSumRow('保証金', depositAmt);
     pushSumRow('小計', rawGrandTotal);
@@ -8932,10 +8937,10 @@ async function generateCostCalcSheet(caseId, plIdx) {
 
     // ── お振込先セクション ──
     aoa.push([bl(),T('  お振込先（賃料等・保証金 共通）', sSecTitle),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     const pushAcctBlank = (label) => {
       aoa.push([bl(),T(label, sLabel),T('', sVal),bl(),bl(),bl()]);
-      mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+      mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
     };
     pushAcctBlank('銀行名');
     pushAcctBlank('支店名');
@@ -8943,16 +8948,16 @@ async function generateCostCalcSheet(caseId, plIdx) {
     pushAcctBlank('口座番号');
     pushAcctBlank('口座名義');
     aoa.push([bl(),T('※ ご記入の上、押印してご返送ください', sNote),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     aoa.push([bl(),bl(),bl(),bl(),bl(),bl()]);
 
     // ── 保証金返還先セクション（当社口座） ──
     if (depositAmt > 0) {
       aoa.push([bl(),T('  保証金 返還時のお振込先（当社口座）', sSecTitle),bl(),bl(),bl(),bl()]);
-      mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+      mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
       const pushAcct = (label, val) => {
         aoa.push([bl(),T(label, sLabel),T(val || '', sVal),bl(),bl(),bl()]);
-        mergesQueue.push({r:aoa.length-1, c1:2, c2:4});
+        mergesQueue.push({r:aoa.length-1, c1:2, c2:5});
       };
       pushAcct('銀行名', bank.bankName);
       pushAcct('支店名', bank.branchName);
@@ -8964,10 +8969,10 @@ async function generateCostCalcSheet(caseId, plIdx) {
 
     // ── 支払期日セクション ──
     aoa.push([bl(),T('  お支払期日', sSecTitle),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     const sDueDate = { font:{name:F,sz:13,bold:true,color:{rgb:'B45309'}}, alignment:{horizontal:'left',vertical:'center',indent:1} };
     aoa.push([bl(),T(dueDateStr + '（契約開始日の前日）', sDueDate),bl(),bl(),bl(),bl()]);
-    mergesQueue.push({r:aoa.length-1, c1:1, c2:4});
+    mergesQueue.push({r:aoa.length-1, c1:1, c2:5});
     aoa.push([bl(),bl(),bl(),bl(),bl(),bl()]);
 
     // ── Worksheet 作成 ──
