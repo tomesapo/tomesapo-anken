@@ -8800,10 +8800,10 @@ async function generateCostCalcSheet(caseId, plIdx) {
     const sSumLbl   = { font:{name:F,sz:11,bold:true}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:{top:{style:'thin'},bottom:{style:'thin'}} };
     const sGrand    = { font:{name:F,sz:14,bold:true,color:{rgb:'B45309'}}, alignment:{horizontal:'right',vertical:'center',indent:1}, numFmt:'#,##0', border:{top:{style:'medium'},bottom:{style:'double'}} };
     const sGrandLbl = { font:{name:F,sz:14,bold:true,color:{rgb:'B45309'}}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:{top:{style:'medium'},bottom:{style:'double'}} };
-    const sBox      = { font:{name:F,sz:10}, alignment:{horizontal:'left',vertical:'center',wrapText:true}, border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}} };
+    const sBox      = { font:{name:F,sz:10}, alignment:{horizontal:'right',vertical:'center',wrapText:true,indent:1}, border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}} };
     // 地主情報ボックスの merge 用（右側・中間セル向けにボーダーを分離）
-    const sBoxM  = { font:{name:F,sz:10}, alignment:{horizontal:'left',vertical:'center',wrapText:true}, border:{top:{style:'thin'},bottom:{style:'thin'}} };
-    const sBoxR  = { font:{name:F,sz:10}, alignment:{horizontal:'left',vertical:'center',wrapText:true}, border:{top:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}} };
+    const sBoxM  = { font:{name:F,sz:10}, alignment:{horizontal:'right',vertical:'center',wrapText:true}, border:{top:{style:'thin'},bottom:{style:'thin'}} };
+    const sBoxR  = { font:{name:F,sz:10}, alignment:{horizontal:'right',vertical:'center',wrapText:true,indent:1}, border:{top:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}} };
     const sNote     = { font:{name:F,sz:9,color:{rgb:'6B7280'}}, alignment:{horizontal:'left',vertical:'center',indent:1} };
     const sBlank    = { font:{name:F,sz:10} };
     const sHdr      = { font:{name:F,sz:10,bold:true,color:{rgb:'FFFFFF'}}, alignment:{horizontal:'center',vertical:'center'}, fill:{fgColor:{rgb:'6B7280'}} };
@@ -8850,7 +8850,7 @@ async function generateCostCalcSheet(caseId, plIdx) {
       ownerBoxLines.push(regNo ? ('登録番号: ' + regNo) : '登録番号: T＿＿＿＿＿＿＿');
     }
     ownerBoxLines.push('');
-    ownerBoxLines.push('           [ 押印 ]');
+    ownerBoxLines.push('[ 押印 ]');
     aoa.push([bl(),bl(),bl(),T(ownerBoxLines.join('\n'), sBox),T('', sBoxM),T('', sBoxR)]);
     mergesQueue.push({r:aoa.length-1, c1:3, c2:5});
     // 行10: 空白
