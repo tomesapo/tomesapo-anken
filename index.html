@@ -864,7 +864,7 @@
     <div class="monthly-header">
       <h2>&#128176; 資金繰り予測</h2>
       <div style="flex:1;font-size:11px;color:rgba(255,255,255,.85);margin-left:14px;line-height:1.4">
-        提案済案件のみ対象 ／ 見積仕入（前月支払予定・税別）・見積売上（依頼開始月入金予定・税別）<br>
+        提案済・未申込・契約中案件が対象 ／ 見積仕入（前月支払予定・税別）・見積売上（依頼開始月入金予定・税別）<br>
         資金ショート回避・追加融資タイミングの把握用
       </div>
       <button class="monthly-close-btn" onclick="exportCashflowExcel()" style="background:rgba(255,255,255,.25);margin-right:6px">&#128202; Excel出力</button>
@@ -6900,10 +6900,10 @@ var monthlyPeriod = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().
 
 // v111: 資金繰り予測ビュー
 // 目的: 資金ショート防止のため、追加融資タイミングを把握する
-// 対象: 提案済のみ（未申込・契約中は既に確定数字が見えるので除外）
+// 対象: 提案済・未申込・契約中
 // 仕入予定月 = 依頼開始月の前月、入金予定月 = 依頼開始月
 // 金額源: 見積売上 (c.estSales) / 見積仕入 (c.estPurchase) ※税別
-const CASHFLOW_TARGET_STATUSES = ['提案済'];
+const CASHFLOW_TARGET_STATUSES = ['提案済','未申込','契約中'];
 function openCashflowView() {
   document.getElementById('cashflowOverlay').classList.add('open');
   renderCashflowView();
@@ -6960,7 +6960,7 @@ function renderCashflowView() {
   var body = document.getElementById('cashflowBody');
   if (!body) return;
   if (!rows.length) {
-    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9ca3af">提案済の案件で、依頼開始日が入力されたものがありません</div>';
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9ca3af">対象ステータス（提案済・未申込・契約中）の案件で、依頼開始日が入力されたものがありません</div>';
     return;
   }
   // 全体サマリ
@@ -7060,8 +7060,8 @@ async function exportCashflowExcel() {
 
   // ─── シート1: 月別合計 ───
   var aoa1 = [];
-  aoa1.push([ {v:'資金繰り予測(提案済案件・税別)', t:'s', s:sTitle}, '', '', '' ]);
-  aoa1.push([ {v:'出力日:'+todayStr+'  /  対象:提案済ステータスのみ  /  仕入予定月=依頼開始月の前月、入金予定月=依頼開始月', t:'s', s:sSubtitle}, '', '', '' ]);
+  aoa1.push([ {v:'資金繰り予測(提案済・未申込・契約中案件・税別)', t:'s', s:sTitle}, '', '', '' ]);
+  aoa1.push([ {v:'出力日:'+todayStr+'  /  対象:提案済・未申込・契約中  /  仕入予定月=依頼開始月の前月、入金予定月=依頼開始月', t:'s', s:sSubtitle}, '', '', '' ]);
   aoa1.push(['','','','']);
   aoa1.push([
     {v:'月', t:'s', s:sHdr},
