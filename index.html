@@ -3482,17 +3482,103 @@ function _siteKeyOf(c) {
   }
   return c.caseNo || ((c.customerName || '') + '||' + (c.siteName || '（現場未設定）'));
 }
+
+// v111: 上部統計・現場単価を月次レポート(buildMonthlyData)と完全一致させるためのヘルパー
+// 契約期間・台数のフォールバックを buildMonthlyData と同じにする:
+//   pl.contractStart 未設定 → c.contractStart にフォールバック
+//   pl.units 未設定/0 → 1 として扱う
+// 業者費用按分・封鎖手数料・調整金額・礼金税区分等の税処理も buildMonthlyData と同じ
+function _plFixedTotalsAllPeriod(pl, c) {
+  var startStr = pl.contractStart || c.contractStart || '';
+  var endStr   = pl.contractEnd   || c.contractEnd   || '';
+  if (!startStr || !endStr) return { sales: 0, purchase: 0, profit: 0 };
+  var units = pl.units || 1;
+  var quoteRate = pl.rateType === 'daily' ? (pl.quoteDailyRent || 0) : (pl.quoteMonthlyRent || 0);
+  var costRateInc = pl.rateType === 'daily' ? (pl.dailyRent || 0) : (pl.monthlyRent || 0);
+  if (!quoteRate && !costRateInc) return { sales: 0, purchase: 0, profit: 0 };
+
+  var start = new Date(startStr + 'T00:00:00');
+  var end   = new Date(endStr   + 'T00:00:00');
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return { sales: 0, purchase: 0, profit: 0 };
+  var y = start.getFullYear(), m = start.getMonth();
+  var ey = end.getFullYear(), em = end.getMonth();
+  var totalSales = 0, totalCost = 0;
+
+  while (y < ey || (y === ey && m <= em)) {
+    var dim = new Date(y, m + 1, 0).getDate();
+    var isF = (y === start.getFullYear() && m === start.getMonth());
+    var isL = (y === ey && m === em);
+    var salesAmt = 0;
+    var rentCostInc = 0, adminCostInc = 0, keyCostInc = 0, blockingCostInc = 0, adjCostInc = 0;
+
+    if (pl.rateType === 'daily') {
+      var ds = (isF && isL) ? (end.getDate() - start.getDate() + 1)
+             : isF ? (dim - start.getDate() + 1)
+             : isL ? end.getDate() : dim;
+      salesAmt = units * ds * quoteRate;
+      rentCostInc = units * ds * costRateInc;
+    } else {
+      if (isF && start.getDate() > 1 && pl.startProRate) {
+        var days1 = dim - start.getDate() + 1;
+        salesAmt = units * days1 * Math.floor(quoteRate / 30);
+        rentCostInc = units * days1 * Math.floor(costRateInc / 30);
+      } else if (isL && end.getDate() < dim && pl.endProRate) {
+        var days2 = end.getDate();
+        salesAmt = units * days2 * Math.floor(quoteRate / 30);
+        rentCostInc = units * days2 * Math.floor(costRateInc / 30);
+      } else {
+        salesAmt = units * quoteRate;
+        rentCostInc = units * costRateInc;
+      }
+    }
+
+    if (isF) {
+      var quoteAdmin = pl.quoteAdminFee || 0;
+      var quoteKey   = pl.quoteKeyMoney || 0;
+      salesAmt += units * (quoteAdmin + quoteKey);
+      adminCostInc = units * (pl.adminFee || 0);
+      keyCostInc   = units * (pl.keyMoney || 0);
+      adjCostInc   = pl.adjustmentAmount || 0;
+      var quoteBlocking = pl.quoteBlockingFee || 0;
+      salesAmt += quoteBlocking;
+      blockingCostInc = pl.blockingFee || 0;
+      if (typeof calcAgencyFeeShare === 'function') {
+        var _plIndex = (c.parkingLots || []).indexOf(pl);
+        var _agencyShare = calcAgencyFeeShare(c, _plIndex, true) || 0;
+        salesAmt += _agencyShare;
+      }
+    }
+
+    // 税抜換算（項目別）
+    var _ownerT   = !!pl.ownerTaxable;
+    var _managerT = !!pl.managerTaxable;
+    var _isNT     = (pl.taxCategory === 'nontaxable');
+    var _rentEx   = _ownerT   ? Math.round(rentCostInc / 1.1)  : rentCostInc;
+    var _adminEx  = _managerT ? Math.round(adminCostInc / 1.1) : adminCostInc;
+    var _keyNonTax = (pl.keyMoneyTaxCategory === 'nontaxable');
+    var _keyEx    = _keyNonTax ? keyCostInc : (_ownerT ? Math.round(keyCostInc / 1.1) : keyCostInc);
+    var _blkEx    = _isNT ? blockingCostInc : Math.round(blockingCostInc / 1.1);
+    var _adjEx    = _isNT ? adjCostInc      : Math.round(adjCostInc / 1.1);
+    var costExcl  = _rentEx + _adminEx + _keyEx + _blkEx + _adjEx;
+
+    totalSales += salesAmt;
+    totalCost  += costExcl;
+
+    m++; if (m > 11) { m = 0; y++; }
+  }
+
+  return { sales: totalSales, purchase: totalCost, profit: totalSales - totalCost };
+}
 function _calcSiteUnitPrice(caseList) {
-  // v111: PL データからリアルタイム再計算（保存時スナップショットではなく最新値を使う）
+  // v111: 月次レポートと完全一致する _plFixedTotalsAllPeriod を使用
   const siteMap = {};
   caseList.forEach(c => {
     const k = _siteKeyOf(c);
     if (!siteMap[k]) siteMap[k] = 0;
-    // calcParkingLotFixed で再計算した合計を使用（月次レポートと一致）
     let caseSales = 0;
-    (c.parkingLots || []).forEach(function(pl, plIdx){
-      var r = (typeof calcParkingLotFixed === 'function') ? calcParkingLotFixed(pl, c, plIdx) : null;
-      if (r) caseSales += r.fixedSales || 0;
+    (c.parkingLots || []).forEach(function(pl){
+      var r = _plFixedTotalsAllPeriod(pl, c);
+      caseSales += r.sales || 0;
     });
     siteMap[k] += caseSales;
   });
@@ -3511,16 +3597,14 @@ function renderStats(){
   const cntKeiyaku=cases.filter(c=>c.status==='契約中').length;
   const cntMiSeikyu=cases.filter(c=>c.status==='未請求').length;
   const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
-  // v111: PL データからリアルタイム再計算（保存時スナップショットではなく最新値を使う）
-  //       月次レポートと同じ calcParkingLotFixed を用いるため、両者は常に一致する
+  // v111: 月次レポート(buildMonthlyData)と同じアルゴリズムで再計算
+  //       契約期間/台数のフォールバックも同じなので両者は常に一致する
   let totalFS=0, totalFP=0;
   ordered.forEach(function(c){
-    (c.parkingLots||[]).forEach(function(pl, plIdx){
-      var r = (typeof calcParkingLotFixed === 'function') ? calcParkingLotFixed(pl, c, plIdx) : null;
-      if (r) {
-        totalFS += r.fixedSales || 0;
-        totalFP += r.profit || 0;
-      }
+    (c.parkingLots||[]).forEach(function(pl){
+      var r = _plFixedTotalsAllPeriod(pl, c);
+      totalFS += r.sales || 0;
+      totalFP += r.profit || 0;
     });
   });
   const totalTI = Math.round(totalFS * 1.1);
