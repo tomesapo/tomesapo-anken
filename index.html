@@ -3472,9 +3472,15 @@ function filterByStatuses(arr, cardEl) {
   }
   renderAll();
 }
-// 現場単価計算ヘルパー（同一顧客×同一siteNameで1現場、確定売上を集計）
+// 現場単価計算ヘルパー
+// v111: 追加/延長は元案件（parentCaseNo）に集約する。
+//       通常案件はその caseNo をキーとして 1 現場としてカウント。
+//       caseNo が未設定の異常データは customerName + siteName にフォールバック。
 function _siteKeyOf(c) {
-  return (c.customerName || '') + '||' + (c.siteName || '（現場未設定）');
+  if ((c.caseType === '追加' || c.caseType === '延長') && c.parentCaseNo) {
+    return c.parentCaseNo;
+  }
+  return c.caseNo || ((c.customerName || '') + '||' + (c.siteName || '（現場未設定）'));
 }
 function _calcSiteUnitPrice(caseList) {
   const siteMap = {};
