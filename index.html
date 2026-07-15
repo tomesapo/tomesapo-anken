@@ -3624,7 +3624,7 @@ function calcAgencyFeeShare(c, plIdx, useContractedOnly){
 }
 
 // ── Excel出力 ──
-const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
+const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','最遅仕入支払日','振込状況','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
 // v111: 駐車場単位Excel出力用 追加ヘッダー
 const CSV_LOT_HEADERS=['駐車場No','駐車場名','駐車場住所','徒歩(分)','賃借形態','料金タイプ','契約台数','契約開始','契約終了','見積開始','見積終了','仕入賃料(税込)','見積賃料(税別)','仕入手数料','見積手数料','仕入礼金','見積礼金','仕入封鎖手数料','見積封鎖手数料','保証金','調整金額','仕入金額(税込)','請求額(税込)','仕入先名','仕入先電話','駐車場の課税区分','地主税区分','管理会社税区分','貸主住所','備考'];
 function csvCell(v){const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
@@ -3633,7 +3633,30 @@ async function exportCSV(){
   await waitXLSX();
   const HEADERS=CSV_HEADERS;
   function fmtDateJP(s){if(!s)return'';const p=s.split('-');if(p.length<3)return s;return p[0]+'年'+parseInt(p[1])+'月'+parseInt(p[2])+'日';}
-  const dataRows=cases.map(c=>[c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName??'',c.siteAddress??'',fmtDateJP(c.receptionDate),fmtDateJP(c.requestStart),fmtDateJP(c.requestEnd),c.requestUnits??'',c.requestNote??'',fmtDateJP(c.proposalDate),c.estSales??'',c.estPurchase??'',c.estProfit??'',fmtDateJP(c.orderDate),fmtDateJP(c.contractStart),fmtDateJP(c.contractEnd),c.fixedSales??'',c.fixedPurchase??'',c.fixedProfit??'',c.taxIncludedSales??'',c.fixedUnits??'',fmtDateJP(c.invoiceDate),fmtDateJP(c.paymentDue),fmtDateJP(c.paymentDate),c.paymentAmount??'',c.caseNote??'']);
+  // v111: 仕入支払日の集計（契約済み駐車場のみ対象、最遅日+振込状況を算出）
+  function calcSupplierPayInfo(c) {
+    const contractedPLs = (c.parkingLots || []).filter(pl =>
+      pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units) || 0) > 0
+    );
+    const totalCount = contractedPLs.length;
+    if (totalCount === 0) return { latest: '', status: '' };
+    const paidDates = contractedPLs
+      .map(pl => pl.supplierPaymentDate)
+      .filter(d => d && d.length >= 10)
+      .sort();
+    const paidCount = paidDates.length;
+    let latest = '';
+    if (paidCount > 0) {
+      latest = fmtDateJP(paidDates[paidDates.length - 1]);
+    } else {
+      latest = '未振込';
+    }
+    return { latest: latest, status: paidCount + '/' + totalCount + ' 件振込済' };
+  }
+  const dataRows=cases.map(c=>{
+    const _sp = calcSupplierPayInfo(c);
+    return [c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName??'',c.siteAddress??'',fmtDateJP(c.receptionDate),fmtDateJP(c.requestStart),fmtDateJP(c.requestEnd),c.requestUnits??'',c.requestNote??'',fmtDateJP(c.proposalDate),c.estSales??'',c.estPurchase??'',c.estProfit??'',fmtDateJP(c.orderDate),fmtDateJP(c.contractStart),fmtDateJP(c.contractEnd),c.fixedSales??'',c.fixedPurchase??'',c.fixedProfit??'',c.taxIncludedSales??'',c.fixedUnits??'',_sp.latest,_sp.status,fmtDateJP(c.invoiceDate),fmtDateJP(c.paymentDue),fmtDateJP(c.paymentDate),c.paymentAmount??'',c.caseNote??''];
+  });
   function ex(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function colLetter(n){let s='';n++;while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-(n%26?0:1)-1)/26);}return s;}
   function cellRef(r,c){return colLetter(c)+(r+1);}
@@ -3656,7 +3679,7 @@ async function exportCSV(){
   sd+='</sheetData>';
   // cols
   let colsXml='<cols>';
-  const colWidths=[12,8,16,12,10,20,20,12,12,12,8,20,12,14,14,14,12,12,12,14,14,14,14,8,12,12,12,14,20];
+  const colWidths=[12,8,16,12,10,20,20,12,12,12,8,20,12,14,14,14,12,12,12,14,14,14,14,8,14,14,12,12,12,14,20];
   HEADERS.forEach((_,i)=>{colsXml+=`<col min="${i+1}" max="${i+1}" width="${colWidths[i]||12}" customWidth="1"/>`;});
   colsXml+='</cols>';
   const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView>${colsXml}${sd}</worksheet>`;
