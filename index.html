@@ -3483,11 +3483,18 @@ function _siteKeyOf(c) {
   return c.caseNo || ((c.customerName || '') + '||' + (c.siteName || '（現場未設定）'));
 }
 function _calcSiteUnitPrice(caseList) {
+  // v111: PL データからリアルタイム再計算（保存時スナップショットではなく最新値を使う）
   const siteMap = {};
   caseList.forEach(c => {
     const k = _siteKeyOf(c);
     if (!siteMap[k]) siteMap[k] = 0;
-    siteMap[k] += parseFloat(c.fixedSales || 0) || 0;
+    // calcParkingLotFixed で再計算した合計を使用（月次レポートと一致）
+    let caseSales = 0;
+    (c.parkingLots || []).forEach(function(pl, plIdx){
+      var r = (typeof calcParkingLotFixed === 'function') ? calcParkingLotFixed(pl, c, plIdx) : null;
+      if (r) caseSales += r.fixedSales || 0;
+    });
+    siteMap[k] += caseSales;
   });
   const sites = Object.values(siteMap);
   const sum = sites.reduce((s,v) => s + v, 0);
@@ -3504,9 +3511,19 @@ function renderStats(){
   const cntKeiyaku=cases.filter(c=>c.status==='契約中').length;
   const cntMiSeikyu=cases.filter(c=>c.status==='未請求').length;
   const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
-  const totalFS=ordered.reduce((s,c)=>s+(c.fixedSales||0),0);
-  const totalFP=ordered.reduce((s,c)=>s+(c.fixedProfit||0),0);
-  const totalTI=ordered.reduce((s,c)=>s+(c.taxIncludedSales||0),0);
+  // v111: PL データからリアルタイム再計算（保存時スナップショットではなく最新値を使う）
+  //       月次レポートと同じ calcParkingLotFixed を用いるため、両者は常に一致する
+  let totalFS=0, totalFP=0;
+  ordered.forEach(function(c){
+    (c.parkingLots||[]).forEach(function(pl, plIdx){
+      var r = (typeof calcParkingLotFixed === 'function') ? calcParkingLotFixed(pl, c, plIdx) : null;
+      if (r) {
+        totalFS += r.fixedSales || 0;
+        totalFP += r.profit || 0;
+      }
+    });
+  });
+  const totalTI = Math.round(totalFS * 1.1);
   const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   // v111: 仕入未振込駐車場の件数（受注以降のステータスで pl.units あり かつ supplierPaymentDate 未入力）
   const PAY_TARGET_STATUSES = ['契約中','未請求','請求済','入金済'];
