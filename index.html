@@ -893,7 +893,7 @@
         <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名で検索…" oninput="renderAll()">
       </div>
       <div class="filter-row">
-        <select class="filter-select" id="statusFilter" onchange="activeStatuses=null;document.querySelectorAll('.stat-card.active').forEach(el=>el.classList.remove('active'));renderAll()">
+        <select class="filter-select" id="statusFilter" onchange="activeStatuses=null;filterUnpaidPL=false;document.querySelectorAll('.stat-card.active').forEach(el=>el.classList.remove('active'));renderAll()">
           <option value="">すべての進捗</option>
           <option>未調査</option><option>調査中</option><option>再調査</option>
           <option>提案済</option><option>未申込</option><option>契約中</option>
@@ -3379,6 +3379,8 @@ function getFiltered(){
   const cu=document.getElementById('customerFilter').value;
   const pd=document.getElementById('periodFilter').value;
   let data=cases.filter(c=>{
+    // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
+    if(filterUnpaidPL && !_caseHasUnpaidPL(c))return false;
     if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
     else if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
@@ -3461,16 +3463,40 @@ function renderCards(){
 
 // ── 統計 ──
 const ORDERED_STATUSES=['未請求','請求済','入金済'];
+// v111: 仕入未振込フィルタ（未振込駐車場カードで有効化）
+let filterUnpaidPL = false;
 function filterByStatuses(arr, cardEl) {
   if (activeStatuses && JSON.stringify(activeStatuses) === JSON.stringify(arr)) {
     activeStatuses = null;
     document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
   } else {
     activeStatuses = arr;
+    filterUnpaidPL = false; // 他フィルタと排他
     document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
     if (cardEl) cardEl.classList.add('active');
   }
   renderAll();
+}
+// v111: 未振込駐車場フィルタ切替
+function filterUnpaidParking(cardEl) {
+  if (filterUnpaidPL) {
+    filterUnpaidPL = false;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+  } else {
+    filterUnpaidPL = true;
+    activeStatuses = null; // 他フィルタと排他
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+    if (cardEl) cardEl.classList.add('active');
+  }
+  renderAll();
+}
+// v111: 案件が「未振込駐車場」を含むか判定
+function _caseHasUnpaidPL(c) {
+  const PAY_TARGET = ['契約中','未請求','請求済','入金済'];
+  if (!PAY_TARGET.includes(c.status)) return false;
+  return (c.parkingLots || []).some(pl =>
+    pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0) > 0 && !pl.supplierPaymentDate
+  );
 }
 // 現場単価計算ヘルパー
 // v111: 追加/延長は元案件（parentCaseNo）に集約する。
@@ -3635,7 +3661,7 @@ function renderStats(){
     (function(){var sst=_calcSiteUnitPrice(ordered);return '<div class="stat-card"><div class="stat-label">現場単価 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(Math.round(sst.avgPerSite))+'</div><div class="stat-sub">'+sst.siteCount+'現場の平均</div></div>';})()+
     '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>'+
     /* v111: 仕入未振込駐車場（地主・管理会社への振込未完了） */
-    '<div class="stat-card"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>';
+    '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>';
 }
 function updateYearFilter(){
   const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
