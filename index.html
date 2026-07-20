@@ -9455,11 +9455,18 @@ function renderSalesCustomer() {
     if (isBase) g.caseCount++;
     if (c.caseType === '追加') g.addCount++;
     if (c.caseType === '延長') g.extCount++;
-    g.total += c.fixedSales || 0;
-    g.purchase += c.fixedPurchase || 0;
+    // v111: 月次レポートと一致する _plFixedTotalsAllPeriod でリアルタイム再計算
+    let caseSales = 0, casePurchase = 0;
+    (c.parkingLots || []).forEach(function(pl){
+      var r = _plFixedTotalsAllPeriod(pl, c);
+      caseSales += r.sales || 0;
+      casePurchase += r.purchase || 0;
+    });
+    g.total += caseSales;
+    g.purchase += casePurchase;
     const sName = c.siteName || '（現場未設定）';
     if (!g.sites[sName]) g.sites[sName] = 0;
-    g.sites[sName] += c.fixedSales || 0;
+    g.sites[sName] += caseSales;
   });
   const rows = Object.values(map).sort((a,b) => b.total - a.total);
   const totSales = rows.reduce((s,r)=>s+r.total,0);
@@ -9502,8 +9509,15 @@ function renderSalesSite() {
       const base = src.find(x => x.caseNo === key) || c;
       map[key] = { baseCaseNo: key, siteName: base.siteName||'-', customerName: base.customerName||'-', sales: 0, purchase: 0, cases: [] };
     }
-    map[key].sales += c.fixedSales || 0;
-    map[key].purchase += c.fixedPurchase || 0;
+    // v111: 月次レポートと一致する _plFixedTotalsAllPeriod でリアルタイム再計算
+    let _caseSales = 0, _casePurchase = 0;
+    (c.parkingLots || []).forEach(function(pl){
+      var r = _plFixedTotalsAllPeriod(pl, c);
+      _caseSales += r.sales || 0;
+      _casePurchase += r.purchase || 0;
+    });
+    map[key].sales += _caseSales;
+    map[key].purchase += _casePurchase;
     map[key].cases.push(c);
   });
   const rows = Object.values(map).sort((a,b) => b.sales - a.sales);
@@ -9586,7 +9600,10 @@ function exportSalesExcel() {
     if (!c.caseType||c.caseType==='通常') g.caseCount++;
     if (c.caseType==='追加') g.addCount++;
     if (c.caseType==='延長') g.extCount++;
-    g.total += c.fixedSales||0; g.purchase += c.fixedPurchase||0;
+    // v111: リアルタイム再計算で月次レポート・売上集計と一致
+    let _cs=0,_cp=0;
+    (c.parkingLots||[]).forEach(function(pl){var r=_plFixedTotalsAllPeriod(pl,c); _cs+=r.sales||0; _cp+=r.purchase||0;});
+    g.total += _cs; g.purchase += _cp;
   });
   Object.values(cmap).sort((a,b)=>b.total-a.total).forEach(r => {
     custData.push([r.name, r.caseCount, r.addCount, r.extCount, fv(r.total), fv(r.purchase), fv(r.total-r.purchase), fp(r.total,r.purchase)]);
@@ -9601,7 +9618,10 @@ function exportSalesExcel() {
   src.forEach(c => {
     const k = baseCaseNo(c);
     if (!smap[k]) { const b=src.find(x=>x.caseNo===k)||c; smap[k]={key:k,siteName:b.siteName||'-',custName:b.customerName||'-',sales:0,purchase:0,addCount:0,extCount:0}; }
-    smap[k].sales += c.fixedSales||0; smap[k].purchase += c.fixedPurchase||0;
+    // v111: リアルタイム再計算
+    let _ss=0,_sp=0;
+    (c.parkingLots||[]).forEach(function(pl){var r=_plFixedTotalsAllPeriod(pl,c); _ss+=r.sales||0; _sp+=r.purchase||0;});
+    smap[k].sales += _ss; smap[k].purchase += _sp;
     if (c.caseType==='追加') smap[k].addCount++;
     if (c.caseType==='延長') smap[k].extCount++;
   });
@@ -10050,13 +10070,16 @@ function switchAnalyticsTab(tab) {
   renderAnalyticsView();
 }
 
-// 案件1件の売上・仕入・粗利を計算（既存の confirmed sales/purchase/profit を利用、税抜）
+// 案件1件の売上・仕入・粗利を計算
+// v111: リアルタイム再計算（月次レポート・売上集計と一致）
 function _avCaseAmounts(c) {
-  return {
-    sales: parseFloat(c.fixedSales || 0) || 0,
-    purchase: parseFloat(c.fixedPurchase || 0) || 0,
-    profit: parseFloat(c.fixedProfit) != null ? parseFloat(c.fixedProfit) : ((parseFloat(c.fixedSales||0)||0) - (parseFloat(c.fixedPurchase||0)||0))
-  };
+  let s=0, p=0;
+  (c.parkingLots||[]).forEach(function(pl){
+    var r=_plFixedTotalsAllPeriod(pl,c);
+    s += r.sales||0;
+    p += r.purchase||0;
+  });
+  return { sales: s, purchase: p, profit: s - p };
 }
 
 // 期フィルタを適用した分析対象案件
