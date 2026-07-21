@@ -2791,6 +2791,7 @@ function calcPlPurchase(el){
   const quoteBlockingFee=parseFloat(g('pl_quoteBlockingFee')?g('pl_quoteBlockingFee').value:0)||0;
   const deposit=parseFloat(g('pl_deposit')?g('pl_deposit').value:0)||0;
   const pa=g('pl_purchaseAmount');
+  const pwd=g('pl_purchaseWithDeposit'); // v111: 仕入金額（保証金込）
   const ia=g('pl_invoiceAmount');
   if(pa){
     let rentPart=null;
@@ -2805,6 +2806,10 @@ function calcPlPurchase(el){
       // 封鎖手数料は「一式」のため units を掛けず加算
       const purchase=rentPart+adminFee*units+keyMoney*units+adjustment+blockingFee;
       pa.value=fmt(purchase);
+      // v111: 仕入金額（保証金込）＝ 仕入金額 + 保証金×台数
+      if(pwd){
+        pwd.value = fmt(purchase + deposit*units);
+      }
       // v111: 請求額（税込）を「見積側の税別合計 × 1.1 + 保証金×台数」に修正
       //       従来: 仕入ベースで礼金/封鎖だけ見積に差替 → 賃料/手数料の markup が反映されない不具合
       if(ia){
@@ -4031,6 +4036,7 @@ function addParkingLotCard(pl={}) {
           '<div class="form-group"><label>契約台数'+(pl.rentMode==='lump'?' <span class="auto-tag" style="background:#fef3c7;color:#92400e">土地一括</span>':'')+'</label><input type="number" name="pl_units" min="1" placeholder="0" value="'+(pl.rentMode==='lump'?'1':(pl.units||''))+'" '+(pl.rentMode==='lump'?'readonly style="background:#f3f4f6;color:#6b7280"':'')+' onchange="calcPlPurchase(this)"></div>' +
           '<div class="form-group"><label>調整金額 <span class="auto-tag">税込</span></label><input type="number" name="pl_adjustmentAmount" placeholder="0" value="'+(pl.adjustmentAmount!=null?pl.adjustmentAmount:'')+'" onchange="calcPlPurchase(this)"></div>' +
           '<div class="form-group"><label>仕入金額（自動計算） <span class="auto-tag">税込</span></label><input type="text" name="pl_purchaseAmount" readonly class="readonly-calc" placeholder="自動計算" value="'+(pl.purchaseAmount!=null?fmt(pl.purchaseAmount):'')+'"></div>' +
+          '<div class="form-group"><label>仕入金額（保証金込） <span class="auto-tag">仕入先への振込予定額</span></label><input type="text" name="pl_purchaseWithDeposit" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.purchaseWithDeposit!=null?fmt(pl.purchaseWithDeposit):'')+'"></div>' +
           '<div class="form-group"><label>請求額（自動計算） <span class="auto-tag">税込・保証金含む</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
           /* v111: 仕入先への振込日（地主・管理会社への一括支払日） */
           '<div class="form-group"><label>仕入支払日 <span class="auto-tag">地主・管理会社へ振込</span></label><input type="date" name="pl_supplierPaymentDate" value="'+(pl.supplierPaymentDate||'')+'"></div>' +
@@ -4534,6 +4540,7 @@ function getParkingLotsFromForm(){
       adjustmentAmount:g('pl_adjustmentAmount')?(parseFloat(g('pl_adjustmentAmount').value)||0):0,
       supplierPaymentDate:g('pl_supplierPaymentDate')?g('pl_supplierPaymentDate').value||'':'', // v111: 仕入先(地主・管理会社)への振込日
       purchaseAmount:g('pl_purchaseAmount')?(parseFloat((g('pl_purchaseAmount').value||'').replace(/,/g,''))||null):null,
+      purchaseWithDeposit:g('pl_purchaseWithDeposit')?(parseFloat((g('pl_purchaseWithDeposit').value||'').replace(/,/g,''))||null):null,
       invoiceAmount:g('pl_invoiceAmount')?(parseFloat((g('pl_invoiceAmount').value||'').replace(/,/g,''))||null):null,
       photo:pa?(pa.dataset.photo||''):'',
       lotNote:g('pl_lotNote')?g('pl_lotNote').value.trim():'',};
@@ -12003,25 +12010,18 @@ window.addEventListener('DOMContentLoaded', initApp);
       const wb = XLSX.read(e.target.result, {type:'binary', cellStyles:true});
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
-      const out = {
-        sheetName: wsName,
-        ref: ws['!ref'],
-        cols: ws['!cols'] || [],
-        rows: ws['!rows'] || [],
-        merges: (ws['!merges']||[]).map(m => XLSX.utils.encode_cell(m.s)+':'+XLSX.utils.encode_cell(m.e)),
-        cells: {}
-      };
+      const out = { sheetName: wsName, ref: ws['!ref'], cols: ws['!cols']||[], rows: ws['!rows']||[], merges: (ws['!merges']||[]).map(m => XLSX.utils.encode_cell(m.s)+':'+XLSX.utils.encode_cell(m.e)), cells: {} };
       Object.keys(ws).forEach(k => {
         if (k.startsWith('!')) return;
         const cell = ws[k];
         const info = {v: cell.v, t: cell.t};
         if (cell.s) {
           info.s = {};
-          if (cell.s.font)      info.s.font      = cell.s.font;
-          if (cell.s.fill)      info.s.fill      = cell.s.fill;
+          if (cell.s.font) info.s.font = cell.s.font;
+          if (cell.s.fill) info.s.fill = cell.s.fill;
           if (cell.s.alignment) info.s.alignment = cell.s.alignment;
-          if (cell.s.border)    info.s.border    = '(has border)';
-          if (cell.s.numFmt)    info.s.numFmt    = cell.s.numFmt;
+          if (cell.s.border) info.s.border = '(has border)';
+          if (cell.s.numFmt) info.s.numFmt = cell.s.numFmt;
         }
         out.cells[k] = info;
       });
@@ -12032,10 +12032,7 @@ window.addEventListener('DOMContentLoaded', initApp);
   window.dbgCopy = function(){
     const txt = document.getElementById('dbgOut').textContent || '';
     if (!txt) { alert('コピーする内容がありません'); return; }
-    navigator.clipboard.writeText(txt).then(
-      ()=>alert('クリップボードにコピーしました'),
-      ()=>alert('コピーに失敗しました')
-    );
+    navigator.clipboard.writeText(txt).then(()=>alert('クリップボードにコピーしました'), ()=>alert('コピーに失敗しました'));
   };
 })();
 </script>
