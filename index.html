@@ -9214,7 +9214,10 @@ async function generateLotContract(caseId, plIdx) {
   const sealMode = await chooseSealMode(branch, 'round'); // 管理者契約書 → 代表者印
   if (sealMode === null) return; // キャンセル
   const period = calcPlPeriod(pl.contractStart||'', pl.contractEnd||'', !!pl.startProRate, !!pl.endProRate);
-  const months = (period.months || period.days) ? (period.months || 1) : 1;
+  // v111: 満月数と日割日数を両方保持（総額計算・表記で使用）
+  const months = period.months || 0;
+  const days = period.days || 0;
+  const monthsForCalc = (months || days) ? (months || 0) : 1; // 満月がなく日数もない場合の後方互換で1ヶ月
 
   // ▼ 駐車場の課税区分（取引そのものが課税か非課税か）
   const isTaxablePL = (pl.taxCategory || 'taxable') === 'taxable';
@@ -9232,9 +9235,10 @@ async function generateLotContract(caseId, plIdx) {
   const monthlyRaw = Number(pl.monthlyRent) || 0;
   // 土地一括時は units を 1 として扱う（保存時に1強制しているが、防御的に）
   const units = isLump ? 1 : (Number(pl.units) || 0);
-  const periodCalc = isLump
-    ? (String(months) + 'ヶ月分')
-    : (String(units) + '台 × ' + String(months) + 'ヶ月分');
+  // v111: 日割り日数がある場合は「N ヶ月 + M 日分」と表記
+  const _periodPart = (months ? String(months) + 'ヶ月' : '') + (days ? (months ? ' + ' : '') + String(days) + '日' : '');
+  const _periodStr = (_periodPart || String(monthsForCalc) + 'ヶ月') + '分';
+  const periodCalc = isLump ? _periodStr : (String(units) + '台 × ' + _periodStr);
   let monthlyExTax, monthlyInTax, monthlyTax, totalExTax, totalInTax, totalTax;
   let monthlyRentLine, totalRentLine, taxNote;
 
@@ -9243,8 +9247,11 @@ async function generateLotContract(caseId, plIdx) {
     monthlyInTax = monthlyRaw;
     monthlyExTax = Math.round(monthlyRaw / 1.1);
     monthlyTax   = monthlyInTax - monthlyExTax;
-    totalInTax   = monthlyInTax * units * months;
-    totalExTax   = monthlyExTax * units * months;
+    // v111: 日割り期間を反映（月額 / 30 × 日数を加算）
+    const _dailyInTax = Math.floor(monthlyInTax / 30);
+    const _dailyExTax = Math.floor(monthlyExTax / 30);
+    totalInTax   = monthlyInTax * units * monthsForCalc + _dailyInTax * units * days;
+    totalExTax   = monthlyExTax * units * monthsForCalc + _dailyExTax * units * days;
     totalTax     = totalInTax - totalExTax;
     monthlyRentLine = '税抜 ' + _fmtN(monthlyExTax) + '円 ／ 消費税 ' + _fmtN(monthlyTax) + '円 ／ 税込 ' + _fmtN(monthlyInTax) + '円';
     totalRentLine   = '税抜 ' + _fmtN(totalExTax)   + '円 ／ 消費税 ' + _fmtN(totalTax)   + '円 ／ 税込 ' + _fmtN(totalInTax)   + '円';
@@ -9258,7 +9265,9 @@ async function generateLotContract(caseId, plIdx) {
     monthlyExTax = monthlyRaw;
     monthlyInTax = monthlyRaw;
     monthlyTax   = 0;
-    totalExTax   = monthlyRaw * units * months;
+    // v111: 日割り期間を反映
+    const _dailyRaw = Math.floor(monthlyRaw / 30);
+    totalExTax   = monthlyRaw * units * monthsForCalc + _dailyRaw * units * days;
     totalInTax   = totalExTax;
     totalTax     = 0;
     monthlyRentLine = '金 ' + _fmtN(monthlyRaw) + ' 円（消費税非課税）';
