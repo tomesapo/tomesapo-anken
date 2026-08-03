@@ -8648,7 +8648,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       dataRows.push({ kind:'data', item: feeLabel, qty: '1式', per: '-', up: scaledAgencyTotal, amt: scaledAgencyTotal, isAgency: true });
     }
   }
-  const taxAmt   = Math.round(subtotalExTax * 0.1);
+  // v111: 消費税端数処理を切り捨てに統一（他書類と揃える）
+  const taxAmt   = Math.floor(subtotalExTax * 0.1);
   const totalAmt = subtotalExTax + taxAmt;
 
   // ─── 行数調整：22行を超える場合は行を挿入 ───
