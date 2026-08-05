@@ -2891,6 +2891,11 @@ function calcFixedProfit() {
 // ── フォーマット ──
 function fmt(n) { if(n===null||n===undefined||n==='')return''; return Number(n).toLocaleString('ja-JP'); }
 function fmtDate(d) { return d?d.replace(/-/g,'/'):''; }
+// v111: ローカル日時で YYYY-MM-DD を返す（UTC 基準の toISOString による日付ズレを回避）
+function _todayLocalISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
 
 // ── モーダル ──
 function openModal(id=null) {
@@ -3835,7 +3840,7 @@ async function exportCSV(){
   zip.file('xl/styles.xml',styles);
   const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='案件データ_'+new Date().toISOString().slice(0,10)+'.xlsx';
+  const a=document.createElement('a');a.href=url;a.download='案件データ_'+_todayLocalISO()+'.xlsx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   showToast(cases.length+' 件をExcelに出力しました');
 }
@@ -3937,7 +3942,7 @@ async function exportCSVByLot(){
   zip.file('xl/styles.xml',styles);
   const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='案件データ_駐車場別_'+new Date().toISOString().slice(0,10)+'.xlsx';
+  const a=document.createElement('a');a.href=url;a.download='案件データ_駐車場別_'+_todayLocalISO()+'.xlsx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
   showToast(dataRows.length+' 行（駐車場単位）をExcelに出力しました' + (skipped?'（'+skipped+'件は駐車場0件のためスキップ）':''));
 }
@@ -6072,7 +6077,7 @@ async function generateProposalDocument(caseId){
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;
-    var _propD=(c.proposalDate||new Date().toISOString().slice(0,10)).replace(/-/g,'').slice(2);
+    var _propD=(c.proposalDate||_todayLocalISO()).replace(/-/g,'').slice(2);
     a.download='\u63d0\u6848\u8cc7\u6599\uff5c'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'_'+_propD+'.xlsx';
     document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
   }catch(e){alert('\u63d0\u6848\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
@@ -6537,7 +6542,7 @@ async function generateKakuteiDocument(caseId){
     var blob=new Blob([finalBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;
-    var _kakD=new Date().toISOString().slice(0,10).replace(/-/g,'').slice(2);
+    var _kakD=_todayLocalISO().replace(/-/g,'').slice(2);
     a.download='\u78ba\u5b9a\u8cc7\u6599\uff5c'+(c.siteName||c.caseNo||'').replace(/[\\/:\*\?"<>\|]/g,'_')+'_'+_kakD+'.xlsx';
     document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
   }catch(e){alert('\u78ba\u5b9a\u8cc7\u6599\u51fa\u529b\u30a8\u30e9\u30fc: '+e.message);console.error(e);}
@@ -7304,7 +7309,7 @@ async function exportCashflowExcel() {
   XLSX.utils.book_append_sheet(wb, ws1, '月別合計');
   XLSX.utils.book_append_sheet(wb, ws2, '案件内訳');
 
-  var fname = '資金繰り予測_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  var fname = '資金繰り予測_' + _todayLocalISO() + '.xlsx';
   XLSX.writeFile(wb, fname);
   showToast('資金繰り予測を Excel に出力しました');
 }
@@ -8510,7 +8515,7 @@ async function _genInvoiceFromTemplate(c, sealMode) {
 
   // ─── ヘッダー情報 ───
   setV('A5',  (c.customerName || '') + ' 御中');
-  setV('Y5',  fmtD(c.invoiceDate || new Date().toISOString().slice(0,10)));
+  setV('Y5',  fmtD(c.invoiceDate || _todayLocalISO()));
   setV('Y6',  c.caseNo || '');
   setV('E8',  c.staffName ? (c.staffName + ' 様') : '');
   setV('E9',  c.siteName || '');
@@ -8725,7 +8730,7 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   // ─── ファイル出力（ブラウザダウンロード） ───
   const out = await wb.xlsx.writeBuffer();
   const safeName = (c.siteName || c.caseNo || '案件').replace(/[/\\:*?"<>|]/g, '_');
-  const dateStr  = (c.invoiceDate || new Date().toISOString().slice(0,10)).replace(/-/g, '').slice(2);
+  const dateStr  = (c.invoiceDate || _todayLocalISO()).replace(/-/g, '').slice(2);
   const filename = '請求書｜' + safeName + '_' + dateStr + '.xlsx';
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url  = URL.createObjectURL(blob);
@@ -9331,7 +9336,7 @@ async function generateLotContract(caseId, plIdx) {
     depositPerUnit: _fmtN(pl.deposit || 0),
     depositTotal: _fmtN((pl.deposit || 0) * units),
     specialTerms: pl.specialTerms || '（特になし）',
-    contractDate: _fmtDateJ(c.orderDate || new Date().toISOString().slice(0,10)),
+    contractDate: _fmtDateJ(c.orderDate || _todayLocalISO()),
     lessorAddress: pl.lessorAddress || '',
     lessorName: pl.supplierName || '',
     lesseeAddress: branch.address || '',
@@ -9395,7 +9400,7 @@ async function generateCustomerContract(caseId, plIdx) {
     totalTaxAmount: _fmtN(totalTax),
     keyMoneyText: quoteKey > 0 ? ('金 ' + _fmtN(quoteKey * units) + ' 円') : 'なし',
     paymentDue: '請求書発行月の翌月末日',
-    contractDate: _fmtDateJ(c.orderDate || new Date().toISOString().slice(0,10)),
+    contractDate: _fmtDateJ(c.orderDate || _todayLocalISO()),
     ourAddress: branch.address || '',
     ourName: branch.name || '',
     ourInvoiceRegNo: branch.invoiceRegNo || '＿＿＿＿＿＿＿＿',
@@ -9738,7 +9743,7 @@ function exportFreeeCSV() {
   const a = document.createElement('a');
   const url = URL.createObjectURL(blob);
   a.href = url;
-  a.download = 'freee_取引_' + (new Date().toISOString().slice(0,10)) + '.csv';
+  a.download = 'freee_取引_' + (_todayLocalISO()) + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   showToast(targets.length + '件をfreee CSVで出力しました');
@@ -9887,7 +9892,7 @@ function exportDepositCSV() {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  a.href = url; a.download = '保証金一覧_' + (new Date().toISOString().slice(0,10)) + '.csv';
+  a.href = url; a.download = '保証金一覧_' + (_todayLocalISO()) + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -10737,7 +10742,7 @@ async function generateDunningDocument(caseId) {
   };
 
   const data = {
-    issueDate: fmtJ(today.toISOString().slice(0,10)),
+    issueDate: fmtJ(_todayLocalISO()),
     customerName: (c.customerName || '') + ' 御中',
     customerStaffLine: customerStaffLine,
     title: content.title,
@@ -10864,39 +10869,13 @@ function renderOverdueView() {
 }
 
 // ═══════════════════════════════════════════════
-// ── ① 契約期間アラート ──
+// ── ① 契約期間アラート ──（v111: ユーザー要望により無効化）
 // ═══════════════════════════════════════════════
 function renderContractAlerts() {
   const bar = document.getElementById('alertBar');
-  if (!bar) return;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const alerts = [];
-  cases.forEach(c => {
-    if (!c.parkingLots) return;
-    c.parkingLots.forEach(pl => {
-      if (!pl.contractEnd) return;
-      const end = new Date(pl.contractEnd); end.setHours(0,0,0,0);
-      const diff = Math.round((end - today) / 86400000);
-      if (diff <= 14) {
-        alerts.push({ c, pl, diff });
-      }
-    });
-  });
-  alerts.sort((a,b) => a.diff - b.diff);
-  if (!alerts.length) { bar.innerHTML = ''; return; }
-  bar.innerHTML = alerts.map(({c, pl, diff}) => {
-    const urgent = diff <= 3;
-    const diffStr = diff < 0 ? '終了済み (' + Math.abs(diff) + '日経過)' : diff === 0 ? '本日終了' : diff + '日後に終了';
-    return '<div class="alert-card' + (urgent ? ' urgent' : '') + '">'
-      + '<span class="alert-icon">' + (urgent ? '🚨' : '⚠️') + '</span>'
-      + '<div class="alert-body">'
-      + '<div class="alert-title">' + esc(c.caseNo) + '　' + esc(c.siteName) + '</div>'
-      + '<div class="alert-sub">駐車場：' + esc(pl.name||'名称未設定') + '　契約終了日：' + pl.contractEnd.replace(/-/g,'/') + '</div>'
-      + '</div>'
-      + '<span class="alert-days">' + diffStr + '</span>'
-      + '<button class="alert-link" onclick="openDetail(\'' + c.id + '\')">詳細</button>'
-      + '</div>';
-  }).join('');
+  if (bar) bar.innerHTML = '';
+  // アラート表示は無効化されています。
+  // 復活させたい場合は、この関数の中身に旧ロジックを戻してください。
 }
 
 // ═══════════════════════════════════════════════
