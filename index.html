@@ -892,41 +892,26 @@
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名で検索…" oninput="renderAll()">
       </div>
-      <div class="filter-row">
-        <select class="filter-select" id="statusFilter" onchange="activeStatuses=null;filterUnpaidPL=false;document.querySelectorAll('.stat-card.active').forEach(el=>el.classList.remove('active'));renderAll()">
-          <option value="">すべての進捗</option>
-          <option>未調査</option><option>調査中</option><option>再調査</option>
-          <option>提案済</option><option>未申込</option><option>契約中</option>
-          <option>未請求</option><option>請求済</option><option>入金済</option><option>失注</option>
-        </select>
-        <select class="filter-select" id="customerFilter" onchange="renderAll()">
-          <option value="">すべての顧客</option>
-        </select>
-        <select class="filter-select" id="yearFilter" onchange="renderAll()">
-          <option value="">すべての年</option>
-        </select>
-        <select class="filter-select" id="periodFilter" onchange="renderAll()">
-          <option value="">すべての期</option>
-        </select>
-        <button id="advSearchToggle" onclick="toggleAdvSearch()" style="padding:6px 12px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;white-space:nowrap">🔍 詳細検索 <span id="advSearchArrow">▼</span></button>
+      <!-- v111: 部分一致検索（駐車場関連） -->
+      <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+        <input type="text" id="advSupplierName" placeholder="仕入先名（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
+        <input type="text" id="advSupplierTel" placeholder="仕入先TEL（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
+        <input type="text" id="advLotName" placeholder="駐車場名（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
+        <input type="text" id="advLotAddress" placeholder="駐車場住所（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
       </div>
-      <!-- v111: 詳細検索パネル -->
-      <div id="advSearchPanel" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:8px">
-        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:12px;color:#374151;font-weight:600">入金期日：</label>
-            <input type="date" id="advPayDueFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
-            <span style="color:#9ca3af">〜</span>
-            <input type="date" id="advPayDueTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer">
-              <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
-              🔒 保証金あり駐車場を含む案件のみ
-            </label>
-          </div>
-          <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280">条件をクリア</button>
+      <!-- v111: 入金期日 FROM-TO + 保証金あり -->
+      <div class="filter-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">入金期日：</label>
+          <input type="date" id="advPayDueFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <span style="color:#9ca3af">〜</span>
+          <input type="date" id="advPayDueTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         </div>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
+          🔒 保証金あり駐車場を含む案件のみ
+        </label>
+        <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;white-space:nowrap">条件をクリア</button>
       </div>
     </div>
     <span id="countLabel" style="color:var(--gray-500);font-size:13px;white-space:nowrap"></span>
@@ -3396,54 +3381,16 @@ function confirmDelete(){const cb=deleteCallback;closeConfirm();if(cb)cb();}
 // ── ソート / フィルタ ──
 function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}renderAll();}
 
-// v111: 詳細検索 展開/クリア
-function toggleAdvSearch(){
-  const panel=document.getElementById('advSearchPanel');
-  const arrow=document.getElementById('advSearchArrow');
-  const btn=document.getElementById('advSearchToggle');
-  if(!panel)return;
-  const isOpen=panel.style.display!=='none';
-  panel.style.display=isOpen?'none':'block';
-  if(arrow)arrow.textContent=isOpen?'▼':'▲';
-  try{localStorage.setItem('advSearchOpen',isOpen?'0':'1');}catch(e){}
-  _advSearchActiveHighlight();
-}
-function _advSearchActiveHighlight(){
-  const btn=document.getElementById('advSearchToggle');
-  if(!btn)return;
-  const from=document.getElementById('advPayDueFrom')?.value||'';
-  const to=document.getElementById('advPayDueTo')?.value||'';
-  const hasDep=document.getElementById('advHasDeposit')?.checked||false;
-  const isActive=!!(from||to||hasDep);
-  if(isActive){
-    btn.style.background='#1e3a5f';
-    btn.style.color='#fff';
-    btn.style.borderColor='#1e3a5f';
-  }else{
-    btn.style.background='#f3f4f6';
-    btn.style.color='#374151';
-    btn.style.borderColor='#d1d5db';
-  }
-}
+// v111: 詳細検索クリア（バーに直接配置版）
+function _advSearchActiveHighlight(){ /* 展開UIを撤廃したためno-op（互換維持） */ }
+function toggleAdvSearch(){ /* 撤廃されたトグルの互換用no-op */ }
 function clearAdvSearch(){
-  ['advPayDueFrom','advPayDueTo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
-  _advSearchActiveHighlight();
   renderAll();
 }
-// 初期化: localStorage から展開状態を復元
-window.addEventListener('DOMContentLoaded',function(){
-  setTimeout(function(){
-    try{
-      if(localStorage.getItem('advSearchOpen')==='1'){
-        const panel=document.getElementById('advSearchPanel');
-        const arrow=document.getElementById('advSearchArrow');
-        if(panel){panel.style.display='block';if(arrow)arrow.textContent='▲';}
-      }
-    }catch(e){}
-    _advSearchActiveHighlight();
-  },100);
-});
 function getCasePeriod(c){
   var dateStr=c.receptionDate||c.requestStart||'';
   if(dateStr){var d=new Date(dateStr+'T00:00:00');return Math.max(1,calcPeriod(d.getFullYear(),d.getMonth()));}
@@ -3452,14 +3399,17 @@ function getCasePeriod(c){
 }
 function getFiltered(){
   const q=document.getElementById('searchInput').value.toLowerCase();
-  const st=document.getElementById('statusFilter').value;
-  const yr=document.getElementById('yearFilter').value;
-  const cu=document.getElementById('customerFilter').value;
-  const pd=document.getElementById('periodFilter').value;
-  // v111: 詳細検索フィルタ
+  // v111: 4つの旧ドロップダウン（statusFilter/customerFilter/yearFilter/periodFilter）は削除済み。
+  //       stat-cardクリックによる activeStatuses のフィルタは引き続き有効。
+  const st='', yr='', cu='', pd='';
+  // v111: 詳細検索フィルタ（直接バー配置版）
   const advPayDueFrom=document.getElementById('advPayDueFrom')?document.getElementById('advPayDueFrom').value:'';
   const advPayDueTo=document.getElementById('advPayDueTo')?document.getElementById('advPayDueTo').value:'';
   const advHasDeposit=document.getElementById('advHasDeposit')?document.getElementById('advHasDeposit').checked:false;
+  const advSupplierName=(document.getElementById('advSupplierName')?.value||'').trim().toLowerCase();
+  const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,''); // 数字のみで比較
+  const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
+  const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
   if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
@@ -3475,6 +3425,30 @@ function getFiltered(){
     if(advHasDeposit){
       const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
       if(!hasDep)return false;
+    }
+    // v111: 部分一致検索（駐車場単位でANY一致）
+    if(advSupplierName){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.supplierName||'').toLowerCase().includes(advSupplierName));
+      if(!hit)return false;
+    }
+    if(advSupplierTel){
+      const hit=(c.parkingLots||[]).some(pl=>{
+        if(!pl)return false;
+        // 電話番号は数字のみで比較（ハイフン・スペース無視）
+        const t1=String(pl.supplierPhone||'').replace(/[^\d]/g,'');
+        const t2=String(pl.tel||'').replace(/[^\d]/g,'');
+        const t3=String(pl.supplierFax||'').replace(/[^\d]/g,'');
+        return (t1&&t1.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
+      });
+      if(!hit)return false;
+    }
+    if(advLotName){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.name||'').toLowerCase().includes(advLotName));
+      if(!hit)return false;
+    }
+    if(advLotAddress){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.address||'').toLowerCase().includes(advLotAddress));
+      if(!hit)return false;
     }
     if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
     else if(st&&c.status!==st)return false;
