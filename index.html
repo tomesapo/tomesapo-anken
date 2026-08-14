@@ -911,6 +911,14 @@
           <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
           🔒 保証金あり駐車場を含む案件のみ
         </label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">💰 入金:</label>
+          <select id="advPayStatus" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <option value="">すべて</option>
+            <option value="paid">入金済のみ</option>
+            <option value="unpaid">未入金のみ（未請求・請求済）</option>
+          </select>
+        </div>
         <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;white-space:nowrap">条件をクリア</button>
       </div>
     </div>
@@ -3385,7 +3393,7 @@ function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}re
 function _advSearchActiveHighlight(){ /* 展開UIを撤廃したためno-op（互換維持） */ }
 function toggleAdvSearch(){ /* 撤廃されたトグルの互換用no-op */ }
 function clearAdvSearch(){
-  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress'].forEach(id=>{
+  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
@@ -3410,6 +3418,7 @@ function getFiltered(){
   const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,''); // 数字のみで比較
   const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
   const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
+  const advPayStatus=document.getElementById('advPayStatus')?.value||''; // '' / 'paid' / 'unpaid'
   if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
@@ -3450,6 +3459,9 @@ function getFiltered(){
       const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.address||'').toLowerCase().includes(advLotAddress));
       if(!hit)return false;
     }
+    // v111: 入金有無フィルタ
+    if(advPayStatus==='paid' && c.status!=='入金済')return false;
+    if(advPayStatus==='unpaid' && !['未請求','請求済'].includes(c.status))return false;
     if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
     else if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
@@ -3466,7 +3478,7 @@ function getFiltered(){
   });
   return data;
 }
-function renderAll(){renderTable();renderCards();renderContractAlerts();renderOverdueBadge();}
+function renderAll(){renderStats();renderTable();renderCards();renderContractAlerts();renderOverdueBadge();}
 
 // ── PC テーブル ──
 function renderTable(){
@@ -3681,17 +3693,75 @@ function _calcSiteUnitPrice(caseList) {
   const sum = sites.reduce((s,v) => s + v, 0);
   return { siteCount: sites.length, totalSales: sum, avgPerSite: sites.length ? sum / sites.length : 0 };
 }
+// v111: 統計用のフィルタ済みケース（活性ステータス選択・未振込フィルタは除外）
+function _getStatFilteredCases(){
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
+  const advPayDueFrom=document.getElementById('advPayDueFrom')?.value||'';
+  const advPayDueTo=document.getElementById('advPayDueTo')?.value||'';
+  const advHasDeposit=document.getElementById('advHasDeposit')?.checked||false;
+  const advSupplierName=(document.getElementById('advSupplierName')?.value||'').trim().toLowerCase();
+  const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,'');
+  const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
+  const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
+  const advPayStatus=document.getElementById('advPayStatus')?.value||'';
+  return cases.filter(c=>{
+    if(advPayDueFrom||advPayDueTo){
+      const pdue=c.paymentDue||'';
+      if(!pdue)return false;
+      if(advPayDueFrom&&pdue<advPayDueFrom)return false;
+      if(advPayDueTo&&pdue>advPayDueTo)return false;
+    }
+    if(advHasDeposit){
+      const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
+      if(!hasDep)return false;
+    }
+    if(advSupplierName){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.supplierName||'').toLowerCase().includes(advSupplierName));
+      if(!hit)return false;
+    }
+    if(advSupplierTel){
+      const hit=(c.parkingLots||[]).some(pl=>{
+        if(!pl)return false;
+        const t1=String(pl.supplierPhone||'').replace(/[^\d]/g,'');
+        const t2=String(pl.tel||'').replace(/[^\d]/g,'');
+        const t3=String(pl.supplierFax||'').replace(/[^\d]/g,'');
+        return (t1&&t1.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
+      });
+      if(!hit)return false;
+    }
+    if(advLotName){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.name||'').toLowerCase().includes(advLotName));
+      if(!hit)return false;
+    }
+    if(advLotAddress){
+      const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.address||'').toLowerCase().includes(advLotAddress));
+      if(!hit)return false;
+    }
+    if(advPayStatus==='paid' && c.status!=='入金済')return false;
+    if(advPayStatus==='unpaid' && !['未請求','請求済'].includes(c.status))return false;
+    if(q){
+      if(!(c.caseNo||'').toLowerCase().includes(q)
+        &&!(c.siteName||'').toLowerCase().includes(q)
+        &&!(c.customerName||'').toLowerCase().includes(q)
+        &&!(c.staffName||'').toLowerCase().includes(q))return false;
+    }
+    return true;
+  });
+}
 function renderStats(){
-  const baseCases=cases.filter(c=>!c.caseType||c.caseType==='通常');
-  const addCount=cases.filter(c=>c.caseType==='追加').length;
-  const extCount=cases.filter(c=>c.caseType==='延長').length;
+  // v111: 統計カードは詳細検索フィルタ（入金期日/保証金/部分一致/入金有無/テキスト検索）を反映する。
+  //       ただし stat-card クリックによる activeStatuses と filterUnpaidPL は除外（自己参照によるゼロ化を防ぐ）。
+  const _statCases = _getStatFilteredCases();
+  const baseCases=_statCases.filter(c=>!c.caseType||c.caseType==='通常');
+  const addCount=_statCases.filter(c=>c.caseType==='追加').length;
+  const extCount=_statCases.filter(c=>c.caseType==='延長').length;
   const total=baseCases.length;
-  const cntMiChosa=cases.filter(c=>['未調査','調査中','再調査'].includes(c.status)).length;
-  const cntTeian=cases.filter(c=>c.status==='提案済').length;
-  const cntMiMoshikomi=cases.filter(c=>c.status==='未申込').length;
-  const cntKeiyaku=cases.filter(c=>c.status==='契約中').length;
-  const cntMiSeikyu=cases.filter(c=>c.status==='未請求').length;
-  const ordered=cases.filter(c=>ORDERED_STATUSES.includes(c.status));
+  const cntMiChosa=_statCases.filter(c=>['未調査','調査中','再調査'].includes(c.status)).length;
+  const cntTeian=_statCases.filter(c=>c.status==='提案済').length;
+  const cntMiMoshikomi=_statCases.filter(c=>c.status==='未申込').length;
+  const cntKeiyaku=_statCases.filter(c=>c.status==='契約中').length;
+  const cntMiSeikyu=_statCases.filter(c=>c.status==='未請求').length;
+  const ordered=_statCases.filter(c=>ORDERED_STATUSES.includes(c.status));
   // v111: 月次レポート(buildMonthlyData)と同じアルゴリズムで再計算
   //       契約期間/台数のフォールバックも同じなので両者は常に一致する
   let totalFS=0, totalFP=0;
@@ -3703,11 +3773,11 @@ function renderStats(){
     });
   });
   const totalTI = Math.round(totalFS * 1.1);
-  const unpaid=cases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
+  const unpaid=_statCases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   // v111: 仕入未振込駐車場の件数（受注以降のステータスで pl.units あり かつ supplierPaymentDate 未入力）
   const PAY_TARGET_STATUSES = ['契約中','未請求','請求済','入金済'];
   let supplierUnpaidCount = 0;
-  cases.forEach(c => {
+  _statCases.forEach(c => {
     if (!PAY_TARGET_STATUSES.includes(c.status)) return;
     (c.parkingLots || []).forEach(pl => {
       // 契約済み駐車場（contractStart/End/units あり）で支払日が未入力ならカウント
