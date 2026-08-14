@@ -3733,16 +3733,26 @@ function renderStats(){
     '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>';
 }
 function updateYearFilter(){
-  const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
-  const sel=document.getElementById('yearFilter'),cur=sel.value;
-  sel.innerHTML='<option value="">すべての年</option>'+years.map(y=>'<option'+(y===cur?' selected':'')+'>'+y+'</option>').join('');
-  const periods=[...new Set(cases.map(c=>getCasePeriod(c)))].sort((a,b)=>b-a);
-  const psel=document.getElementById('periodFilter'),pcur=psel.value;
-  psel.innerHTML='<option value="">すべての期</option>'+periods.map(p=>'<option value="'+p+'"'+(String(p)===pcur?' selected':'')+'>'+'第'+p+'期</option>').join('');
+  // v111: yearFilter/periodFilter ドロップダウンは削除済み。null チェックで安全化。
+  const sel=document.getElementById('yearFilter');
+  if(sel){
+    const years=[...new Set(cases.map(c=>c.parentCaseNo?c.parentCaseNo.split('-')[0]:c.caseNo.split('-')[0]).filter(y=>/^\d{4}$/.test(y)))].sort().reverse();
+    const cur=sel.value;
+    sel.innerHTML='<option value="">すべての年</option>'+years.map(y=>'<option'+(y===cur?' selected':'')+'>'+y+'</option>').join('');
+  }
+  const psel=document.getElementById('periodFilter');
+  if(psel){
+    const periods=[...new Set(cases.map(c=>getCasePeriod(c)))].sort((a,b)=>b-a);
+    const pcur=psel.value;
+    psel.innerHTML='<option value="">すべての期</option>'+periods.map(p=>'<option value="'+p+'"'+(String(p)===pcur?' selected':'')+'>'+'第'+p+'期</option>').join('');
+  }
 }
 function syncCustomerFilter(){
+  // v111: customerFilter ドロップダウンは削除済み。null チェックで安全化。
+  const sel=document.getElementById('customerFilter');
+  if(!sel)return;
   const names=[...new Set(activeCustomers().map(c=>c.name))].sort();
-  const sel=document.getElementById('customerFilter'),cur=sel.value;
+  const cur=sel.value;
   sel.innerHTML='<option value="">すべての顧客</option>'+names.map(n=>'<option'+(n===cur?' selected':'')+'>'+n+'</option>').join('');
 }
 
