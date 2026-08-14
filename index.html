@@ -908,6 +908,25 @@
         <select class="filter-select" id="periodFilter" onchange="renderAll()">
           <option value="">すべての期</option>
         </select>
+        <button id="advSearchToggle" onclick="toggleAdvSearch()" style="padding:6px 12px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;white-space:nowrap">🔍 詳細検索 <span id="advSearchArrow">▼</span></button>
+      </div>
+      <!-- v111: 詳細検索パネル -->
+      <div id="advSearchPanel" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:8px">
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:12px;color:#374151;font-weight:600">入金期日：</label>
+            <input type="date" id="advPayDueFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <span style="color:#9ca3af">〜</span>
+            <input type="date" id="advPayDueTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer">
+              <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
+              🔒 保証金あり駐車場を含む案件のみ
+            </label>
+          </div>
+          <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280">条件をクリア</button>
+        </div>
       </div>
     </div>
     <span id="countLabel" style="color:var(--gray-500);font-size:13px;white-space:nowrap"></span>
@@ -3376,6 +3395,55 @@ function confirmDelete(){const cb=deleteCallback;closeConfirm();if(cb)cb();}
 
 // ── ソート / フィルタ ──
 function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}renderAll();}
+
+// v111: 詳細検索 展開/クリア
+function toggleAdvSearch(){
+  const panel=document.getElementById('advSearchPanel');
+  const arrow=document.getElementById('advSearchArrow');
+  const btn=document.getElementById('advSearchToggle');
+  if(!panel)return;
+  const isOpen=panel.style.display!=='none';
+  panel.style.display=isOpen?'none':'block';
+  if(arrow)arrow.textContent=isOpen?'▼':'▲';
+  try{localStorage.setItem('advSearchOpen',isOpen?'0':'1');}catch(e){}
+  _advSearchActiveHighlight();
+}
+function _advSearchActiveHighlight(){
+  const btn=document.getElementById('advSearchToggle');
+  if(!btn)return;
+  const from=document.getElementById('advPayDueFrom')?.value||'';
+  const to=document.getElementById('advPayDueTo')?.value||'';
+  const hasDep=document.getElementById('advHasDeposit')?.checked||false;
+  const isActive=!!(from||to||hasDep);
+  if(isActive){
+    btn.style.background='#1e3a5f';
+    btn.style.color='#fff';
+    btn.style.borderColor='#1e3a5f';
+  }else{
+    btn.style.background='#f3f4f6';
+    btn.style.color='#374151';
+    btn.style.borderColor='#d1d5db';
+  }
+}
+function clearAdvSearch(){
+  ['advPayDueFrom','advPayDueTo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
+  _advSearchActiveHighlight();
+  renderAll();
+}
+// 初期化: localStorage から展開状態を復元
+window.addEventListener('DOMContentLoaded',function(){
+  setTimeout(function(){
+    try{
+      if(localStorage.getItem('advSearchOpen')==='1'){
+        const panel=document.getElementById('advSearchPanel');
+        const arrow=document.getElementById('advSearchArrow');
+        if(panel){panel.style.display='block';if(arrow)arrow.textContent='▲';}
+      }
+    }catch(e){}
+    _advSearchActiveHighlight();
+  },100);
+});
 function getCasePeriod(c){
   var dateStr=c.receptionDate||c.requestStart||'';
   if(dateStr){var d=new Date(dateStr+'T00:00:00');return Math.max(1,calcPeriod(d.getFullYear(),d.getMonth()));}
@@ -3388,9 +3456,26 @@ function getFiltered(){
   const yr=document.getElementById('yearFilter').value;
   const cu=document.getElementById('customerFilter').value;
   const pd=document.getElementById('periodFilter').value;
+  // v111: 詳細検索フィルタ
+  const advPayDueFrom=document.getElementById('advPayDueFrom')?document.getElementById('advPayDueFrom').value:'';
+  const advPayDueTo=document.getElementById('advPayDueTo')?document.getElementById('advPayDueTo').value:'';
+  const advHasDeposit=document.getElementById('advHasDeposit')?document.getElementById('advHasDeposit').checked:false;
+  if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
     if(filterUnpaidPL && !_caseHasUnpaidPL(c))return false;
+    // v111: 詳細検索 入金期日 FROM-TO
+    if(advPayDueFrom||advPayDueTo){
+      const pdue=c.paymentDue||'';
+      if(!pdue)return false;
+      if(advPayDueFrom&&pdue<advPayDueFrom)return false;
+      if(advPayDueTo&&pdue>advPayDueTo)return false;
+    }
+    // v111: 詳細検索 保証金あり駐車場を含む案件のみ
+    if(advHasDeposit){
+      const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
+      if(!hasDep)return false;
+    }
     if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
     else if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
