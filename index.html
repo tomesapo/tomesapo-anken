@@ -3423,6 +3423,8 @@ function getFiltered(){
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
     if(filterUnpaidPL && !_caseHasUnpaidPL(c))return false;
+    // v111: 解約連絡フィルタ
+    if(filterCancelNotice && !_caseHasCancelNoticeAlert(c))return false;
     // v111: 詳細検索 入金期日 FROM-TO
     if(advPayDueFrom||advPayDueTo){
       const pdue=c.paymentDue||'';
@@ -3578,6 +3580,57 @@ function _caseHasUnpaidPL(c) {
   return (c.parkingLots || []).some(pl =>
     pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0) > 0 && !pl.supplierPaymentDate
   );
+}
+
+// v111: 解約連絡フィルタ
+let filterCancelNotice = false;
+function filterCancelNoticeParking(cardEl) {
+  if (filterCancelNotice) {
+    filterCancelNotice = false;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+  } else {
+    filterCancelNotice = true;
+    activeStatuses = null;
+    filterUnpaidPL = false;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+    if (cardEl) cardEl.classList.add('active');
+  }
+  renderAll();
+}
+
+// v111: 契約終了月の前月末日を返す（YYYY-MM-DD 形式、契約終了日が無ければ null）
+function _cancelNoticeDeadline(pl) {
+  if (!pl || !pl.contractEnd) return null;
+  const end = new Date(pl.contractEnd + 'T00:00:00');
+  if (isNaN(end.getTime())) return null;
+  // 契約終了月の前月末日 = 契約終了月の1日 - 1日
+  const firstOfEndMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+  const prevMonthLast = new Date(firstOfEndMonth.getTime() - 86400000);
+  return prevMonthLast.getFullYear() + '-' + String(prevMonthLast.getMonth()+1).padStart(2,'0') + '-' + String(prevMonthLast.getDate()).padStart(2,'0');
+}
+
+// v111: 期限までの残日数（マイナスは超過）。期限計算不可なら null
+function _cancelNoticeDaysRemaining(pl) {
+  const dl = _cancelNoticeDeadline(pl);
+  if (!dl) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dl + 'T00:00:00');
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
+}
+
+// v111: 案件が「要解約連絡（未送信・期限まで30日以内 OR 超過）」の駐車場を含むか判定
+function _caseHasCancelNoticeAlert(c) {
+  if (!c) return false;
+  // 契約中以降のみ対象
+  const PAY_TARGET = ['契約中','未請求','請求済','入金済'];
+  if (!PAY_TARGET.includes(c.status)) return false;
+  return (c.parkingLots || []).some(pl => {
+    if (!pl || !pl.cancelNoticeRequired) return false;
+    if (pl.cancelNoticeSentDate) return false; // 送信済みは除外
+    const days = _cancelNoticeDaysRemaining(pl);
+    if (days == null) return false;
+    return days <= 30; // 30日以内（超過も含む）
+  });
 }
 // 現場単価計算ヘルパー
 // v111: 追加/延長は元案件（parentCaseNo）に集約する。
@@ -3786,6 +3839,18 @@ function renderStats(){
       }
     });
   });
+  // v111: 要解約連絡（cancelNoticeRequired かつ 未送信 かつ 期限まで30日以内 or 超過）
+  let cancelNoticeCount = 0;
+  _statCases.forEach(c => {
+    if (!PAY_TARGET_STATUSES.includes(c.status)) return;
+    (c.parkingLots || []).forEach(pl => {
+      if (!pl || !pl.cancelNoticeRequired) return;
+      if (pl.cancelNoticeSentDate) return;
+      const days = _cancelNoticeDaysRemaining(pl);
+      if (days == null) return;
+      if (days <= 30) cancelNoticeCount++;
+    });
+  });
   function _isAct(a){return activeStatuses&&JSON.stringify(activeStatuses)===JSON.stringify(a);}
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
@@ -3800,7 +3865,9 @@ function renderStats(){
     (function(){var sst=_calcSiteUnitPrice(ordered);return '<div class="stat-card"><div class="stat-label">現場単価 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(Math.round(sst.avgPerSite))+'</div><div class="stat-sub">'+sst.siteCount+'現場の平均</div></div>';})()+
     '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>'+
     /* v111: 仕入未振込駐車場（地主・管理会社への振込未完了） */
-    '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>';
+    '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>'+
+    /* v111: 要解約連絡（30日以内or期限超過・未送信） */
+    '<div class="stat-card clickable'+(filterCancelNotice?' active':'')+'" onclick="filterCancelNoticeParking(this)"><div class="stat-label">要解約連絡 <span style="font-size:10px;font-weight:400">30日以内</span></div><div class="stat-value" style="color:'+(cancelNoticeCount>0?'var(--danger)':'var(--gray-500)')+'">'+cancelNoticeCount+'</div><div class="stat-sub">未送信・期限30日以内</div></div>';
 }
 function updateYearFilter(){
   // v111: yearFilter/periodFilter ドロップダウンは削除済み。null チェックで安全化。
@@ -4184,6 +4251,10 @@ function addParkingLotCard(pl={}) {
           '<div class="form-group"><label>請求額（自動計算） <span class="auto-tag">税込・保証金含む</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
           /* v111: 仕入先への振込日（地主・管理会社への一括支払日） */
           '<div class="form-group"><label>仕入支払日 <span class="auto-tag">地主・管理会社へ振込</span></label><input type="date" name="pl_supplierPaymentDate" value="'+(pl.supplierPaymentDate||'')+'"></div>' +
+          /* v111: 解約連絡（1台のみ契約の駐車場等、こちらで解約通知が必要な場合） */
+          '<div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" name="pl_cancelNoticeRequired" '+(pl.cancelNoticeRequired?'checked':'')+' style="cursor:pointer">📞 解約連絡が必要 <span class="auto-tag">契約終了月の前月末が期限</span></label></div>' +
+          '<div class="form-group"><label>解約連絡送信日 <span class="auto-tag">送信済み日付</span></label><input type="date" name="pl_cancelNoticeSentDate" value="'+(pl.cancelNoticeSentDate||'')+'"></div>' +
+          '<div class="form-group span-2"><label>解約連絡メモ</label><input type="text" name="pl_cancelNoticeMemo" placeholder="例：1台のみのためニーリーに直接連絡必要" value="'+esc(pl.cancelNoticeMemo||'')+'"></div>' +
         '</div></div>' +
         '<div class="form-group"><label>保証金 <span class="auto-tag">1台あたり</span></label><input type="number" name="pl_deposit" min="0" placeholder="0" value="'+(pl.deposit!=null?pl.deposit:'')+'" onchange="calcPlPurchase(this)"></div>' +
         '<div class="form-group"><label>開始月日割</label>' +
@@ -4683,6 +4754,9 @@ function getParkingLotsFromForm(){
       contractEnd:g('pl_contractEnd')?g('pl_contractEnd').value||'':'',
       adjustmentAmount:g('pl_adjustmentAmount')?(parseFloat(g('pl_adjustmentAmount').value)||0):0,
       supplierPaymentDate:g('pl_supplierPaymentDate')?g('pl_supplierPaymentDate').value||'':'', // v111: 仕入先(地主・管理会社)への振込日
+      cancelNoticeRequired:g('pl_cancelNoticeRequired')?g('pl_cancelNoticeRequired').checked:false, // v111: 解約連絡が必要
+      cancelNoticeSentDate:g('pl_cancelNoticeSentDate')?g('pl_cancelNoticeSentDate').value||'':'', // v111: 解約連絡送信日
+      cancelNoticeMemo:g('pl_cancelNoticeMemo')?g('pl_cancelNoticeMemo').value.trim()||'':'', // v111: 解約連絡メモ
       purchaseAmount:g('pl_purchaseAmount')?(parseFloat((g('pl_purchaseAmount').value||'').replace(/,/g,''))||null):null,
       purchaseWithDeposit:g('pl_purchaseWithDeposit')?(parseFloat((g('pl_purchaseWithDeposit').value||'').replace(/,/g,''))||null):null,
       invoiceAmount:g('pl_invoiceAmount')?(parseFloat((g('pl_invoiceAmount').value||'').replace(/,/g,''))||null):null,
@@ -4782,6 +4856,38 @@ function renderParkingLotsDetail(c){
           '<div style="font-size:10px;font-weight:700;color:'+_spdColor+'">💸 仕入支払日</div>'+
           '<div style="font-size:12px;font-weight:700;color:'+_spdColor+'">'+_spdLabel+'</div>'+
         '</div>';
+        // v111: 解約連絡ステータス表示
+        if (pl.cancelNoticeRequired) {
+          var _cnSent = pl.cancelNoticeSentDate || '';
+          var _cnDeadline = _cancelNoticeDeadline(pl);
+          var _cnDays = _cancelNoticeDaysRemaining(pl);
+          var _cnLabel = '', _cnColor = '#6b7280', _cnBg = '#f9fafb', _cnBd = '#e5e7eb', _cnIcon = '📞';
+          if (_cnSent) {
+            _cnLabel = '✅ 送信済 ' + _cnSent.replace(/-/g,'/');
+            _cnColor = '#16a34a'; _cnBg = '#f0fdf4'; _cnBd = '#bbf7d0';
+          } else if (_cnDeadline == null) {
+            _cnLabel = '⏳ 契約終了日未設定';
+          } else if (_cnDays < 0) {
+            _cnLabel = '❌ 期限超過（' + Math.abs(_cnDays) + '日経過）　期限: ' + _cnDeadline.replace(/-/g,'/');
+            _cnColor = '#dc2626'; _cnBg = '#fef2f2'; _cnBd = '#fecaca'; _cnIcon = '🚨';
+          } else if (_cnDays <= 7) {
+            _cnLabel = '🚨 期限まで残り ' + _cnDays + '日　期限: ' + _cnDeadline.replace(/-/g,'/');
+            _cnColor = '#dc2626'; _cnBg = '#fef2f2'; _cnBd = '#fecaca'; _cnIcon = '🚨';
+          } else if (_cnDays <= 30) {
+            _cnLabel = '⚠ 期限まで残り ' + _cnDays + '日　期限: ' + _cnDeadline.replace(/-/g,'/');
+            _cnColor = '#ca8a04'; _cnBg = '#fefce8'; _cnBd = '#fef08a'; _cnIcon = '⚠';
+          } else {
+            _cnLabel = '期限: ' + _cnDeadline.replace(/-/g,'/') + '（残り ' + _cnDays + '日）';
+            _cnColor = '#6b7280'; _cnBg = '#f9fafb'; _cnBd = '#e5e7eb';
+          }
+          h+='<div style="margin-top:4px;background:'+_cnBg+';border:1px solid '+_cnBd+';border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
+            '<div style="font-size:10px;font-weight:700;color:'+_cnColor+'">'+_cnIcon+' 解約連絡</div>'+
+            '<div style="font-size:11px;font-weight:700;color:'+_cnColor+';text-align:right">'+_cnLabel+'</div>'+
+          '</div>';
+          if (pl.cancelNoticeMemo) {
+            h+='<div style="margin-top:2px;padding:2px 10px;font-size:10px;color:#6b7280">メモ: '+esc(pl.cancelNoticeMemo)+'</div>';
+          }
+        }
       }
     }
     h+='</div>';
