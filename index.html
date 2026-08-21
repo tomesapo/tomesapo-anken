@@ -942,8 +942,9 @@
           <th onclick="sortBy('estSales')" style="text-align:right">見積売上 <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('estProfit')" style="text-align:right">見積粗利 <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('orderDate')">受注日 <span class="sort-icon">&#8597;</span></th>
-          <th onclick="sortBy('fixedSales')" style="text-align:right">確定売上 <span class="sort-icon">&#8597;</span></th>
-          <th onclick="sortBy('fixedProfit')" style="text-align:right">確定粗利 <span class="sort-icon">&#8597;</span></th>
+          <th onclick="sortBy('fixedSales')" style="text-align:right">確定売上<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税別</span> <span class="sort-icon">&#8597;</span></th>
+          <th onclick="sortBy('taxIncludedSales')" style="text-align:right">請求金額<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税込</span> <span class="sort-icon">&#8597;</span></th>
+          <th onclick="sortBy('fixedProfit')" style="text-align:right">確定粗利<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税別</span> <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('paymentDate')">入金日 <span class="sort-icon">&#8597;</span></th>
           <th>操作</th>
         </tr>
@@ -3509,6 +3510,8 @@ function renderTable(){
       '<td class="num-cell '+epC+'">'+(ep!=null?'&#165;'+fmt(ep):'')+'</td>'+
       '<td>'+fmtDate(c.orderDate)+'</td>'+
       '<td class="num-cell">'+(c.fixedSales!=null?'&#165;'+fmt(c.fixedSales):'')+'</td>'+
+      // v111: 請求金額 税込（fixedSales × 1.1 の切上げ整数）
+      '<td class="num-cell" style="font-weight:600">'+(c.fixedSales!=null?'&#165;'+fmt(Math.round(c.fixedSales*1.1)):'')+'</td>'+
       '<td class="num-cell '+fpC+'">'+(fp!=null?'&#165;'+fmt(fp):'')+'</td>'+
       '<td>'+fmtDate(c.paymentDate)+'</td>'+
       '<td onclick="event.stopPropagation()">'+
