@@ -2792,13 +2792,19 @@ function calcPlPurchase(el){
   const start=g('pl_contractStart')?g('pl_contractStart').value:'';
   const end=g('pl_contractEnd')?g('pl_contractEnd').value:'';
   const units=parseInt(g('pl_units')?g('pl_units').value:0)||0;
+  // v111: 料金タイプ（monthly / daily）
+  const rateType=g('pl_rateType')?g('pl_rateType').value:'monthly';
+  const isDaily=(rateType==='daily');
   const monthlyRent=parseFloat(g('pl_monthlyRent')?g('pl_monthlyRent').value:0)||0;
+  const dailyRent=parseFloat(g('pl_dailyRent')?g('pl_dailyRent').value:0)||0;
   const adminFee=parseFloat(g('pl_adminFee')?g('pl_adminFee').value:0)||0;
   const keyMoney=parseFloat(g('pl_keyMoney')?g('pl_keyMoney').value:0)||0;
   const adjustment=parseFloat(g('pl_adjustmentAmount')?g('pl_adjustmentAmount').value:0)||0;
   const startProRate=(g('pl_startProRate')?g('pl_startProRate').value:'')==='true';
   const endProRate  =(g('pl_endProRate')?g('pl_endProRate').value:'')==='true';
   const quoteKeyMoney=parseFloat(g('pl_quoteKeyMoney')?g('pl_quoteKeyMoney').value:0)||0;
+  const quoteMonthlyRentInput=parseFloat(g('pl_quoteMonthlyRent')?g('pl_quoteMonthlyRent').value:0)||0;
+  const quoteDailyRentInput=parseFloat(g('pl_quoteDailyRent')?g('pl_quoteDailyRent').value:0)||0;
   // v111: コインP封鎖手数料(一式・台数を掛けない)
   const blockingFee=parseFloat(g('pl_blockingFee')?g('pl_blockingFee').value:0)||0;
   const quoteBlockingFee=parseFloat(g('pl_quoteBlockingFee')?g('pl_quoteBlockingFee').value:0)||0;
@@ -2809,10 +2815,19 @@ function calcPlPurchase(el){
   if(pa){
     let rentPart=null;
     if(start&&end&&units){
-      const period=calcPlPeriod(start,end,startProRate,endProRate);
-      const dailyRate=Math.floor(monthlyRent/30);
-      if(period.months||period.days){
-        rentPart=monthlyRent*units*period.months+dailyRate*units*period.days;
+      if(isDaily){
+        // v111: 日額タイプ：契約期間の総日数 × 単価 × 台数
+        const _s=new Date(start+'T00:00:00'), _e=new Date(end+'T00:00:00');
+        if(!isNaN(_s.getTime()) && !isNaN(_e.getTime()) && _e>=_s){
+          const totalDays=Math.round((_e.getTime()-_s.getTime())/86400000)+1;
+          rentPart=dailyRent*units*totalDays;
+        }
+      }else{
+        const period=calcPlPeriod(start,end,startProRate,endProRate);
+        const dailyRate=Math.floor(monthlyRent/30);
+        if(period.months||period.days){
+          rentPart=monthlyRent*units*period.months+dailyRate*units*period.days;
+        }
       }
     }
     if(rentPart!=null){
@@ -2827,14 +2842,22 @@ function calcPlPurchase(el){
       //       従来: 仕入ベースで礼金/封鎖だけ見積に差替 → 賃料/手数料の markup が反映されない不具合
       if(ia){
         // 見積側の値（税別。未入力なら仕入側を採用＝マージン0の後方互換）
-        const quoteMonthlyRent=parseFloat(g('pl_quoteMonthlyRent')?g('pl_quoteMonthlyRent').value:0)||monthlyRent;
+        const quoteMonthlyRent=quoteMonthlyRentInput||monthlyRent;
+        const quoteDailyRent=quoteDailyRentInput||dailyRent;
         const quoteAdminFee  =parseFloat(g('pl_quoteAdminFee')?g('pl_quoteAdminFee').value:0)||adminFee;
         const effectiveKey   =quoteKeyMoney||keyMoney;
         const effectiveBlocking=quoteBlockingFee||blockingFee;
         // 見積側の賃料（税別）
-        const period=calcPlPeriod(start,end,startProRate,endProRate);
-        const quoteDailyRate=Math.floor(quoteMonthlyRent/30);
-        const quoteRentPart=quoteMonthlyRent*units*period.months+quoteDailyRate*units*period.days;
+        let quoteRentPart;
+        if(isDaily){
+          const _s=new Date(start+'T00:00:00'), _e=new Date(end+'T00:00:00');
+          const totalDays=(!isNaN(_s.getTime())&&!isNaN(_e.getTime())&&_e>=_s)?Math.round((_e.getTime()-_s.getTime())/86400000)+1:0;
+          quoteRentPart=quoteDailyRent*units*totalDays;
+        }else{
+          const period=calcPlPeriod(start,end,startProRate,endProRate);
+          const quoteDailyRate=Math.floor(quoteMonthlyRent/30);
+          quoteRentPart=quoteMonthlyRent*units*period.months+quoteDailyRate*units*period.days;
+        }
         // 見積側 税別合計
         let salesExTax = quoteRentPart + quoteAdminFee*units + effectiveKey*units + effectiveBlocking;
         // 業者費用「任意金額」モードの按分（この駐車場の分）を売上に加算
