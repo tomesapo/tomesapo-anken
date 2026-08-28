@@ -2879,7 +2879,8 @@ function calcPlPurchase(el){
         // 税込化＋保証金加算（保証金は非課税想定）
         // v111: 消費税端数処理を切り捨てに統一（他書類と揃える）
         const salesInclTax = Math.floor(salesExTax * 1.1);
-        const invoice = salesInclTax + deposit*units;
+        // v111: 請求額（税込）に保証金は含めない（保証金は仕入先への振込に含めるだけ）
+        const invoice = salesInclTax;
         ia.value = fmt(invoice);
       }
     }else{pa.value='';if(ia)ia.value='';}
@@ -4295,7 +4296,7 @@ function addParkingLotCard(pl={}) {
           '<div class="form-group"><label>調整金額 <span class="auto-tag">税込</span></label><input type="number" name="pl_adjustmentAmount" placeholder="0" value="'+(pl.adjustmentAmount!=null?pl.adjustmentAmount:'')+'" onchange="calcPlPurchase(this)"></div>' +
           '<div class="form-group"><label>仕入金額（自動計算） <span class="auto-tag">税込</span></label><input type="text" name="pl_purchaseAmount" readonly class="readonly-calc" placeholder="自動計算" value="'+(pl.purchaseAmount!=null?fmt(pl.purchaseAmount):'')+'"></div>' +
           '<div class="form-group"><label>仕入金額（保証金込） <span class="auto-tag">仕入先への振込予定額</span></label><input type="text" name="pl_purchaseWithDeposit" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.purchaseWithDeposit!=null?fmt(pl.purchaseWithDeposit):'')+'"></div>' +
-          '<div class="form-group"><label>請求額（自動計算） <span class="auto-tag">税込・保証金含む</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="仕入金額＋保証金×台数" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
+          '<div class="form-group"><label>請求額（自動計算） <span class="auto-tag">税込</span></label><input type="text" name="pl_invoiceAmount" readonly class="readonly-calc" placeholder="賃料等の税込金額" value="'+(pl.invoiceAmount!=null?fmt(pl.invoiceAmount):'')+'"></div>' +
           /* v111: 仕入先への振込日（地主・管理会社への一括支払日） */
           '<div class="form-group"><label>仕入支払日 <span class="auto-tag">地主・管理会社へ振込</span></label><input type="date" name="pl_supplierPaymentDate" value="'+(pl.supplierPaymentDate||'')+'"></div>' +
           /* v111: 解約連絡（1台のみ契約の駐車場等、こちらで解約通知が必要な場合） */
