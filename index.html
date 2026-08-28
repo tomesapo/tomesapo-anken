@@ -3534,10 +3534,20 @@ function renderTable(){
       '<td class="num-cell">'+(c.estSales!=null?'&#165;'+fmt(c.estSales):'')+'</td>'+
       '<td class="num-cell '+epC+'">'+(ep!=null?'&#165;'+fmt(ep):'')+'</td>'+
       '<td>'+fmtDate(c.orderDate)+'</td>'+
-      '<td class="num-cell">'+(c.fixedSales!=null?'&#165;'+fmt(c.fixedSales):'')+'</td>'+
-      // v111: 請求金額 税込（fixedSales × 1.1 の切上げ整数）
-      '<td class="num-cell" style="font-weight:600">'+(c.fixedSales!=null?'&#165;'+fmt(Math.round(c.fixedSales*1.1)):'')+'</td>'+
-      '<td class="num-cell '+fpC+'">'+(fp!=null?'&#165;'+fmt(fp):'')+'</td>'+
+      // v111: 確定売上・粗利・税込確定売上をリアルタイム再計算（上部統計と一致）
+      (function(){
+        let _rS=0,_rP=0;
+        (c.parkingLots||[]).forEach(pl=>{
+          const r=_plFixedTotalsAllPeriod(pl,c);
+          _rS+=r.sales||0; _rP+=r.purchase||0;
+        });
+        const _rProfit = _rS - _rP;
+        const _rTI = Math.round(_rS * 1.1);
+        const _rC = _rProfit >= 0 ? 'profit-pos' : 'profit-neg';
+        return '<td class="num-cell">'+(_rS?'&#165;'+fmt(_rS):'')+'</td>'+
+          '<td class="num-cell" style="font-weight:600">'+(_rS?'&#165;'+fmt(_rTI):'')+'</td>'+
+          '<td class="num-cell '+_rC+'">'+(_rS?'&#165;'+fmt(_rProfit):'')+'</td>';
+      })()+
       '<td>'+fmtDate(c.paymentDate)+'</td>'+
       '<td onclick="event.stopPropagation()">'+
       '<button class="btn btn-outline btn-sm" onclick="openModal(\''+c.id+'\')">編集</button>'+
@@ -3601,6 +3611,77 @@ function filterUnpaidParking(cardEl) {
   }
   renderAll();
 }
+// v111: 駐車場単位の仕入金額・請求額をリアルタイム再計算（保存時スナップショットに依存しない）
+//       calcPlPurchase と同じロジックだが DOM に依存しない。Excel 出力・表示で使う。
+function _calcPlInvoiceRT(pl, c) {
+  const empty = { purchase: 0, purchaseWithDeposit: 0, invoiceAmount: 0 };
+  if (!pl) return empty;
+  const start = pl.contractStart || '';
+  const end   = pl.contractEnd   || '';
+  const units = parseInt(pl.units) || 0;
+  if (!start || !end || !units) return empty;
+
+  const isDaily = (pl.rateType === 'daily');
+  const monthlyRent = Number(pl.monthlyRent) || 0;
+  const dailyRent   = Number(pl.dailyRent)   || 0;
+  const adminFee    = Number(pl.adminFee)    || 0;
+  const keyMoney    = Number(pl.keyMoney)    || 0;
+  const adjustment  = Number(pl.adjustmentAmount) || 0;
+  const blockingFee = Number(pl.blockingFee) || 0;
+  const deposit     = Number(pl.deposit)     || 0;
+  const startProRate = !!pl.startProRate;
+  const endProRate   = !!pl.endProRate;
+  const quoteMonthlyRent = Number(pl.quoteMonthlyRent) || monthlyRent;
+  const quoteDailyRent   = Number(pl.quoteDailyRent)   || dailyRent;
+  const quoteAdminFee    = Number(pl.quoteAdminFee)    || adminFee;
+  const quoteKeyMoney    = Number(pl.quoteKeyMoney)    || 0;
+  const quoteBlockingFee = Number(pl.quoteBlockingFee) || 0;
+  const effectiveKey      = quoteKeyMoney   || keyMoney;
+  const effectiveBlocking = quoteBlockingFee || blockingFee;
+
+  // 仕入 rentPart
+  let rentPart = 0;
+  if (isDaily) {
+    const _s = new Date(start + 'T00:00:00');
+    const _e = new Date(end   + 'T00:00:00');
+    if (!isNaN(_s.getTime()) && !isNaN(_e.getTime()) && _e >= _s) {
+      const totalDays = Math.round((_e.getTime() - _s.getTime()) / 86400000) + 1;
+      rentPart = dailyRent * units * totalDays;
+    }
+  } else {
+    const period = calcPlPeriod(start, end, startProRate, endProRate);
+    const dailyRate = Math.floor(monthlyRent / 30);
+    rentPart = monthlyRent * units * period.months + dailyRate * units * period.days;
+  }
+  const purchase = rentPart + adminFee * units + keyMoney * units + adjustment + blockingFee;
+  const purchaseWithDeposit = purchase + deposit * units;
+
+  // 見積 salesExTax
+  let quoteRentPart = 0;
+  if (isDaily) {
+    const _s = new Date(start + 'T00:00:00');
+    const _e = new Date(end   + 'T00:00:00');
+    if (!isNaN(_s.getTime()) && !isNaN(_e.getTime()) && _e >= _s) {
+      const totalDays = Math.round((_e.getTime() - _s.getTime()) / 86400000) + 1;
+      quoteRentPart = quoteDailyRent * units * totalDays;
+    }
+  } else {
+    const period = calcPlPeriod(start, end, startProRate, endProRate);
+    const quoteDailyRate = Math.floor(quoteMonthlyRent / 30);
+    quoteRentPart = quoteMonthlyRent * units * period.months + quoteDailyRate * units * period.days;
+  }
+  let salesExTax = quoteRentPart + quoteAdminFee * units + effectiveKey * units + effectiveBlocking;
+  // 業者費用「任意金額」按分（確定フェーズ）
+  if (c && typeof calcAgencyFeeShare === 'function') {
+    const plIdx = (c.parkingLots || []).indexOf(pl);
+    if (plIdx >= 0) {
+      salesExTax += (calcAgencyFeeShare(c, plIdx, true) || 0);
+    }
+  }
+  const invoiceAmount = Math.floor(salesExTax * 1.1);
+  return { purchase, purchaseWithDeposit, invoiceAmount };
+}
+
 // v111: 案件が「未振込駐車場」を含むか判定
 function _caseHasUnpaidPL(c) {
   const PAY_TARGET = ['契約中','未請求','請求済','入金済'];
@@ -4032,7 +4113,20 @@ async function exportCSV(){
   }
   const dataRows=cases.map(c=>{
     const _sp = calcSupplierPayInfo(c);
-    return [c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName??'',c.siteAddress??'',fmtDateJP(c.receptionDate),fmtDateJP(c.requestStart),fmtDateJP(c.requestEnd),c.requestUnits??'',c.requestNote??'',fmtDateJP(c.proposalDate),c.estSales??'',c.estPurchase??'',c.estProfit??'',fmtDateJP(c.orderDate),fmtDateJP(c.contractStart),fmtDateJP(c.contractEnd),c.fixedSales??'',c.fixedPurchase??'',c.fixedProfit??'',c.taxIncludedSales??'',c.fixedUnits??'',_sp.latest,_sp.status,fmtDateJP(c.invoiceDate),fmtDateJP(c.paymentDue),fmtDateJP(c.paymentDate),c.paymentAmount??'',c.caseNote??''];
+    // v111: 確定売上・仕入・粗利・税込確定売上をリアルタイム再計算（月次レポート・上部統計と一致）
+    let _fS=0,_fP=0;
+    (c.parkingLots||[]).forEach(pl=>{
+      const r=_plFixedTotalsAllPeriod(pl,c);
+      _fS+=r.sales||0; _fP+=r.purchase||0;
+    });
+    const _fProfit = _fS - _fP;
+    const _fTI = Math.round(_fS * 1.1);
+    // 契約済み駐車場の台数合計（fixedUnits の代替）
+    let _fUnits=0;
+    (c.parkingLots||[]).forEach(pl=>{
+      if(pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0)>0) _fUnits += parseInt(pl.units)||0;
+    });
+    return [c.caseNo,c.status,c.customerName??'',c.baseName??'',c.staffName??'',c.siteName??'',c.siteAddress??'',fmtDateJP(c.receptionDate),fmtDateJP(c.requestStart),fmtDateJP(c.requestEnd),c.requestUnits??'',c.requestNote??'',fmtDateJP(c.proposalDate),c.estSales??'',c.estPurchase??'',c.estProfit??'',fmtDateJP(c.orderDate),fmtDateJP(c.contractStart),fmtDateJP(c.contractEnd),_fS||'',_fP||'',_fProfit||'',_fTI||'',_fUnits||'',_sp.latest,_sp.status,fmtDateJP(c.invoiceDate),fmtDateJP(c.paymentDue),fmtDateJP(c.paymentDate),c.paymentAmount??'',c.caseNote??''];
   });
   function ex(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function colLetter(n){let s='';n++;while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-(n%26?0:1)-1)/26);}return s;}
@@ -4114,11 +4208,20 @@ async function exportCSVByLot(){
     if (!lots.length) { skipped++; return; } // 駐車場0件はスキップ
     // v111: 案件側の共通列（CSV_HEADERSと同じ31列。最遅仕入支払日・振込状況を含む）
     const _sp = _calcSupplierPayInfoLocal(c);
+    // v111: 確定売上・仕入・粗利・税込確定売上をリアルタイム再計算
+    let _fS=0,_fP=0,_fUnits=0;
+    (c.parkingLots||[]).forEach(pl=>{
+      const r=_plFixedTotalsAllPeriod(pl,c);
+      _fS+=r.sales||0; _fP+=r.purchase||0;
+      if(pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0)>0) _fUnits += parseInt(pl.units)||0;
+    });
+    const _fProfit = _fS - _fP;
+    const _fTI = Math.round(_fS * 1.1);
     const caseCols = [c.caseNo, c.status, c.customerName??'', c.baseName??'', c.staffName??'', c.siteName??'', c.siteAddress??'',
       fmtDateJP(c.receptionDate), fmtDateJP(c.requestStart), fmtDateJP(c.requestEnd), c.requestUnits??'', c.requestNote??'',
       fmtDateJP(c.proposalDate), c.estSales??'', c.estPurchase??'', c.estProfit??'',
       fmtDateJP(c.orderDate), fmtDateJP(c.contractStart), fmtDateJP(c.contractEnd),
-      c.fixedSales??'', c.fixedPurchase??'', c.fixedProfit??'', c.taxIncludedSales??'', c.fixedUnits??'',
+      _fS||'', _fP||'', _fProfit||'', _fTI||'', _fUnits||'',
       _sp.latest, _sp.status,
       fmtDateJP(c.invoiceDate), fmtDateJP(c.paymentDue), fmtDateJP(c.paymentDate), c.paymentAmount??'', c.caseNote??''];
     lots.forEach((pl, idx) => {
@@ -4131,6 +4234,10 @@ async function exportCSVByLot(){
       const taxCat = (pl.taxCategory === 'nontaxable') ? '非課税' : '課税';
       const ownerTax = pl.ownerTaxable ? '課税' : '免税';
       const managerTax = pl.managerTaxable ? '課税' : '免税/該当なし';
+      // v111: 仕入金額(税込) / 請求額(税込) をリアルタイム再計算（スナップショット依存を排除）
+      const _rt = _calcPlInvoiceRT(pl, c);
+      const purchaseRT = _rt.purchase || 0;
+      const invoiceRT  = _rt.invoiceAmount || 0;
       const lotCols = [
         idx+1, pl.name??'', pl.address??'', pl.walkMinutes??'',
         rentMode, rateLabel, unitsVal,
@@ -4141,7 +4248,7 @@ async function exportCSVByLot(){
         pl.keyMoney??'', pl.quoteKeyMoney??'',
         pl.blockingFee??'', pl.quoteBlockingFee??'',
         pl.deposit??'', pl.adjustmentAmount??'',
-        pl.purchaseAmount??'', pl.invoiceAmount??'',
+        purchaseRT || '', invoiceRT || '',
         pl.supplierName??'', pl.supplierPhone??'',
         taxCat, ownerTax, managerTax,
         pl.lessorAddress??'', pl.lotNote??''
