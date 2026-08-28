@@ -4086,18 +4086,38 @@ async function exportCSVByLot(){
   function colLetter(n){let s='';n++;while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-(n%26?0:1)-1)/26);}return s;}
   function cellRef(r,c){return colLetter(c)+(r+1);}
 
+  // v111: 仕入支払日の集計（exportCSV と同じロジック）
+  function _calcSupplierPayInfoLocal(c) {
+    const contractedPLs = (c.parkingLots || []).filter(pl =>
+      pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units) || 0) > 0
+    );
+    const totalCount = contractedPLs.length;
+    if (totalCount === 0) return { latest: '', status: '' };
+    const paidDates = contractedPLs
+      .map(pl => pl.supplierPaymentDate)
+      .filter(d => d && d.length >= 10)
+      .sort();
+    const paidCount = paidDates.length;
+    let latest = '';
+    if (paidCount > 0) latest = fmtDateJP(paidDates[paidDates.length - 1]);
+    else latest = '未振込';
+    return { latest: latest, status: paidCount + '/' + totalCount + ' 件振込済' };
+  }
+
   const HEADERS = CSV_HEADERS.concat(CSV_LOT_HEADERS);
   const dataRows = [];
   let skipped = 0;
   cases.forEach(c => {
     const lots = (c.parkingLots || []);
     if (!lots.length) { skipped++; return; } // 駐車場0件はスキップ
-    // 案件側の共通列（exportCSVと同じ並び）
+    // v111: 案件側の共通列（CSV_HEADERSと同じ31列。最遅仕入支払日・振込状況を含む）
+    const _sp = _calcSupplierPayInfoLocal(c);
     const caseCols = [c.caseNo, c.status, c.customerName??'', c.baseName??'', c.staffName??'', c.siteName??'', c.siteAddress??'',
       fmtDateJP(c.receptionDate), fmtDateJP(c.requestStart), fmtDateJP(c.requestEnd), c.requestUnits??'', c.requestNote??'',
       fmtDateJP(c.proposalDate), c.estSales??'', c.estPurchase??'', c.estProfit??'',
       fmtDateJP(c.orderDate), fmtDateJP(c.contractStart), fmtDateJP(c.contractEnd),
       c.fixedSales??'', c.fixedPurchase??'', c.fixedProfit??'', c.taxIncludedSales??'', c.fixedUnits??'',
+      _sp.latest, _sp.status,
       fmtDateJP(c.invoiceDate), fmtDateJP(c.paymentDue), fmtDateJP(c.paymentDate), c.paymentAmount??'', c.caseNote??''];
     lots.forEach((pl, idx) => {
       const isLump = (pl.rentMode === 'lump');
