@@ -2877,7 +2877,8 @@ function calcPlPurchase(el){
           }
         } catch(_e) { /* 静かに無視 */ }
         // 税込化＋保証金加算（保証金は非課税想定）
-        const salesInclTax = Math.round(salesExTax * 1.1);
+        // v111: 消費税端数処理を切り捨てに統一（他書類と揃える）
+        const salesInclTax = Math.floor(salesExTax * 1.1);
         const invoice = salesInclTax + deposit*units;
         ia.value = fmt(invoice);
       }
