@@ -3758,10 +3758,11 @@ function _siteKeyOf(c) {
 //   pl.units 未設定/0 → 1 として扱う
 // 業者費用按分・封鎖手数料・調整金額・礼金税区分等の税処理も buildMonthlyData と同じ
 function _plFixedTotalsAllPeriod(pl, c) {
-  var startStr = pl.contractStart || c.contractStart || '';
-  var endStr   = pl.contractEnd   || c.contractEnd   || '';
-  if (!startStr || !endStr) return { sales: 0, purchase: 0, profit: 0 };
-  var units = pl.units || 1;
+  // v111: 失注駐車場（契約データが揃っていない）は集計対象外にする（calcParkingLotFixed と同じ挙動）
+  var startStr = pl.contractStart || '';
+  var endStr   = pl.contractEnd   || '';
+  var units = parseInt(pl.units) || 0;
+  if (!startStr || !endStr || units <= 0) return { sales: 0, purchase: 0, profit: 0 };
   var quoteRate = pl.rateType === 'daily' ? (pl.quoteDailyRent || 0) : (pl.quoteMonthlyRent || 0);
   var costRateInc = pl.rateType === 'daily' ? (pl.dailyRent || 0) : (pl.monthlyRent || 0);
   if (!quoteRate && !costRateInc) return { sales: 0, purchase: 0, profit: 0 };
@@ -7741,10 +7742,11 @@ function buildMonthlyData(period) {
   confirmed.forEach(function(c) {
     var custName = c.customerName || '不明';
     (c.parkingLots || []).forEach(function(pl) {
-      var startStr = pl.contractStart || c.contractStart || '';
-      var endStr   = pl.contractEnd   || c.contractEnd   || '';
-      if (!startStr || !endStr) return;
-      var units = pl.units || 1;
+      // v111: 失注駐車場（契約データが揃っていない）は月次集計対象外にする
+      var startStr = pl.contractStart || '';
+      var endStr   = pl.contractEnd   || '';
+      var units = parseInt(pl.units) || 0;
+      if (!startStr || !endStr || units <= 0) return;
       var quoteRate = pl.rateType === 'daily'
         ? (pl.quoteDailyRent || 0)
         : (pl.quoteMonthlyRent || 0);
