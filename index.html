@@ -9069,6 +9069,27 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     // テンプレートの行40をextra回複製してTEMPLATE_SUBTOTAL_ROWの直前に挿入（罫線・スタイル保持）
     ws.duplicateRow(TEMPLATE_SUBTOTAL_ROW - 1, extra, true);
     subtotalRow += extra;
+
+    // v111: duplicateRow がマージセルを崩すため、追加行 + 小計/消費税/合計 の3行分マージを再設定
+    //       データ行のマージ: A:L / M:O / P:R / S:X / Y:AD
+    //       小計・消費税・合計行のマージ: S:X（ラベル） / Y:AD（金額）
+    const _addMerge = (range) => {
+      try { ws.unMergeCells(range); } catch(_e) {}
+      try { ws.mergeCells(range); } catch(_e) {}
+    };
+    // 追加された明細行分（新しく挿入された TEMPLATE_SUBTOTAL_ROW 〜 TEMPLATE_SUBTOTAL_ROW+extra-1）
+    for (let _r = TEMPLATE_SUBTOTAL_ROW; _r < TEMPLATE_SUBTOTAL_ROW + extra; _r++) {
+      _addMerge('A'+_r+':L'+_r);
+      _addMerge('M'+_r+':O'+_r);
+      _addMerge('P'+_r+':R'+_r);
+      _addMerge('S'+_r+':X'+_r);
+      _addMerge('Y'+_r+':AD'+_r);
+    }
+    // 小計/消費税/合計 3行分（subtotalRow, +1, +2）
+    for (let _r = subtotalRow; _r <= subtotalRow + 2; _r++) {
+      _addMerge('S'+_r+':X'+_r);
+      _addMerge('Y'+_r+':AD'+_r);
+    }
   }
 
   // ─── 明細行へ書き込み ───
