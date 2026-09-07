@@ -9113,10 +9113,22 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const _remarksRow = 46 + extra;
     _addMerge('A'+_remarksRow+':AD'+_remarksRow);
   }
-  // v111: 印刷範囲を「今後ともよろしく…」の 50 行目（+extra）まで拡張
-  const _lastPrintRow = 50 + Math.max(0, dataRows.length - TEMPLATE_DATA_ROWS);
+  // v111: 印刷範囲を「今後ともよろしく…」の行までに設定
+  //       テンプレの 今後とも は 49 行目。行挿入があれば +extra 分シフト。
+  const _extraForPrint = Math.max(0, dataRows.length - TEMPLATE_DATA_ROWS);
+  const _lastPrintRow = 49 + _extraForPrint;
   try {
     ws.pageSetup.printArea = 'A1:AD' + _lastPrintRow;
+    // fitToPage を明示的に有効化（fitToWidth/Height を機能させる）
+    ws.pageSetup.fitToPage = true;
+    ws.pageSetup.fitToWidth = 1;
+    ws.pageSetup.fitToHeight = 1;
+    // fitToPage が有効な時 scale は無視されるが、念のためリセット
+    ws.pageSetup.scale = 100;
+    // sheet_properties 側でも fitToPage フラグを立てる（Excelが認識するために必要）
+    if (ws.pageSetup && ws.sheetPr === undefined) {
+      // ExcelJS の場合 pageSetup.fitToPage で十分だが、保険で XML 出力後にパッチする
+    }
   } catch(_e) {}
 
   // ─── 明細行へ書き込み ───
@@ -9187,7 +9199,29 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   }
 
   // ─── ファイル出力（ブラウザダウンロード） ───
-  const out = await wb.xlsx.writeBuffer();
+  let out = await wb.xlsx.writeBuffer();
+  // v111: fitToPage を <sheetPr><pageSetUpPr fitToPage="1"/> の形で XML に強制注入
+  //       ExcelJS の pageSetup.fitToPage 設定だけでは <pageSetUpPr> が生成されないケースの補完
+  try {
+    if (typeof JSZip !== 'undefined') {
+      const _zip = await JSZip.loadAsync(out);
+      const _sheetNames = Object.keys(_zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/i.test(n));
+      for (const _name of _sheetNames) {
+        let _sx = await _zip.file(_name).async('string');
+        if (!/fitToPage="1"/.test(_sx)) {
+          if (/<sheetPr[^\/>]*\/>/.test(_sx)) {
+            _sx = _sx.replace(/<sheetPr([^\/>]*)\/>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/></sheetPr>');
+          } else if (/<sheetPr[^>]*>/.test(_sx)) {
+            _sx = _sx.replace(/(<sheetPr[^>]*>)/, '$1<pageSetUpPr fitToPage="1"/>');
+          } else {
+            _sx = _sx.replace(/(<worksheet[^>]*>)/, '$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+          }
+        }
+        _zip.file(_name, _sx);
+      }
+      out = await _zip.generateAsync({ type: 'uint8array' });
+    }
+  } catch(_e) { console.warn('fitToPage XML patch failed:', _e); }
   const safeName = (c.siteName || c.caseNo || '案件').replace(/[/\\:*?"<>|]/g, '_');
   const dateStr  = (c.invoiceDate || _todayLocalISO()).replace(/-/g, '').slice(2);
   const filename = '請求書｜' + safeName + '_' + dateStr + '.xlsx';
