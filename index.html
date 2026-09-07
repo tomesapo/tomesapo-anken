@@ -8975,21 +8975,39 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const quoteKeyMoney  = pl.quoteKeyMoney || 0;
     // v111: コインP封鎖手数料(一式・見積=税別、仕入=税込)
     const quoteBlockingFee = pl.quoteBlockingFee || 0;
+    // v111: 料金タイプ（月額/日額）
+    const _isDaily = (pl.rateType === 'daily');
+    const _quoteDailyRent = pl.quoteDailyRent || 0;
     // 仕入額（税抜）— 地主/管理会社の税区分で課税のときだけ税抜換算
     const ownerT = !!pl.ownerTaxable;
     const managerT = !!pl.managerTaxable;
-    const purchaseUnitPrice = ownerT ? (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0) : (pl.monthlyRent || 0);
+    const purchaseUnitPrice = ownerT
+      ? (_isDaily ? (pl.dailyRent ? Math.round(pl.dailyRent / 1.1) : 0) : (pl.monthlyRent ? Math.round(pl.monthlyRent / 1.1) : 0))
+      : (_isDaily ? (pl.dailyRent || 0) : (pl.monthlyRent || 0));
     const purchaseAdminFee = managerT ? (pl.adminFee ? Math.round(pl.adminFee / 1.1) : 0) : (pl.adminFee || 0);
     const purchaseKeyMoney = ownerT ? (pl.keyMoney ? Math.round(pl.keyMoney / 1.1) : 0) : (pl.keyMoney || 0);
     // 封鎖手数料仕入(税抜): 駐車場の課税区分(taxCategory)準拠（非課税は元から税なし）
     const purchaseBlockingFee = (pl.taxCategory==='nontaxable') ? (pl.blockingFee||0) : (pl.blockingFee ? Math.round(pl.blockingFee/1.1) : 0);
     // 'auto'モードのみ仕入額表示、それ以外（none/manual）は見積額表示
-    const unitPrice = (feeMode==='auto') ? purchaseUnitPrice : quoteUnitPrice;
+    // v111: 日額タイプは quoteDailyRent、月額は quoteMonthlyRent を使う
+    const unitPrice = _isDaily
+      ? ((feeMode==='auto') ? purchaseUnitPrice : _quoteDailyRent)
+      : ((feeMode==='auto') ? purchaseUnitPrice : quoteUnitPrice);
     const adminFee  = (feeMode==='auto') ? purchaseAdminFee  : quoteAdminFee;
     const keyMoney  = (feeMode==='auto') ? purchaseKeyMoney  : quoteKeyMoney;
     const blockingFee = (feeMode==='auto') ? purchaseBlockingFee : quoteBlockingFee;
-    const dailyRate = Math.floor(unitPrice / 30);
-    const rentAmt  = Math.round(unitPrice * units * months + dailyRate * units * days);
+    // v111: 日額タイプは 単価 × 台数 × 総日数、月額タイプは従来通り
+    let rentAmt, _totalDays = 0;
+    if (_isDaily) {
+      const _s = new Date((pl.contractStart||'') + 'T00:00:00');
+      const _e = new Date((pl.contractEnd  ||'') + 'T00:00:00');
+      _totalDays = (!isNaN(_s.getTime()) && !isNaN(_e.getTime()) && _e >= _s)
+        ? Math.round((_e.getTime() - _s.getTime()) / 86400000) + 1 : 0;
+      rentAmt = Math.round(unitPrice * units * _totalDays);
+    } else {
+      const dailyRate = Math.floor(unitPrice / 30);
+      rentAmt = Math.round(unitPrice * units * months + dailyRate * units * days);
+    }
     const adminAmt = Math.round(adminFee * units);
     const keyAmt   = Math.round(keyMoney * units);
     // 封鎖手数料は一式（×units しない）
@@ -9022,7 +9040,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     const periodTxt = (pl.contractStart && pl.contractEnd)
       ? fmtD(pl.contractStart) + '〜' + fmtD(pl.contractEnd) + '　賃料'
       : '賃料';
-    const periodCell = fmtPlPeriod(months, days) || (months + 'ヶ月');
+    // v111: 日額タイプは「N日」、月額タイプは月数+日割日数
+    const periodCell = _isDaily ? (_totalDays + '日') : (fmtPlPeriod(months, days) || (months + 'ヶ月'));
     // v111: 土地一括時は数量列を「土地一括」文字列にする
     const qtyVal = isLumpInv ? '土地一括' : units;
     dataRows.push({ kind:'data', item: periodTxt, qty: qtyVal, per: periodCell, up: unitPrice, amt: rentAmt });
@@ -9090,7 +9109,15 @@ async function _genInvoiceFromTemplate(c, sealMode) {
       _addMerge('S'+_r+':X'+_r);
       _addMerge('Y'+_r+':AD'+_r);
     }
+    // v111: 備考行（テンプレ Row 46 = A46:AD46 マージ）も extra 分シフトするため再設定
+    const _remarksRow = 46 + extra;
+    _addMerge('A'+_remarksRow+':AD'+_remarksRow);
   }
+  // v111: 印刷範囲を「今後ともよろしく…」の 50 行目（+extra）まで拡張
+  const _lastPrintRow = 50 + Math.max(0, dataRows.length - TEMPLATE_DATA_ROWS);
+  try {
+    ws.pageSetup.printArea = 'A1:AD' + _lastPrintRow;
+  } catch(_e) {}
 
   // ─── 明細行へ書き込み ───
   dataRows.forEach((r, idx) => {
