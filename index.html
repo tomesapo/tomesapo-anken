@@ -9091,6 +9091,15 @@ async function _genInvoiceFromTemplate(c, sealMode) {
   }
 
   // ─── 合計欄 ───
+  // v111: 22行超過時に duplicateRow でマージセルが崩れて、テンプレのサンプル値(600000/60000/660000)が
+  //       Z-AD列や隣接セルに残ってしまうため、小計/消費税/合計 3行の金額領域を明示クリアしてから書き込む。
+  for (let _r = subtotalRow; _r <= subtotalRow + 2; _r++) {
+    ['Y','Z','AA','AB','AC','AD','T','U','V','W','X'].forEach(col => {
+      const _cell = ws.getCell(col + _r);
+      // ラベル文字列（小計・消費税率10％・合計）は保持し、数値だけクリアする
+      if (typeof _cell.value === 'number') _cell.value = null;
+    });
+  }
   setV('Y' + subtotalRow,       subtotalExTax);
   setV('Y' + (subtotalRow + 1), taxAmt);
   setV('Y' + (subtotalRow + 2), totalAmt);
