@@ -888,14 +888,18 @@
 
   <div class="controls">
     <div class="controls-left">
-      <div class="search-box">
+      <!-- v111: 検索テキストはカード直下・フル幅 -->
+      <div class="search-box" style="flex-basis:100%;width:100%">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名で検索…" oninput="renderAll()">
       </div>
-      <!-- v111: 部分一致検索（駐車場関連） -->
-      <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+      <!-- v111: 部分一致検索（仕入先） -->
+      <div class="filter-row" style="flex-basis:100%;width:100%;display:flex;gap:6px;margin-top:6px">
         <input type="text" id="advSupplierName" placeholder="仕入先名（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
         <input type="text" id="advSupplierTel" placeholder="仕入先TEL（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
+      </div>
+      <!-- v111: 部分一致検索（駐車場） -->
+      <div class="filter-row" style="flex-basis:100%;width:100%;display:flex;gap:6px;margin-top:6px">
         <input type="text" id="advLotName" placeholder="駐車場名（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
         <input type="text" id="advLotAddress" placeholder="駐車場住所（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
       </div>
