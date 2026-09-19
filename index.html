@@ -919,6 +919,16 @@
             <option value="unpaid">未入金のみ（未請求・請求済）</option>
           </select>
         </div>
+        <!-- v111: 保証金返還状態 -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">🔒 保証金:</label>
+          <select id="advDepositStatus" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <option value="">すべて</option>
+            <option value="returned">返還済みのみ</option>
+            <option value="unreturned">未返還のみ</option>
+            <option value="partial">差額あり（部分返還）</option>
+          </select>
+        </div>
         <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;white-space:nowrap">条件をクリア</button>
       </div>
     </div>
@@ -3419,7 +3429,7 @@ function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}re
 function _advSearchActiveHighlight(){ /* 展開UIを撤廃したためno-op（互換維持） */ }
 function toggleAdvSearch(){ /* 撤廃されたトグルの互換用no-op */ }
 function clearAdvSearch(){
-  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus'].forEach(id=>{
+  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus','advDepositStatus'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
@@ -3445,12 +3455,15 @@ function getFiltered(){
   const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
   const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
   const advPayStatus=document.getElementById('advPayStatus')?.value||''; // '' / 'paid' / 'unpaid'
+  const advDepositStatus=document.getElementById('advDepositStatus')?.value||''; // '' / 'returned' / 'unreturned' / 'partial'
   if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
     if(filterUnpaidPL && !_caseHasUnpaidPL(c))return false;
     // v111: 解約連絡フィルタ
     if(filterCancelNotice && !_caseHasCancelNoticeAlert(c))return false;
+    // v111: 保証金未返還フィルタ
+    if(filterDepositUnreturned && !_caseHasUnreturnedDeposit(c))return false;
     // v111: 詳細検索 入金期日 FROM-TO
     if(advPayDueFrom||advPayDueTo){
       const pdue=c.paymentDue||'';
@@ -3490,6 +3503,26 @@ function getFiltered(){
     // v111: 入金有無フィルタ
     if(advPayStatus==='paid' && c.status!=='入金済')return false;
     if(advPayStatus==='unpaid' && !['未請求','請求済'].includes(c.status))return false;
+    // v111: 保証金返還状態フィルタ
+    if(advDepositStatus){
+      const _plsWithDep=(c.parkingLots||[]).filter(pl=>pl&&(parseFloat(pl.deposit)||0)>0&&(parseInt(pl.units)||0)>0);
+      if(_plsWithDep.length===0)return false;
+      if(advDepositStatus==='returned'){
+        // 全ての保証金あり駐車場が返還済み
+        if(!_plsWithDep.every(pl=>pl.depositReturnedDate))return false;
+      } else if(advDepositStatus==='unreturned'){
+        // 未返還が1件でもある
+        if(!_plsWithDep.some(pl=>!pl.depositReturnedDate))return false;
+      } else if(advDepositStatus==='partial'){
+        // 差額返還が1件でもある
+        if(!_plsWithDep.some(pl=>{
+          if(!pl.depositReturnedDate)return false;
+          if(pl.depositReturnedAmount==null||pl.depositReturnedAmount==='')return false;
+          const total=(parseFloat(pl.deposit)||0)*(parseInt(pl.units)||0);
+          return parseFloat(pl.depositReturnedAmount)!==total;
+        }))return false;
+      }
+    }
     if(activeStatuses){if(!activeStatuses.includes(c.status))return false;}
     else if(st&&c.status!==st)return false;
     if(yr&&!c.caseNo.startsWith(yr+'-'))return false;
@@ -3593,6 +3626,8 @@ function filterByStatuses(arr, cardEl) {
   } else {
     activeStatuses = arr;
     filterUnpaidPL = false; // 他フィルタと排他
+    filterCancelNotice = false;
+    filterDepositUnreturned = false;
     document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
     if (cardEl) cardEl.classList.add('active');
   }
@@ -3606,6 +3641,8 @@ function filterUnpaidParking(cardEl) {
   } else {
     filterUnpaidPL = true;
     activeStatuses = null; // 他フィルタと排他
+    filterCancelNotice = false;
+    filterDepositUnreturned = false;
     document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
     if (cardEl) cardEl.classList.add('active');
   }
@@ -3701,10 +3738,43 @@ function filterCancelNoticeParking(cardEl) {
     filterCancelNotice = true;
     activeStatuses = null;
     filterUnpaidPL = false;
+    filterDepositUnreturned = false;
     document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
     if (cardEl) cardEl.classList.add('active');
   }
   renderAll();
+}
+
+// v111: 保証金 未返還フィルタ（契約中の返還予定＋契約終了後の未返還を含む）
+let filterDepositUnreturned = false;
+function filterDepositUnreturnedParking(cardEl) {
+  if (filterDepositUnreturned) {
+    filterDepositUnreturned = false;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+  } else {
+    filterDepositUnreturned = true;
+    activeStatuses = null;
+    filterUnpaidPL = false;
+    filterCancelNotice = false;
+    document.querySelectorAll('.stat-card.active').forEach(el => el.classList.remove('active'));
+    if (cardEl) cardEl.classList.add('active');
+  }
+  renderAll();
+}
+
+// v111: 案件が「保証金未返還駐車場」を含むか判定（保証金>0・契約済み・返還日未入力）
+function _caseHasUnreturnedDeposit(c) {
+  if (!c) return false;
+  const PAY_TARGET = ['契約中','未請求','請求済','入金済'];
+  if (!PAY_TARGET.includes(c.status)) return false;
+  return (c.parkingLots || []).some(pl => {
+    if (!pl) return false;
+    const dep = parseFloat(pl.deposit) || 0;
+    const units = parseInt(pl.units) || 0;
+    if (dep <= 0 || units <= 0) return false;
+    if (!pl.contractStart || !pl.contractEnd) return false;
+    return !pl.depositReturnedDate; // 返還受領日未入力
+  });
 }
 
 // v111: 契約終了月の前月末日を返す（YYYY-MM-DD 形式、契約終了日が無ければ null）
@@ -3961,6 +4031,23 @@ function renderStats(){
       if (days <= 30) cancelNoticeCount++;
     });
   });
+  // v111: 保証金未返還駐車場（返還予定＋契約終了後未返還を合算）
+  let depUnreturnedCount = 0, depUnreturnedTotal = 0, depOverdueCount = 0;
+  const _dToday = (typeof _todayLocalISO==='function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
+  _statCases.forEach(c => {
+    if (!PAY_TARGET_STATUSES.includes(c.status)) return;
+    (c.parkingLots || []).forEach(pl => {
+      if (!pl) return;
+      const dep = parseFloat(pl.deposit) || 0;
+      const units = parseInt(pl.units) || 0;
+      if (dep <= 0 || units <= 0) return;
+      if (!pl.contractStart || !pl.contractEnd) return;
+      if (pl.depositReturnedDate) return; // 返還済みは除外
+      depUnreturnedCount++;
+      depUnreturnedTotal += dep * units;
+      if (pl.contractEnd < _dToday) depOverdueCount++; // 契約終了後の未返還
+    });
+  });
   function _isAct(a){return activeStatuses&&JSON.stringify(activeStatuses)===JSON.stringify(a);}
   document.getElementById('statsBar').innerHTML=
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
@@ -3977,7 +4064,9 @@ function renderStats(){
     /* v111: 仕入未振込駐車場（地主・管理会社への振込未完了） */
     '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>'+
     /* v111: 要解約連絡（30日以内or期限超過・未送信） */
-    '<div class="stat-card clickable'+(filterCancelNotice?' active':'')+'" onclick="filterCancelNoticeParking(this)"><div class="stat-label">要解約連絡 <span style="font-size:10px;font-weight:400">30日以内</span></div><div class="stat-value" style="color:'+(cancelNoticeCount>0?'var(--danger)':'var(--gray-500)')+'">'+cancelNoticeCount+'</div><div class="stat-sub">未送信・期限30日以内</div></div>';
+    '<div class="stat-card clickable'+(filterCancelNotice?' active':'')+'" onclick="filterCancelNoticeParking(this)"><div class="stat-label">要解約連絡 <span style="font-size:10px;font-weight:400">30日以内</span></div><div class="stat-value" style="color:'+(cancelNoticeCount>0?'var(--danger)':'var(--gray-500)')+'">'+cancelNoticeCount+'</div><div class="stat-sub">未送信・期限30日以内</div></div>'+
+    /* v111: 保証金未返還駐車場（契約中の返還予定＋契約終了後の未返還） */
+    '<div class="stat-card clickable'+(filterDepositUnreturned?' active':'')+'" onclick="filterDepositUnreturnedParking(this)"><div class="stat-label">未返還保証金 <span style="font-size:10px;font-weight:400">￥'+fmt(depUnreturnedTotal)+'</span></div><div class="stat-value" style="color:'+(depOverdueCount>0?'var(--danger)':(depUnreturnedCount>0?'var(--warning)':'var(--gray-500)'))+'">'+depUnreturnedCount+'</div><div class="stat-sub">'+(depOverdueCount>0?'契約終了後 '+depOverdueCount+'件':'返還予定含む')+'</div></div>';
 }
 function updateYearFilter(){
   // v111: yearFilter/periodFilter ドロップダウンは削除済み。null チェックで安全化。
@@ -4085,7 +4174,7 @@ function calcAgencyFeeShare(c, plIdx, useContractedOnly){
 // ── Excel出力 ──
 const CSV_HEADERS=['案件番号','進捗状況','顧客名','拠点名','担当者名','現場名','現場住所','依頼受付日','依頼開始日','依頼終了日','依頼台数','依頼備考','提案日','見積売上(税別)','見積仕入(税別)','見積粗利(税別)','受注日','契約開始日','契約終了日','確定売上(税別)','確定仕入(税別)','確定粗利(税別)','税込確定売上','確定台数','最遅仕入支払日','振込状況','請求日','入金期日','入金日','入金額(税込)','案件メモ'];
 // v111: 駐車場単位Excel出力用 追加ヘッダー
-const CSV_LOT_HEADERS=['駐車場No','駐車場名','駐車場住所','徒歩(分)','賃借形態','料金タイプ','契約台数','契約開始','契約終了','見積開始','見積終了','仕入賃料(税込)','見積賃料(税別)','仕入手数料','見積手数料','仕入礼金','見積礼金','仕入封鎖手数料','見積封鎖手数料','保証金','調整金額','仕入金額(税込)','請求額(税込)','仕入先名','仕入先電話','駐車場の課税区分','地主税区分','管理会社税区分','貸主住所','備考'];
+const CSV_LOT_HEADERS=['駐車場No','駐車場名','駐車場住所','徒歩(分)','賃借形態','料金タイプ','契約台数','契約開始','契約終了','見積開始','見積終了','仕入賃料(税込)','見積賃料(税別)','仕入手数料','見積手数料','仕入礼金','見積礼金','仕入封鎖手数料','見積封鎖手数料','保証金','調整金額','仕入金額(税込)','請求額(税込)','仕入先名','仕入先電話','駐車場の課税区分','地主税区分','管理会社税区分','貸主住所','備考','保証金返還受領日','保証金返還金額','保証金返還メモ'];
 function csvCell(v){const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCSV(){
   if(!cases.length){showToast('エクスポートする案件がありません');return;}
@@ -4252,7 +4341,11 @@ async function exportCSVByLot(){
         purchaseRT || '', invoiceRT || '',
         pl.supplierName??'', pl.supplierPhone??'',
         taxCat, ownerTax, managerTax,
-        pl.lessorAddress??'', pl.lotNote??''
+        pl.lessorAddress??'', pl.lotNote??'',
+        // v111: 保証金返還管理
+        fmtDateJP(pl.depositReturnedDate),
+        (pl.depositReturnedAmount!=null && pl.depositReturnedAmount!=='') ? pl.depositReturnedAmount : '',
+        pl.depositReturnNote??''
       ];
       dataRows.push(caseCols.concat(lotCols));
     });
@@ -4284,7 +4377,7 @@ async function exportCSVByLot(){
   let colsXml='<cols>';
   // 案件列 → 駐車場列、ざっくり既定幅
   const caseW=[12,8,16,12,10,20,20,12,12,12,8,20,12,14,14,14,12,12,12,14,14,14,14,8,12,12,12,14,20];
-  const lotW =[7,18,22,8,10,8,9,12,12,12,12,12,12,11,11,11,11,12,12,10,11,14,14,16,14,12,12,14,18,16];
+  const lotW =[7,18,22,8,10,8,9,12,12,12,12,12,12,11,11,11,11,12,12,10,11,14,14,16,14,12,12,14,18,16,14,12,20];
   const allW = caseW.concat(lotW);
   HEADERS.forEach((_,i)=>{colsXml+=`<col min="${i+1}" max="${i+1}" width="${allW[i]||12}" customWidth="1"/>`;});
   colsXml+='</cols>';
@@ -4411,6 +4504,10 @@ function addParkingLotCard(pl={}) {
           '<div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" name="pl_cancelNoticeRequired" '+(pl.cancelNoticeRequired?'checked':'')+' style="cursor:pointer">📞 解約連絡が必要 <span class="auto-tag">契約終了月の前月末が期限</span></label></div>' +
           '<div class="form-group"><label>解約連絡送信日 <span class="auto-tag">送信済み日付</span></label><input type="date" name="pl_cancelNoticeSentDate" value="'+(pl.cancelNoticeSentDate||'')+'"></div>' +
           '<div class="form-group span-2"><label>解約連絡メモ</label><input type="text" name="pl_cancelNoticeMemo" placeholder="例：1台のみのためニーリーに直接連絡必要" value="'+esc(pl.cancelNoticeMemo||'')+'"></div>' +
+          /* v111: 保証金返還管理 */
+          '<div class="form-group"><label>保証金返還受領日 <span class="auto-tag">受領日</span></label><input type="date" name="pl_depositReturnedDate" value="'+(pl.depositReturnedDate||'')+'"></div>' +
+          '<div class="form-group"><label>保証金返還金額 <span class="auto-tag">差額がある場合のみ</span></label><input type="number" name="pl_depositReturnedAmount" min="0" placeholder="空欄=全額返還" value="'+(pl.depositReturnedAmount!=null?pl.depositReturnedAmount:'')+'"></div>' +
+          '<div class="form-group"><label>保証金返還メモ</label><input type="text" name="pl_depositReturnNote" placeholder="例：原状回復費用 ¥5,000 差引" value="'+esc(pl.depositReturnNote||'')+'"></div>' +
         '</div></div>' +
         '<div class="form-group"><label>保証金 <span class="auto-tag">1台あたり</span></label><input type="number" name="pl_deposit" min="0" placeholder="0" value="'+(pl.deposit!=null?pl.deposit:'')+'" onchange="calcPlPurchase(this)"></div>' +
         '<div class="form-group"><label>開始月日割</label>' +
@@ -4913,6 +5010,9 @@ function getParkingLotsFromForm(){
       cancelNoticeRequired:g('pl_cancelNoticeRequired')?g('pl_cancelNoticeRequired').checked:false, // v111: 解約連絡が必要
       cancelNoticeSentDate:g('pl_cancelNoticeSentDate')?g('pl_cancelNoticeSentDate').value||'':'', // v111: 解約連絡送信日
       cancelNoticeMemo:g('pl_cancelNoticeMemo')?g('pl_cancelNoticeMemo').value.trim()||'':'', // v111: 解約連絡メモ
+      depositReturnedDate:g('pl_depositReturnedDate')?g('pl_depositReturnedDate').value||'':'', // v111: 保証金返還受領日
+      depositReturnedAmount:g('pl_depositReturnedAmount')?(parseFloat(g('pl_depositReturnedAmount').value)||null):null, // v111: 保証金返還金額（差額時のみ入力）
+      depositReturnNote:g('pl_depositReturnNote')?g('pl_depositReturnNote').value.trim()||'':'', // v111: 保証金返還メモ
       purchaseAmount:g('pl_purchaseAmount')?(parseFloat((g('pl_purchaseAmount').value||'').replace(/,/g,''))||null):null,
       purchaseWithDeposit:g('pl_purchaseWithDeposit')?(parseFloat((g('pl_purchaseWithDeposit').value||'').replace(/,/g,''))||null):null,
       invoiceAmount:g('pl_invoiceAmount')?(parseFloat((g('pl_invoiceAmount').value||'').replace(/,/g,''))||null):null,
@@ -5042,6 +5142,59 @@ function renderParkingLotsDetail(c){
           '</div>';
           if (pl.cancelNoticeMemo) {
             h+='<div style="margin-top:2px;padding:2px 10px;font-size:10px;color:#6b7280">メモ: '+esc(pl.cancelNoticeMemo)+'</div>';
+          }
+        }
+        // v111: 保証金返還ステータス表示（保証金あり駐車場のみ）
+        var _depAmt = (parseFloat(pl.deposit)||0);
+        var _depUnits = (parseInt(pl.units)||0);
+        var _depTotal = _depAmt * _depUnits;
+        if (_depAmt > 0 && _depUnits > 0) {
+          var _drDate = pl.depositReturnedDate || '';
+          var _drAmt  = (pl.depositReturnedAmount!=null && pl.depositReturnedAmount!=='') ? parseFloat(pl.depositReturnedAmount) : null;
+          var _drNote = pl.depositReturnNote || '';
+          var _endStr = pl.contractEnd || '';
+          var _todayStr = (typeof _todayLocalISO==='function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
+          var _drLabel = '', _drColor = '#6b7280', _drBg = '#f9fafb', _drBd = '#e5e7eb', _drIcon = '💰';
+          if (_drDate) {
+            // 返還済み
+            var _diff = (_drAmt!=null) ? (_depTotal - _drAmt) : 0;
+            if (_drAmt==null || _diff===0) {
+              _drLabel = '✅ ' + _drDate.replace(/-/g,'/') + ' 全額返還 (¥'+fmt(_depTotal)+')';
+            } else if (_diff > 0) {
+              _drLabel = '✅ ' + _drDate.replace(/-/g,'/') + ' ¥'+fmt(_drAmt)+' 返還（¥'+fmt(_diff)+' 差引）';
+            } else {
+              _drLabel = '✅ ' + _drDate.replace(/-/g,'/') + ' ¥'+fmt(_drAmt)+' 返還（超過返還）';
+            }
+            _drColor = '#16a34a'; _drBg = '#f0fdf4'; _drBd = '#bbf7d0';
+          } else if (!_endStr) {
+            _drLabel = '⏳ 未返還（契約終了日未設定）';
+            _drColor = '#6b7280'; _drBg = '#f9fafb'; _drBd = '#e5e7eb';
+          } else if (_endStr >= _todayStr) {
+            // まだ契約中：返還予定
+            var _tDay = new Date(_todayStr+'T00:00:00');
+            var _eDay = new Date(_endStr+'T00:00:00');
+            var _daysToEnd = Math.round((_eDay.getTime()-_tDay.getTime())/86400000);
+            _drLabel = '⏳ 契約中（返還予定額 ¥'+fmt(_depTotal)+'／契約終了まで '+_daysToEnd+'日）';
+            _drColor = '#6b7280'; _drBg = '#f9fafb'; _drBd = '#e5e7eb';
+          } else {
+            // 契約終了後・未返還
+            var _tDay2 = new Date(_todayStr+'T00:00:00');
+            var _eDay2 = new Date(_endStr+'T00:00:00');
+            var _daysPast = Math.round((_tDay2.getTime()-_eDay2.getTime())/86400000);
+            if (_daysPast <= 30) {
+              _drLabel = '⚠ 未返還（契約終了から '+_daysPast+'日経過／¥'+fmt(_depTotal)+'）';
+              _drColor = '#ca8a04'; _drBg = '#fefce8'; _drBd = '#fef08a'; _drIcon = '⚠';
+            } else {
+              _drLabel = '🚨 未返還（契約終了から '+_daysPast+'日経過／¥'+fmt(_depTotal)+'）';
+              _drColor = '#dc2626'; _drBg = '#fef2f2'; _drBd = '#fecaca'; _drIcon = '🚨';
+            }
+          }
+          h+='<div style="margin-top:4px;background:'+_drBg+';border:1px solid '+_drBd+';border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
+            '<div style="font-size:10px;font-weight:700;color:'+_drColor+'">'+_drIcon+' 保証金返還</div>'+
+            '<div style="font-size:11px;font-weight:700;color:'+_drColor+';text-align:right">'+_drLabel+'</div>'+
+          '</div>';
+          if (_drNote) {
+            h+='<div style="margin-top:2px;padding:2px 10px;font-size:10px;color:#6b7280">メモ: '+esc(_drNote)+'</div>';
           }
         }
       }
