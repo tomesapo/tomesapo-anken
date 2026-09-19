@@ -903,6 +903,21 @@
         <input type="text" id="advLotName" placeholder="駐車場名（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
         <input type="text" id="advLotAddress" placeholder="駐車場住所（部分一致）" oninput="renderAll()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;min-width:140px;flex:1">
       </div>
+      <!-- v111: 契約開始日 FROM-TO / 契約終了日 FROM-TO -->
+      <div class="filter-row" style="flex-basis:100%;width:100%;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">契約開始日：</label>
+          <input type="date" id="advContractStartFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <span style="color:#9ca3af">〜</span>
+          <input type="date" id="advContractStartTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">契約終了日：</label>
+          <input type="date" id="advContractEndFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <span style="color:#9ca3af">〜</span>
+          <input type="date" id="advContractEndTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        </div>
+      </div>
       <!-- v111: 入金期日 FROM-TO + 保証金あり -->
       <div class="filter-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px">
@@ -956,6 +971,9 @@
           <th onclick="sortBy('estSales')" style="text-align:right">見積売上 <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('estProfit')" style="text-align:right">見積粗利 <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('orderDate')">受注日 <span class="sort-icon">&#8597;</span></th>
+          <th onclick="sortBy('contractStart')">契約開始日 <span class="sort-icon">&#8597;</span></th>
+          <th onclick="sortBy('contractEnd')">契約終了日 <span class="sort-icon">&#8597;</span></th>
+          <th style="text-align:right">確定台数</th>
           <th onclick="sortBy('fixedSales')" style="text-align:right">確定売上<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税別</span> <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('taxIncludedSales')" style="text-align:right">請求金額<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税込</span> <span class="sort-icon">&#8597;</span></th>
           <th onclick="sortBy('fixedProfit')" style="text-align:right">確定粗利<br><span style="font-size:10px;font-weight:normal;color:#6b7280">税別</span> <span class="sort-icon">&#8597;</span></th>
@@ -3433,7 +3451,7 @@ function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}re
 function _advSearchActiveHighlight(){ /* 展開UIを撤廃したためno-op（互換維持） */ }
 function toggleAdvSearch(){ /* 撤廃されたトグルの互換用no-op */ }
 function clearAdvSearch(){
-  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus','advDepositStatus'].forEach(id=>{
+  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus','advDepositStatus','advContractStartFrom','advContractStartTo','advContractEndFrom','advContractEndTo'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
@@ -3460,6 +3478,10 @@ function getFiltered(){
   const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
   const advPayStatus=document.getElementById('advPayStatus')?.value||''; // '' / 'paid' / 'unpaid'
   const advDepositStatus=document.getElementById('advDepositStatus')?.value||''; // '' / 'returned' / 'unreturned' / 'partial'
+  const advContractStartFrom=document.getElementById('advContractStartFrom')?.value||'';
+  const advContractStartTo=document.getElementById('advContractStartTo')?.value||'';
+  const advContractEndFrom=document.getElementById('advContractEndFrom')?.value||'';
+  const advContractEndTo=document.getElementById('advContractEndTo')?.value||'';
   if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
@@ -3474,6 +3496,28 @@ function getFiltered(){
       if(!pdue)return false;
       if(advPayDueFrom&&pdue<advPayDueFrom)return false;
       if(advPayDueTo&&pdue>advPayDueTo)return false;
+    }
+    // v111: 契約開始日 FROM-TO（案件c.contractStart または 任意のpl.contractStart が範囲内）
+    if(advContractStartFrom||advContractStartTo){
+      const _cands=[c.contractStart||''].concat((c.parkingLots||[]).map(pl=>pl&&pl.contractStart||'')).filter(d=>d);
+      if(_cands.length===0)return false;
+      const _hit=_cands.some(d=>{
+        if(advContractStartFrom&&d<advContractStartFrom)return false;
+        if(advContractStartTo&&d>advContractStartTo)return false;
+        return true;
+      });
+      if(!_hit)return false;
+    }
+    // v111: 契約終了日 FROM-TO（案件c.contractEnd または 任意のpl.contractEnd が範囲内）
+    if(advContractEndFrom||advContractEndTo){
+      const _cands=[c.contractEnd||''].concat((c.parkingLots||[]).map(pl=>pl&&pl.contractEnd||'')).filter(d=>d);
+      if(_cands.length===0)return false;
+      const _hit=_cands.some(d=>{
+        if(advContractEndFrom&&d<advContractEndFrom)return false;
+        if(advContractEndTo&&d>advContractEndTo)return false;
+        return true;
+      });
+      if(!_hit)return false;
     }
     // v111: 詳細検索 保証金あり駐車場を含む案件のみ
     if(advHasDeposit){
@@ -3571,17 +3615,21 @@ function renderTable(){
       '<td class="num-cell">'+(c.estSales!=null?'&#165;'+fmt(c.estSales):'')+'</td>'+
       '<td class="num-cell '+epC+'">'+(ep!=null?'&#165;'+fmt(ep):'')+'</td>'+
       '<td>'+fmtDate(c.orderDate)+'</td>'+
-      // v111: 確定売上・粗利・税込確定売上をリアルタイム再計算（上部統計と一致）
+      '<td>'+fmtDate(c.contractStart)+'</td>'+
+      '<td>'+fmtDate(c.contractEnd)+'</td>'+
+      // v111: 確定売上・粗利・税込確定売上・確定台数をリアルタイム再計算（上部統計と一致）
       (function(){
-        let _rS=0,_rP=0;
+        let _rS=0,_rP=0,_rU=0;
         (c.parkingLots||[]).forEach(pl=>{
           const r=_plFixedTotalsAllPeriod(pl,c);
           _rS+=r.sales||0; _rP+=r.purchase||0;
+          if(pl && pl.contractStart && pl.contractEnd && (parseInt(pl.units)||0)>0) _rU += parseInt(pl.units)||0;
         });
         const _rProfit = _rS - _rP;
         const _rTI = Math.round(_rS * 1.1);
         const _rC = _rProfit >= 0 ? 'profit-pos' : 'profit-neg';
-        return '<td class="num-cell">'+(_rS?'&#165;'+fmt(_rS):'')+'</td>'+
+        return '<td class="num-cell">'+(_rU>0?_rU:'')+'</td>'+
+          '<td class="num-cell">'+(_rS?'&#165;'+fmt(_rS):'')+'</td>'+
           '<td class="num-cell" style="font-weight:600">'+(_rS?'&#165;'+fmt(_rTI):'')+'</td>'+
           '<td class="num-cell '+_rC+'">'+(_rS?'&#165;'+fmt(_rProfit):'')+'</td>';
       })()+
