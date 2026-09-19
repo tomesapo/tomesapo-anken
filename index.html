@@ -10471,6 +10471,14 @@ function _depositRows() {
       const dep = parseFloat(pl.deposit || 0) || 0;
       const units = parseInt(pl.units || 0, 10) || 0;
       if (dep <= 0) return;
+      // v111: 保証金返還情報
+      const _drDate = pl.depositReturnedDate || '';
+      const _drAmtRaw = (pl.depositReturnedAmount!=null && pl.depositReturnedAmount!=='') ? parseFloat(pl.depositReturnedAmount) : null;
+      const _depTotal = dep * units;
+      // 返還金額：受領日入力あり かつ 金額空欄 → 全額返還と想定
+      let _drAmt = null;
+      if (_drDate) _drAmt = (_drAmtRaw!=null) ? _drAmtRaw : _depTotal;
+      const _drDiff = (_drDate && _drAmt!=null) ? (_depTotal - _drAmt) : null; // 差引額（プラス=差引あり）
       rows.push({
         caseId: c.id,
         caseNo: c.caseNo || '',
@@ -10484,9 +10492,15 @@ function _depositRows() {
         contractEnd: pl.contractEnd || c.contractEnd || '',
         units: units,
         depositPerUnit: dep,
-        depositTotal: dep * units,
+        depositTotal: _depTotal,
         customerName: c.customerName || '',
-        siteName: c.siteName || ''
+        siteName: c.siteName || '',
+        // v111: 保証金返還
+        returnedDate: _drDate,
+        returnedAmount: _drAmt,       // 返還済み額（未返還=null）
+        returnDiff: _drDiff,          // 差引額（返還済みかつ差額あり時のみnon-null）
+        returnNote: pl.depositReturnNote || '',
+        isReturned: !!_drDate
       });
     });
   });
@@ -10516,6 +10530,11 @@ function renderDepositView() {
 
   const totalDeposit = rows.reduce((s,r) => s + r.depositTotal, 0);
   const totalUnits = rows.reduce((s,r) => s + r.units, 0);
+  // v111: 返還集計
+  const totalReturned = rows.reduce((s,r) => s + (r.returnedAmount||0), 0);
+  const totalUnreturned = totalDeposit - totalReturned;
+  const returnedCount = rows.filter(r => r.isReturned).length;
+  const unreturnedCount = rows.length - returnedCount;
   const fmtN = n => (n||0).toLocaleString('ja-JP');
   const fmtD = d => {
     if (!d) return '';
@@ -10530,6 +10549,29 @@ function renderDepositView() {
   }
 
   let html = '<div class="sv-filter-row"><span style="font-size:12px;color:#6b7280">対象：未請求・請求済・入金済の案件で保証金が発生しているもの（契約中は仕入先請求書待ちのため除外）</span></div>';
+  // v111: 上部サマリーカード
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:8px 0 12px">'+
+    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:11px;color:#166534;font-weight:600">✅ 返還済み</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#16a34a">¥'+fmtN(totalReturned)+'</div>'+
+      '<div style="font-size:11px;color:#6b7280">'+returnedCount+' 件</div>'+
+    '</div>'+
+    '<div style="background:#fefce8;border:1px solid #fef08a;border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:11px;color:#854d0e;font-weight:600">⏳ 未返還残高</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#ca8a04">¥'+fmtN(totalUnreturned)+'</div>'+
+      '<div style="font-size:11px;color:#6b7280">'+unreturnedCount+' 件</div>'+
+    '</div>'+
+    '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:11px;color:#374151;font-weight:600">🔒 総額</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#1e3a5f">¥'+fmtN(totalDeposit)+'</div>'+
+      '<div style="font-size:11px;color:#6b7280">'+rows.length+' 件</div>'+
+    '</div>'+
+    '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:11px;color:#1e40af;font-weight:600">📊 返還率</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#2563eb">'+(totalDeposit>0?((totalReturned/totalDeposit)*100).toFixed(1):'0.0')+'%</div>'+
+      '<div style="font-size:11px;color:#6b7280">金額ベース</div>'+
+    '</div>'+
+    '</div>';
   html += '<div class="mobile-scroll-wrap"><table class="sv-table mobile-card-table" style="font-size:12.5px">';
   html += '<thead><tr>';
   html += sortHeader('案件番号','caseNo','left');
@@ -10542,9 +10584,34 @@ function renderDepositView() {
   html += sortHeader('台数','units','right');
   html += sortHeader('保証金/台','depositPerUnit','right');
   html += sortHeader('保証金合計','depositTotal','right');
+  // v111: 返還関連
+  html += sortHeader('返還状態','isReturned','left');
+  html += sortHeader('返還日','returnedDate','left');
+  html += sortHeader('返還金額','returnedAmount','right');
+  html += sortHeader('差引額','returnDiff','right');
   html += '</tr></thead><tbody>';
 
   rows.forEach(r => {
+    // v111: 返還状態バッジ
+    let _rsHtml = '';
+    if (r.isReturned) {
+      if (r.returnDiff && r.returnDiff > 0) {
+        _rsHtml = '<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">✅ 差額返還</span>';
+      } else {
+        _rsHtml = '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">✅ 返還済</span>';
+      }
+    } else {
+      // 契約終了後かどうか判定
+      const _today = (typeof _todayLocalISO==='function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
+      if (r.contractEnd && r.contractEnd < _today) {
+        _rsHtml = '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">🚨 未返還</span>';
+      } else {
+        _rsHtml = '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">⏳ 返還予定</span>';
+      }
+    }
+    const _rAmtStr = (r.returnedAmount!=null) ? '¥'+fmtN(r.returnedAmount) : '—';
+    const _rDiffStr = (r.returnDiff!=null && r.returnDiff!==0) ? '¥'+fmtN(r.returnDiff) : (r.isReturned ? '¥0' : '—');
+    const _rDiffColor = (r.returnDiff && r.returnDiff>0) ? '#dc2626' : '#6b7280';
     html += '<tr style="cursor:pointer" onclick="closeDepositView();openDetail(\''+r.caseId+'\')">';
     html += '<td style="text-align:left;font-weight:600;color:#1e3a5f">' + esc(r.caseNo) + ' ／ ' + esc(r.plName) + '</td>';
     html += '<td data-label="駐車場名" style="text-align:left">' + esc(r.plName) + '</td>';
@@ -10556,13 +10623,22 @@ function renderDepositView() {
     html += '<td data-label="台数">' + r.units + '</td>';
     html += '<td data-label="保証金/台">¥' + fmtN(r.depositPerUnit) + '</td>';
     html += '<td data-label="保証金合計" style="font-weight:600;color:#16a34a">¥' + fmtN(r.depositTotal) + '</td>';
+    html += '<td data-label="返還状態" style="text-align:left;white-space:nowrap">' + _rsHtml + (r.returnNote?'<div style="font-size:10px;color:#6b7280;margin-top:2px">'+esc(r.returnNote)+'</div>':'') + '</td>';
+    html += '<td data-label="返還日" style="text-align:left;color:#6b7280;white-space:nowrap">' + (r.returnedDate?fmtD(r.returnedDate):'—') + '</td>';
+    html += '<td data-label="返還金額" style="font-weight:600;color:'+(r.isReturned?'#16a34a':'#9ca3af')+'">' + _rAmtStr + '</td>';
+    html += '<td data-label="差引額" style="color:'+_rDiffColor+'">' + _rDiffStr + '</td>';
     html += '</tr>';
   });
 
   html += '<tr class="sv-total"><td colspan="7" style="text-align:right;padding-right:12px">合計（'+rows.length+'件）</td>';
   html += '<td data-label="台数合計">' + totalUnits + '</td>';
   html += '<td class="no-label">－</td>';
-  html += '<td data-label="保証金合計">¥' + fmtN(totalDeposit) + '</td></tr>';
+  html += '<td data-label="保証金合計">¥' + fmtN(totalDeposit) + '</td>';
+  html += '<td class="no-label" style="text-align:left">返還済 '+returnedCount+' / 未返還 '+unreturnedCount+'</td>';
+  html += '<td class="no-label">－</td>';
+  html += '<td data-label="返還合計" style="color:#16a34a">¥' + fmtN(totalReturned) + '</td>';
+  html += '<td data-label="未返還残高" style="color:#ca8a04">¥' + fmtN(totalUnreturned) + '</td>';
+  html += '</tr>';
   html += '</tbody></table></div>';
 
   body.innerHTML = html;
@@ -10577,12 +10653,14 @@ function _sortDepositBy(key) {
 function exportDepositCSV() {
   const rows = _depositRows();
   if (!rows.length) { showToast('出力対象がありません'); return; }
-  const headers = ['案件番号','駐車場名','駐車場住所','仕入先名','仕入先電話','仕入先FAX','契約開始日','契約終了日','台数','保証金(1台あたり)','保証金合計','顧客名','現場名'];
+  const headers = ['案件番号','駐車場名','駐車場住所','仕入先名','仕入先電話','仕入先FAX','契約開始日','契約終了日','台数','保証金(1台あたり)','保証金合計','返還状態','返還日','返還金額','差引額','返還メモ','顧客名','現場名'];
   const lines = [headers.map(_csvCell).join(',')];
   rows.forEach(r => {
+    const _stat = r.isReturned ? ((r.returnDiff && r.returnDiff>0) ? '差額返還' : '返還済') : '未返還';
     lines.push([
       r.caseNo, r.plName, r.plAddress, r.supplierName, r.supplierPhone, r.supplierFax,
       r.contractStart, r.contractEnd, r.units, r.depositPerUnit, r.depositTotal,
+      _stat, r.returnedDate||'', (r.returnedAmount!=null?r.returnedAmount:''), (r.returnDiff!=null?r.returnDiff:''), r.returnNote||'',
       r.customerName, r.siteName
     ].map(_csvCell).join(','));
   });
