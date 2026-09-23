@@ -918,13 +918,19 @@
           <input type="date" id="advContractEndTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         </div>
       </div>
-      <!-- v111: 入金期日 FROM-TO + 保証金あり -->
+      <!-- v111: 入金期日 FROM-TO + 入金日 FROM-TO + 保証金あり -->
       <div class="filter-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">入金期日：</label>
           <input type="date" id="advPayDueFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
           <span style="color:#9ca3af">〜</span>
           <input type="date" id="advPayDueTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">入金日：</label>
+          <input type="date" id="advPayDateFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <span style="color:#9ca3af">〜</span>
+          <input type="date" id="advPayDateTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         </div>
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;white-space:nowrap">
           <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
@@ -3451,7 +3457,7 @@ function sortBy(key){if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=1;}re
 function _advSearchActiveHighlight(){ /* 展開UIを撤廃したためno-op（互換維持） */ }
 function toggleAdvSearch(){ /* 撤廃されたトグルの互換用no-op */ }
 function clearAdvSearch(){
-  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus','advDepositStatus','advContractStartFrom','advContractStartTo','advContractEndFrom','advContractEndTo'].forEach(id=>{
+  ['advPayDueFrom','advPayDueTo','advSupplierName','advSupplierTel','advLotName','advLotAddress','advPayStatus','advDepositStatus','advContractStartFrom','advContractStartTo','advContractEndFrom','advContractEndTo','advPayDateFrom','advPayDateTo'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
@@ -3482,6 +3488,8 @@ function getFiltered(){
   const advContractStartTo=document.getElementById('advContractStartTo')?.value||'';
   const advContractEndFrom=document.getElementById('advContractEndFrom')?.value||'';
   const advContractEndTo=document.getElementById('advContractEndTo')?.value||'';
+  const advPayDateFrom=document.getElementById('advPayDateFrom')?.value||'';
+  const advPayDateTo=document.getElementById('advPayDateTo')?.value||'';
   if (typeof _advSearchActiveHighlight === 'function') _advSearchActiveHighlight();
   let data=cases.filter(c=>{
     // v111: 未振込駐車場フィルタ（他フィルタと独立して適用）
@@ -3496,6 +3504,13 @@ function getFiltered(){
       if(!pdue)return false;
       if(advPayDueFrom&&pdue<advPayDueFrom)return false;
       if(advPayDueTo&&pdue>advPayDueTo)return false;
+    }
+    // v111: 詳細検索 入金日 FROM-TO
+    if(advPayDateFrom||advPayDateTo){
+      const pd=c.paymentDate||'';
+      if(!pd)return false;
+      if(advPayDateFrom&&pd<advPayDateFrom)return false;
+      if(advPayDateTo&&pd>advPayDateTo)return false;
     }
     // v111: 契約開始日 FROM-TO（案件c.contractStart または 任意のpl.contractStart が範囲内）
     if(advContractStartFrom||advContractStartTo){
