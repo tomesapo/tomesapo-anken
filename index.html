@@ -918,8 +918,8 @@
           <input type="date" id="advContractEndTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         </div>
       </div>
-      <!-- v111: 入金期日 FROM-TO + 入金日 FROM-TO + 保証金あり -->
-      <div class="filter-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
+      <!-- v111: 入金期日 FROM-TO + 入金日 FROM-TO（1行） -->
+      <div class="filter-row" style="flex-basis:100%;width:100%;display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">入金期日：</label>
           <input type="date" id="advPayDueFrom" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
@@ -932,6 +932,9 @@
           <span style="color:#9ca3af">〜</span>
           <input type="date" id="advPayDateTo" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         </div>
+      </div>
+      <!-- v111: 保証金ありチェック + 入金 + 保証金 + 条件クリア（1行） -->
+      <div class="filter-row" style="flex-basis:100%;width:100%;display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:center">
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;white-space:nowrap">
           <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
           🔒 保証金あり駐車場を含む案件のみ
@@ -944,7 +947,6 @@
             <option value="unpaid">未入金のみ（未請求・請求済）</option>
           </select>
         </div>
-        <!-- v111: 保証金返還状態 -->
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">🔒 保証金:</label>
           <select id="advDepositStatus" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
@@ -954,7 +956,7 @@
             <option value="partial">差額あり（部分返還）</option>
           </select>
         </div>
-        <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;white-space:nowrap">条件をクリア</button>
+        <button onclick="clearAdvSearch()" style="padding:5px 12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;white-space:nowrap;margin-left:auto">条件をクリア</button>
       </div>
     </div>
     <span id="countLabel" style="color:var(--gray-500);font-size:13px;white-space:nowrap"></span>
