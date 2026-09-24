@@ -4000,18 +4000,51 @@ function _getStatFilteredCases(){
   const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const advPayDueFrom=document.getElementById('advPayDueFrom')?.value||'';
   const advPayDueTo=document.getElementById('advPayDueTo')?.value||'';
+  const advPayDateFrom=document.getElementById('advPayDateFrom')?.value||'';
+  const advPayDateTo=document.getElementById('advPayDateTo')?.value||'';
   const advHasDeposit=document.getElementById('advHasDeposit')?.checked||false;
   const advSupplierName=(document.getElementById('advSupplierName')?.value||'').trim().toLowerCase();
   const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,'');
   const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
   const advLotAddress=(document.getElementById('advLotAddress')?.value||'').trim().toLowerCase();
   const advPayStatus=document.getElementById('advPayStatus')?.value||'';
+  const advDepositStatus=document.getElementById('advDepositStatus')?.value||'';
+  const advContractStartFrom=document.getElementById('advContractStartFrom')?.value||'';
+  const advContractStartTo=document.getElementById('advContractStartTo')?.value||'';
+  const advContractEndFrom=document.getElementById('advContractEndFrom')?.value||'';
+  const advContractEndTo=document.getElementById('advContractEndTo')?.value||'';
   return cases.filter(c=>{
     if(advPayDueFrom||advPayDueTo){
       const pdue=c.paymentDue||'';
       if(!pdue)return false;
       if(advPayDueFrom&&pdue<advPayDueFrom)return false;
       if(advPayDueTo&&pdue>advPayDueTo)return false;
+    }
+    if(advPayDateFrom||advPayDateTo){
+      const pd=c.paymentDate||'';
+      if(!pd)return false;
+      if(advPayDateFrom&&pd<advPayDateFrom)return false;
+      if(advPayDateTo&&pd>advPayDateTo)return false;
+    }
+    if(advContractStartFrom||advContractStartTo){
+      const _cands=[c.contractStart||''].concat((c.parkingLots||[]).map(pl=>pl&&pl.contractStart||'')).filter(d=>d);
+      if(_cands.length===0)return false;
+      const _hit=_cands.some(d=>{
+        if(advContractStartFrom&&d<advContractStartFrom)return false;
+        if(advContractStartTo&&d>advContractStartTo)return false;
+        return true;
+      });
+      if(!_hit)return false;
+    }
+    if(advContractEndFrom||advContractEndTo){
+      const _cands=[c.contractEnd||''].concat((c.parkingLots||[]).map(pl=>pl&&pl.contractEnd||'')).filter(d=>d);
+      if(_cands.length===0)return false;
+      const _hit=_cands.some(d=>{
+        if(advContractEndFrom&&d<advContractEndFrom)return false;
+        if(advContractEndTo&&d>advContractEndTo)return false;
+        return true;
+      });
+      if(!_hit)return false;
     }
     if(advHasDeposit){
       const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
@@ -4041,6 +4074,22 @@ function _getStatFilteredCases(){
     }
     if(advPayStatus==='paid' && c.status!=='入金済')return false;
     if(advPayStatus==='unpaid' && !['未請求','請求済'].includes(c.status))return false;
+    if(advDepositStatus){
+      const _plsWithDep=(c.parkingLots||[]).filter(pl=>pl&&(parseFloat(pl.deposit)||0)>0&&(parseInt(pl.units)||0)>0);
+      if(_plsWithDep.length===0)return false;
+      if(advDepositStatus==='returned'){
+        if(!_plsWithDep.every(pl=>pl.depositReturnedDate))return false;
+      } else if(advDepositStatus==='unreturned'){
+        if(!_plsWithDep.some(pl=>!pl.depositReturnedDate))return false;
+      } else if(advDepositStatus==='partial'){
+        if(!_plsWithDep.some(pl=>{
+          if(!pl.depositReturnedDate)return false;
+          if(pl.depositReturnedAmount==null||pl.depositReturnedAmount==='')return false;
+          const total=(parseFloat(pl.deposit)||0)*(parseInt(pl.units)||0);
+          return parseFloat(pl.depositReturnedAmount)!==total;
+        }))return false;
+      }
+    }
     if(q){
       if(!(c.caseNo||'').toLowerCase().includes(q)
         &&!(c.siteName||'').toLowerCase().includes(q)
