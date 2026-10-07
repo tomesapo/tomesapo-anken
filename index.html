@@ -10138,18 +10138,39 @@ async function generateCustomerContract(caseId, plIdx) {
   const dailyRate = Math.floor(quoteMonthly / 30);
   const quoteAdmin = pl.quoteAdminFee || 0;
   const quoteKey = pl.quoteKeyMoney || 0;
+  const quoteBlocking = pl.quoteBlockingFee || 0; // v111: コインP封鎖手数料（税別・一式）
   // v111: 賃借形態（土地一括時は units=1 固定）
   const isLump = (pl.rentMode === 'lump');
   const units = isLump ? 1 : (pl.units || 0);
+  // v111: 礼金の課税区分（nontaxable なら税加算しない）
+  const keyIsNonTaxable = (pl.keyMoneyTaxCategory === 'nontaxable');
+  // v111: 業者費用「任意金額」モードの按分（契約済み駐車場のみ対象）
+  const agencyFeeShare = (typeof calcAgencyFeeShare === 'function') ? (calcAgencyFeeShare(c, plIdx, true) || 0) : 0;
 
   // 月額（税込）
   const monthlyInTax = Math.round(quoteMonthly * 1.1);
   const monthlyTax = monthlyInTax - quoteMonthly;
-  // 期間総額（税別）
-  const totalExTax = quoteMonthly * units * months + dailyRate * units * days
-                    + quoteAdmin * units + quoteKey * units;
-  const totalInTax = Math.round(totalExTax * 1.1);
+  // 礼金（税別・税込・税額）
+  const keyTotalExTax = quoteKey * units;
+  const keyTotalInTax = keyIsNonTaxable ? keyTotalExTax : Math.round(keyTotalExTax * 1.1);
+  const keyTotalTax = keyTotalInTax - keyTotalExTax;
+  // 期間総額（税別）：賃料＋手数料＋礼金＋封鎖手数料＋業者費用按分
+  const rentPartExTax = quoteMonthly * units * months + dailyRate * units * days;
+  const totalExTax = rentPartExTax + quoteAdmin * units + keyTotalExTax + quoteBlocking + agencyFeeShare;
+  // 税込は、礼金が非課税の場合はその分を除外して計算
+  const taxablePart = totalExTax - (keyIsNonTaxable ? keyTotalExTax : 0);
+  const totalInTax = Math.round(taxablePart * 1.1) + (keyIsNonTaxable ? keyTotalExTax : 0);
   const totalTax = totalInTax - totalExTax;
+
+  // 礼金表示テキスト（賃料と同じ形式で税率・税額を併記）
+  let keyMoneyText = 'なし';
+  if (keyTotalExTax > 0) {
+    if (keyIsNonTaxable) {
+      keyMoneyText = '金 ' + _fmtN(keyTotalExTax) + ' 円（課税対象外）';
+    } else {
+      keyMoneyText = '金 ' + _fmtN(keyTotalInTax) + ' 円（消費税率10%・うち消費税 ' + _fmtN(keyTotalTax) + ' 円）';
+    }
+  }
 
   const data = {
     lotAddress: pl.address || '',
@@ -10162,7 +10183,7 @@ async function generateCustomerContract(caseId, plIdx) {
     monthlyTaxAmount: _fmtN(monthlyTax),
     totalAmountInTax: _fmtN(totalInTax),
     totalTaxAmount: _fmtN(totalTax),
-    keyMoneyText: quoteKey > 0 ? ('金 ' + _fmtN(quoteKey * units) + ' 円') : 'なし',
+    keyMoneyText: keyMoneyText,
     paymentDue: '請求書発行月の翌月末日',
     contractDate: _fmtDateJ(c.orderDate || _todayLocalISO()),
     ourAddress: branch.address || '',
