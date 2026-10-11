@@ -939,6 +939,10 @@
           <input type="checkbox" id="advHasDeposit" onchange="renderAll()" style="cursor:pointer">
           🔒 保証金あり駐車場を含む案件のみ
         </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="advHasCancelNotice" onchange="renderAll()" style="cursor:pointer">
+          📞 解約連絡が必要な駐車場を含む案件のみ
+        </label>
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#374151;font-weight:600;white-space:nowrap">💰 入金:</label>
           <select id="advPayStatus" onchange="renderAll()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
@@ -3463,6 +3467,7 @@ function clearAdvSearch(){
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('advHasDeposit');if(cb)cb.checked=false;
+  const cb2=document.getElementById('advHasCancelNotice');if(cb2)cb2.checked=false;
   renderAll();
 }
 function getCasePeriod(c){
@@ -3480,6 +3485,7 @@ function getFiltered(){
   const advPayDueFrom=document.getElementById('advPayDueFrom')?document.getElementById('advPayDueFrom').value:'';
   const advPayDueTo=document.getElementById('advPayDueTo')?document.getElementById('advPayDueTo').value:'';
   const advHasDeposit=document.getElementById('advHasDeposit')?document.getElementById('advHasDeposit').checked:false;
+  const advHasCancelNotice=document.getElementById('advHasCancelNotice')?document.getElementById('advHasCancelNotice').checked:false;
   const advSupplierName=(document.getElementById('advSupplierName')?.value||'').trim().toLowerCase();
   const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,''); // 数字のみで比較
   const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
@@ -3540,6 +3546,11 @@ function getFiltered(){
     if(advHasDeposit){
       const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
       if(!hasDep)return false;
+    }
+    // v111: 詳細検索 解約連絡が必要な駐車場を含む案件のみ
+    if(advHasCancelNotice){
+      const hasCN=(c.parkingLots||[]).some(pl=>pl&&pl.cancelNoticeRequired);
+      if(!hasCN)return false;
     }
     // v111: 部分一致検索（駐車場単位でANY一致）
     if(advSupplierName){
@@ -4003,6 +4014,7 @@ function _getStatFilteredCases(){
   const advPayDateFrom=document.getElementById('advPayDateFrom')?.value||'';
   const advPayDateTo=document.getElementById('advPayDateTo')?.value||'';
   const advHasDeposit=document.getElementById('advHasDeposit')?.checked||false;
+  const advHasCancelNotice=document.getElementById('advHasCancelNotice')?.checked||false;
   const advSupplierName=(document.getElementById('advSupplierName')?.value||'').trim().toLowerCase();
   const advSupplierTel=(document.getElementById('advSupplierTel')?.value||'').trim().replace(/[^\d]/g,'');
   const advLotName=(document.getElementById('advLotName')?.value||'').trim().toLowerCase();
@@ -4049,6 +4061,10 @@ function _getStatFilteredCases(){
     if(advHasDeposit){
       const hasDep=(c.parkingLots||[]).some(pl=>pl&&(parseFloat(pl.deposit)||0)>0);
       if(!hasDep)return false;
+    }
+    if(advHasCancelNotice){
+      const hasCN=(c.parkingLots||[]).some(pl=>pl&&pl.cancelNoticeRequired);
+      if(!hasCN)return false;
     }
     if(advSupplierName){
       const hit=(c.parkingLots||[]).some(pl=>pl&&(pl.supplierName||'').toLowerCase().includes(advSupplierName));
