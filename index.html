@@ -891,7 +891,7 @@
       <!-- v111: 検索テキストはカード直下・フル幅 -->
       <div class="search-box" style="flex-basis:100%;width:100%">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名で検索…" oninput="renderAll()">
+        <input type="text" id="searchInput" placeholder="案件番号・顧客名・担当者・現場名・現場住所で検索…" oninput="renderAll()">
       </div>
       <!-- v111: 部分一致検索（仕入先） -->
       <div class="filter-row" style="flex-basis:100%;width:100%;display:flex;gap:6px;margin-top:6px">
@@ -3605,7 +3605,8 @@ function getFiltered(){
     if(cu&&c.customerName!==cu)return false;
     if(pd&&String(getCasePeriod(c))!==pd)return false;
     if(q&&!c.caseNo.toLowerCase().includes(q)&&!c.siteName.toLowerCase().includes(q)
-        &&!(c.customerName||'').toLowerCase().includes(q)&&!(c.staffName||'').toLowerCase().includes(q))return false;
+        &&!(c.customerName||'').toLowerCase().includes(q)&&!(c.staffName||'').toLowerCase().includes(q)
+        &&!(c.siteAddress||'').toLowerCase().includes(q))return false;
     return true;
   });
   data.sort((a,b)=>{
@@ -4110,7 +4111,8 @@ function _getStatFilteredCases(){
       if(!(c.caseNo||'').toLowerCase().includes(q)
         &&!(c.siteName||'').toLowerCase().includes(q)
         &&!(c.customerName||'').toLowerCase().includes(q)
-        &&!(c.staffName||'').toLowerCase().includes(q))return false;
+        &&!(c.staffName||'').toLowerCase().includes(q)
+        &&!(c.siteAddress||'').toLowerCase().includes(q))return false;
     }
     return true;
   });
