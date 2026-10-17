@@ -10165,19 +10165,19 @@ async function generateCustomerContract(caseId, plIdx) {
   // v111: 業者費用「任意金額」モードの按分（契約済み駐車場のみ対象）
   const agencyFeeShare = (typeof calcAgencyFeeShare === 'function') ? (calcAgencyFeeShare(c, plIdx, true) || 0) : 0;
 
-  // 月額（税込）
-  const monthlyInTax = Math.round(quoteMonthly * 1.1);
+  // 月額（税込）※ 他の計算と統一して切り捨て
+  const monthlyInTax = Math.floor(quoteMonthly * 1.1);
   const monthlyTax = monthlyInTax - quoteMonthly;
   // 礼金（税別・税込・税額）
   const keyTotalExTax = quoteKey * units;
-  const keyTotalInTax = keyIsNonTaxable ? keyTotalExTax : Math.round(keyTotalExTax * 1.1);
+  const keyTotalInTax = keyIsNonTaxable ? keyTotalExTax : Math.floor(keyTotalExTax * 1.1);
   const keyTotalTax = keyTotalInTax - keyTotalExTax;
   // 期間総額（税別）：賃料＋手数料＋礼金＋封鎖手数料＋業者費用按分
   const rentPartExTax = quoteMonthly * units * months + dailyRate * units * days;
   const totalExTax = rentPartExTax + quoteAdmin * units + keyTotalExTax + quoteBlocking + agencyFeeShare;
-  // 税込は、礼金が非課税の場合はその分を除外して計算
+  // 税込は、礼金が非課税の場合はその分を除外して計算（切り捨てで請求書と一致）
   const taxablePart = totalExTax - (keyIsNonTaxable ? keyTotalExTax : 0);
-  const totalInTax = Math.round(taxablePart * 1.1) + (keyIsNonTaxable ? keyTotalExTax : 0);
+  const totalInTax = Math.floor(taxablePart * 1.1) + (keyIsNonTaxable ? keyTotalExTax : 0);
   const totalTax = totalInTax - totalExTax;
 
   // 礼金表示テキスト（賃料と同じ形式で税率・税額を併記）
