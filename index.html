@@ -2012,8 +2012,9 @@ function renderSuppliers() {
         '<input type="text" value="'+esc(s.name||'')+'" placeholder="仕入先名" oninput="updateSupplierField(\''+s.id+'\',\'name\',this.value)" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-weight:600">' +
         '<button class="btn btn-danger btn-xs" onclick="deleteSupplier(\''+s.id+'\')">削除</button>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">' +
-        '<input type="tel" value="'+esc(s.tel||'')+'" placeholder="電話番号" oninput="updateSupplierField(\''+s.id+'\',\'tel\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">' +
+        '<input type="tel" value="'+esc(s.tel||'')+'" placeholder="電話番号①" oninput="updateSupplierField(\''+s.id+'\',\'tel\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
+        '<input type="tel" value="'+esc(s.tel2||'')+'" placeholder="電話番号②（任意）" oninput="updateSupplierField(\''+s.id+'\',\'tel2\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
         '<input type="tel" value="'+esc(s.fax||'')+'" placeholder="FAX" oninput="updateSupplierField(\''+s.id+'\',\'fax\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center;margin-bottom:6px">' +
@@ -2053,6 +2054,7 @@ function addSupplier() {
     name: '',
     type: '管理会社',
     tel: '',
+    tel2: '',
     fax: '',
     email: '',
     taxable: false,
