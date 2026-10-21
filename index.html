@@ -4993,6 +4993,7 @@ function openSupplierPickerForPM() {
     // 仕入先タイプに応じてフィールドを反映
     document.getElementById('pmf_supplierName').value = s.name || '';
     document.getElementById('pmf_tel').value = s.tel || '';
+    const pmfTel2El = document.getElementById('pmf_tel2'); if (pmfTel2El) pmfTel2El.value = s.tel2 || '';
     document.getElementById('pmf_fax').value = s.fax || '';
     if (s.type === '管理会社') {
       const mgrT = document.getElementById('pmf_managerTaxable');
@@ -11951,7 +11952,7 @@ function closePMForm() {
 function clearPMForm() {
   ['pmf_name','pmf_address','pmf_rentMonthly','pmf_rentDaily',
    'pmf_fee','pmf_keyMoney','pmf_deposit',
-   'pmf_supplierName','pmf_tel','pmf_fax','pmf_email','pmf_memo','pmf_lessorAddress','pmf_ownerInvoiceRegNo','pmf_managerInvoiceRegNo'].forEach(id => {
+   'pmf_supplierName','pmf_tel','pmf_tel2','pmf_fax','pmf_email','pmf_memo','pmf_lessorAddress','pmf_ownerInvoiceRegNo','pmf_managerInvoiceRegNo'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
   ['pmf_startProRate','pmf_endProRate','pmf_vehicleType'].forEach(id => {
@@ -11982,6 +11983,7 @@ function populatePMForm(p) {
   set('pmf_deposit', p.deposit);
   set('pmf_supplierName', p.supplierName);
   set('pmf_tel', p.tel);
+  set('pmf_tel2', p.tel2);
   set('pmf_fax', p.fax);
   set('pmf_email', p.email);
   set('pmf_memo', p.memo);
@@ -12334,6 +12336,7 @@ async function savePM() {
     vehicleType: document.getElementById('pmf_vehicleType').value,
     supplierName: document.getElementById('pmf_supplierName').value.trim(),
     tel: document.getElementById('pmf_tel').value.trim(),
+    tel2: document.getElementById('pmf_tel2').value.trim(),
     fax: document.getElementById('pmf_fax').value.trim(),
     email: document.getElementById('pmf_email').value.trim(),
     lessorAddress: document.getElementById('pmf_lessorAddress').value.trim(),
@@ -12778,8 +12781,12 @@ window.addEventListener('DOMContentLoaded', initApp);
       </div>
       <div class="pmf-row">
         <div class="pmf-group">
-          <label>TEL</label>
+          <label>TEL①</label>
           <input type="tel" id="pmf_tel" placeholder="03-0000-0000">
+        </div>
+        <div class="pmf-group">
+          <label>TEL②（任意）</label>
+          <input type="tel" id="pmf_tel2" placeholder="090-0000-0000">
         </div>
         <div class="pmf-group">
           <label>FAX</label>
