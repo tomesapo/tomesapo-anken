@@ -630,6 +630,8 @@
         <button onclick="openMasterModal();closeHbMenus()">🏢 マスタ管理</button>
         <button onclick="openPMModal();closeHbMenus()">🅿 駐車場DB</button>
         <button onclick="openTrash();closeHbMenus()">🗑 ゴミ箱</button>
+        <button onclick="exportAllDataBackup();closeHbMenus()" title="全データ（案件・駐車場DB・マスタ）をJSONファイルでダウンロード">📥 全データバックアップ出力</button>
+        <button onclick="document.getElementById('backupRestoreInput').click();closeHbMenus()" title="バックアップJSONファイルから復元">📤 バックアップから復元</button>
       </div>
     </div>
 
@@ -645,6 +647,7 @@
     </div>
 
     <button class="btn btn-ghost" onclick="openManual()" title="操作マニュアルを開く">📖 ヘルプ</button>
+    <input type="file" id="backupRestoreInput" accept=".json,application/json" style="display:none" onchange="importAllDataBackup(this)">
 
     <div class="user-info" id="authUserInfo" style="display:none">
       <span>👤</span>
@@ -1372,6 +1375,141 @@ function loadPMLocal() {
   try { const d = localStorage.getItem('parkingMasters'); if(d) parkingMasters = JSON.parse(d); } catch(e) {}
 }
 
+// ═══════════════════════════════════════════════
+// ── v111: 全データバックアップ機能 ──
+// ═══════════════════════════════════════════════
+// 全データ（案件・駐車場DB・マスタ）を1つのJSONファイルに出力
+function exportAllDataBackup(opts) {
+  opts = opts || {};
+  try {
+    const payload = {
+      format: 'tomesapo-anken-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      counts: {
+        cases: (cases || []).length,
+        parkingMasters: (parkingMasters || []).length,
+        masterCustomers: ((masterData && masterData.customers) || []).length,
+        masterSuppliers: ((masterData && masterData.suppliers) || []).length
+      },
+      cases: cases || [],
+      parkingMasters: parkingMasters || [],
+      masterData: masterData || {}
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = (typeof _todayLocalISO === 'function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
+    const prefix = opts.auto ? 'backup_auto_' : 'backup_';
+    a.href = url; a.download = prefix + today + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    if (!opts.silent) {
+      showToast('✅ バックアップを出力しました（案件 '+payload.counts.cases+' 件 / 駐車場DB '+payload.counts.parkingMasters+' 件）', 5000);
+    }
+    // 自動バックアップ日の記録
+    try { localStorage.setItem('lastAutoBackupDate', today); } catch(e) {}
+    return true;
+  } catch (e) {
+    showToast('❌ バックアップ出力エラー: ' + e.message, 6000);
+    return false;
+  }
+}
+
+// JSONファイルから全データを復元（既存データを上書き）
+async function importAllDataBackup(fileInput) {
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) return;
+  // 入力をクリア（同じファイルを再選択できるように）
+  fileInput.value = '';
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data || data.format !== 'tomesapo-anken-backup') {
+      alert('⚠ このファイルは当システムのバックアップ形式ではありません。\n（format フィールドが一致しません）');
+      return;
+    }
+    const c = data.counts || {};
+    const msg = '以下の内容で全データを上書き復元します。よろしいですか？\n\n'
+      + '出力日時: ' + (data.exportedAt || '不明') + '\n'
+      + '案件: ' + (c.cases ?? (data.cases||[]).length) + ' 件\n'
+      + '駐車場DB: ' + (c.parkingMasters ?? (data.parkingMasters||[]).length) + ' 件\n'
+      + 'マスタ（顧客）: ' + (c.masterCustomers ?? ((data.masterData&&data.masterData.customers)||[]).length) + ' 件\n'
+      + 'マスタ（仕入先）: ' + (c.masterSuppliers ?? ((data.masterData&&data.masterData.suppliers)||[]).length) + ' 件\n\n'
+      + '⚠ 現在のデータは全て置き換えられます。実行前に念のため現在のデータをバックアップ出力することを強く推奨します。';
+    if (!confirm(msg)) return;
+    // 復元前バックアップ（自動）
+    try { exportAllDataBackup({ silent: true, auto: true }); } catch(_) {}
+    if (!db) {
+      alert('⚠ Firebase未接続のため復元できません。');
+      return;
+    }
+    showToast('⏳ 復元中... しばらくお待ちください', 10000);
+
+    // マスタ復元
+    if (data.masterData) {
+      await db.doc('master/data').set(data.masterData);
+    }
+
+    // 駐車場DBをバッチ書き込み
+    const pms = data.parkingMasters || [];
+    const BATCH_SIZE = 400;
+    // 既存の駐車場DBを削除してから書き込む
+    const existingPMs = await db.collection('parkingMasters').get();
+    for (let i = 0; i < existingPMs.docs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      existingPMs.docs.slice(i, i + BATCH_SIZE).forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    for (let i = 0; i < pms.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      pms.slice(i, i + BATCH_SIZE).forEach(pm => {
+        if (pm && pm.id) batch.set(db.collection('parkingMasters').doc(pm.id), pm);
+      });
+      await batch.commit();
+    }
+
+    // 案件をバッチ書き込み
+    const cs = data.cases || [];
+    const existingCases = await db.collection('cases').get();
+    for (let i = 0; i < existingCases.docs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      existingCases.docs.slice(i, i + BATCH_SIZE).forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    for (let i = 0; i < cs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      cs.slice(i, i + BATCH_SIZE).forEach(obj => {
+        if (obj && obj.id) batch.set(db.collection('cases').doc(obj.id), obj);
+      });
+      await batch.commit();
+    }
+
+    showToast('✅ 復元が完了しました。画面を再読み込みします...', 4000);
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    alert('❌ 復元エラー: ' + e.message);
+  }
+}
+
+// 日次自動バックアップ：最初のアクセス時にその日のバックアップがなければ自動DL
+function tryDailyAutoBackup() {
+  try {
+    const today = (typeof _todayLocalISO === 'function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
+    const last = localStorage.getItem('lastAutoBackupDate') || '';
+    if (last === today) return; // 本日分はすでに取得済み
+    // データが未ロードの可能性があるため、少し遅延してから実行
+    setTimeout(() => {
+      if (!cases || cases.length === 0) return; // 空のバックアップは出力しない
+      const ok = exportAllDataBackup({ silent: true, auto: true });
+      if (ok) {
+        showToast('🛡 本日分の自動バックアップを Downloads に保存しました', 5000);
+      }
+    }, 8000); // 8秒後（Firestoreからのロードを待つ）
+  } catch(e) { /* 静かに失敗 */ }
+}
+
 // ── 初期化 ──
 let _appStarted = false;
 async function initApp() {
@@ -1439,6 +1577,8 @@ async function startApp() {
       if (document.getElementById('trashOverlay') && !document.getElementById('trashOverlay').classList.contains('hidden')) renderTrashTab();
     }, err => { showToast('同期エラー: ' + err.message); });
   } catch(e) { showToast('Firebase接続エラー: ' + e.message); }
+  // v111: 日次自動バックアップ（本日分未取得の場合のみ）
+  tryDailyAutoBackup();
 }
 
 // ── 認証関連 ──
