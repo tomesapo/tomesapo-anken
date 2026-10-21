@@ -3564,9 +3564,10 @@ function getFiltered(){
         if(!pl)return false;
         // 電話番号は数字のみで比較（ハイフン・スペース無視）
         const t1=String(pl.supplierPhone||'').replace(/[^\d]/g,'');
+        const t1b=String(pl.supplierPhone2||'').replace(/[^\d]/g,'');
         const t2=String(pl.tel||'').replace(/[^\d]/g,'');
         const t3=String(pl.supplierFax||'').replace(/[^\d]/g,'');
-        return (t1&&t1.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
+        return (t1&&t1.includes(advSupplierTel))||(t1b&&t1b.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
       });
       if(!hit)return false;
     }
@@ -4077,9 +4078,10 @@ function _getStatFilteredCases(){
       const hit=(c.parkingLots||[]).some(pl=>{
         if(!pl)return false;
         const t1=String(pl.supplierPhone||'').replace(/[^\d]/g,'');
+        const t1b=String(pl.supplierPhone2||'').replace(/[^\d]/g,'');
         const t2=String(pl.tel||'').replace(/[^\d]/g,'');
         const t3=String(pl.supplierFax||'').replace(/[^\d]/g,'');
-        return (t1&&t1.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
+        return (t1&&t1.includes(advSupplierTel))||(t1b&&t1b.includes(advSupplierTel))||(t2&&t2.includes(advSupplierTel))||(t3&&t3.includes(advSupplierTel));
       });
       if(!hit)return false;
     }
@@ -4588,7 +4590,8 @@ function addParkingLotCard(pl={}) {
         '<div class="form-group"><label>対応車両</label><select name="pl_vehicleType"><option value=""'+(!(pl.vehicleType)?' selected':'')+'>（未選択）</option><option value="軽自動車のみ"'+(pl.vehicleType==='軽自動車のみ'?' selected':'')+'>軽自動車のみ</option><option value="普通車まで"'+(pl.vehicleType==='普通車まで'?' selected':'')+'>普通車まで</option><option value="普通車・工事関係車両(ﾊｲｴｰｽ程度)"'+(pl.vehicleType==='普通車・工事関係車両(ﾊｲｴｰｽ程度)'?' selected':'')+'>普通車・工事関係車両(ﾊｲｴｰｽ程度)</option><option value="工事関係車両可(条件有り)"'+(pl.vehicleType==='工事関係車両可(条件有り)'?' selected':'')+'>工事関係車両可(条件有り)</option></select></div>' +
         '<div class="form-group"><label>空き台数</label><input type="number" name="pl_vacancyUnits" min="0" placeholder="0" value="'+(pl.vacancyUnits!=null?pl.vacancyUnits:'')+'"></div>' +
         '<div class="form-group"><label>仕入先名 <button type="button" onclick="openSupplierPickerForPL(this)" style="margin-left:6px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 8px;border-radius:4px;font-size:10px;cursor:pointer">📚 マスタから選択</button></label><input type="text" name="pl_supplierName" value="'+esc(pl.supplierName||'')+'" placeholder="○○不動産"></div>' +
-        '<div class="form-group"><label>仕入先電話</label><input type="tel" name="pl_supplierPhone" value="'+esc(pl.supplierPhone||'')+'" placeholder="03-0000-0000"></div>' +
+        '<div class="form-group"><label>仕入先電話①</label><input type="tel" name="pl_supplierPhone" value="'+esc(pl.supplierPhone||'')+'" placeholder="03-0000-0000"></div>' +
+        '<div class="form-group"><label>仕入先電話②<span class="auto-tag">任意</span></label><input type="tel" name="pl_supplierPhone2" value="'+esc(pl.supplierPhone2||'')+'" placeholder="090-0000-0000"></div>' +
         '<div class="form-group"><label>仕入先FAX</label><input type="tel" name="pl_supplierFax" value="'+esc(pl.supplierFax||'')+'" placeholder="03-0000-0000"></div>' +
         '<div class="form-group"><label>貸主住所 <span class="auto-tag">契約書用</span></label><input type="text" name="pl_lessorAddress" value="'+esc(pl.lessorAddress||'')+'" placeholder="貸主の住所"></div>' +
         '<div class="form-group"><label>地主税区分 <span class="auto-tag">賃料・礼金</span></label><select name="pl_ownerTaxable" onchange="_syncInvoiceFieldDisabled(this,\'pl_ownerInvoiceRegNo\')"><option value="false"'+(!pl.ownerTaxable?' selected':'')+'>免税事業者</option><option value="true"'+(pl.ownerTaxable?' selected':'')+'>課税事業者</option></select></div>' +
@@ -5021,6 +5024,7 @@ function openSupplierPickerForPL(btn) {
   openSupplierPicker('', function(s) {
     if (g('pl_supplierName')) g('pl_supplierName').value = s.name || '';
     if (g('pl_supplierPhone')) g('pl_supplierPhone').value = s.tel || '';
+    if (g('pl_supplierPhone2')) g('pl_supplierPhone2').value = s.tel2 || '';
     if (g('pl_supplierFax')) g('pl_supplierFax').value = s.fax || '';
     if (s.type === '管理会社') {
       const mgrT = g('pl_managerTaxable');
@@ -5080,6 +5084,7 @@ async function pushParkingLotToDB(btn){
     vehicleType: g('pl_vehicleType')?.value || '',
     supplierName: g('pl_supplierName')?.value.trim() || '',
     tel: g('pl_supplierPhone')?.value.trim() || '',
+    tel2: g('pl_supplierPhone2')?.value.trim() || '',
     fax: g('pl_supplierFax')?.value.trim() || '',
     lessorAddress: g('pl_lessorAddress')?.value.trim() || '',
     ownerTaxable: g('pl_ownerTaxable')?.value === 'true',
@@ -5124,7 +5129,7 @@ function getParkingLotsFromForm(){
     const g=n=>card.querySelector('[name="'+n+'"]');
     const rt=g('pl_rateType').value,pa=card.querySelector('.photo-upload-area');
     return{id:card.dataset.plid||uid(),name:g('pl_name').value.trim(),address:g('pl_address').value.trim(),
-      supplierName:g('pl_supplierName').value.trim(),walkMinutes:g('pl_walkMinutes')?(parseInt(g('pl_walkMinutes').value)||null):null,supplierPhone:g('pl_supplierPhone').value.trim(),supplierFax:g('pl_supplierFax').value.trim(),
+      supplierName:g('pl_supplierName').value.trim(),walkMinutes:g('pl_walkMinutes')?(parseInt(g('pl_walkMinutes').value)||null):null,supplierPhone:g('pl_supplierPhone').value.trim(),supplierPhone2:g('pl_supplierPhone2')?g('pl_supplierPhone2').value.trim():'',supplierFax:g('pl_supplierFax').value.trim(),
       lessorAddress:g('pl_lessorAddress')?g('pl_lessorAddress').value.trim():'',ownerTaxable:g('pl_ownerTaxable')?g('pl_ownerTaxable').value==='true':false,managerTaxable:g('pl_managerTaxable')?g('pl_managerTaxable').value==='true':false,ownerInvoiceRegNo:g('pl_ownerInvoiceRegNo')?g('pl_ownerInvoiceRegNo').value.trim():'',managerInvoiceRegNo:g('pl_managerInvoiceRegNo')?g('pl_managerInvoiceRegNo').value.trim():'',specialTerms:g('pl_specialTerms')?g('pl_specialTerms').value.trim():'',taxCategory:g('pl_taxCategory')?g('pl_taxCategory').value:'taxable',ownerSupplierId:card.dataset.supplierId||'',rentMode:(g('pl_rentMode')?g('pl_rentMode').value:'perUnit'),
       rateType:rt,units:((g('pl_rentMode')&&g('pl_rentMode').value==='lump')?1:(parseInt(g('pl_units').value)||null)),
       estimateStart:g('pl_estimateStart')?g('pl_estimateStart').value||'':'',
@@ -12543,6 +12548,7 @@ async function selectPlFromDb(pmId) {
     vehicleType: p.vehicleType || '',
     supplierName: p.supplierName || '',
     supplierPhone: p.tel || '',
+    supplierPhone2: p.tel2 || '',
     supplierFax: p.fax || '',
     rateType: p.rentMonthly ? 'monthly' : (p.rentDaily ? 'daily' : 'monthly'),
     monthlyRent: p.rentMonthly ? parseFloat(p.rentMonthly) : null,
