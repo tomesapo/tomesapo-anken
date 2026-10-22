@@ -1248,7 +1248,7 @@
           <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏢 仕入先マスタ（管理会社・地主）</div>
           <button class="btn btn-primary btn-xs" onclick="addSupplier()">＋ 仕入先を追加</button>
         </div>
-        <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
+        <input type="text" id="supplierSearchInput" placeholder="🔍 仕入先名・電話①・電話②・FAX・インボイス番号で検索..." oninput="renderSuppliers()" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:10px">
         <div id="supplierList"></div>
       </div>
       </div>
@@ -2125,7 +2125,19 @@ function renderSuppliers() {
   const q = (document.getElementById('supplierSearchInput')?.value || '').toLowerCase().trim();
   let list = activeSuppliers();
   if (q) {
-    list = list.filter(s => (s.name||'').toLowerCase().includes(q) || (s.invoiceRegNo||'').toLowerCase().includes(q));
+    // v111: 電話番号検索時はハイフン無視で数字のみ比較
+    const qDigits = q.replace(/\D/g,'');
+    list = list.filter(s => {
+      if ((s.name||'').toLowerCase().includes(q)) return true;
+      if ((s.invoiceRegNo||'').toLowerCase().includes(q)) return true;
+      if (qDigits) {
+        const t1 = String(s.tel||'').replace(/\D/g,'');
+        const t2 = String(s.tel2||'').replace(/\D/g,'');
+        const fx = String(s.fax||'').replace(/\D/g,'');
+        if ((t1 && t1.includes(qDigits)) || (t2 && t2.includes(qDigits)) || (fx && fx.includes(qDigits))) return true;
+      }
+      return false;
+    });
   }
   if (!list.length) {
     container.innerHTML = '<div style="color:#9ca3af;font-size:12px;padding:14px;text-align:center">' + (q ? '該当なし' : '仕入先がまだ登録されていません') + '</div>';
