@@ -83,6 +83,8 @@
   .btn-sm{padding:6px 10px;font-size:12px}
   .btn-xs{padding:3px 8px;font-size:11px;border-radius:6px}
   .stats-bar{display:flex;gap:10px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .stats-section-label{display:inline-flex;align-items:center;padding:0 10px;color:#6b7280;font-size:11px;font-weight:700;letter-spacing:.05em;flex-shrink:0;white-space:nowrap;border-left:2px dashed #d1d5db}
+  .stats-section-label.first{border-left:none;padding-left:0}
   .stat-card{background:white;border:1px solid var(--gray-200);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:130px;flex-shrink:0;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
   .stat-card.clickable{cursor:pointer}
   .stat-card.clickable:hover{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
@@ -885,6 +887,15 @@
     設定方法は手順書をご参照ください。設定するまでは端末内のみで動作します。</p>
   </div>
 
+  <!-- v111: 期間切替バー -->
+  <div id="statsPeriodBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+    <label style="font-size:13px;color:#374151;font-weight:600;white-space:nowrap">📅 表示期間：</label>
+    <select id="statsPeriodSelect" onchange="onStatsPeriodChange()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:white;cursor:pointer">
+      <!-- JSで動的生成 -->
+    </select>
+    <span id="statsPeriodBadge" style="font-size:12px;color:#1e3a5f;background:#dbeafe;padding:3px 10px;border-radius:999px;font-weight:600"></span>
+    <span style="font-size:11px;color:#9ca3af">※ 進捗カードは依頼受付日、売上系は契約開始日で判定</span>
+  </div>
   <div class="stats-bar" id="statsBar"></div>
   <div id="overdueBadgeBar"></div>
   <div class="alert-bar" id="alertBar"></div>
@@ -1518,6 +1529,7 @@ async function initApp() {
     document.getElementById('authOverlay').classList.add('hidden');
     document.getElementById('setupBanner').style.display = 'block';
     loadPMLocal();
+    _initStatsPeriod();
     hideLoading(); renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
     return;
   }
@@ -1549,6 +1561,7 @@ async function initApp() {
 // アプリ起動（認証済み後に呼ばれる）
 async function startApp() {
   loadPMLocal();
+  _initStatsPeriod();
   hideLoading(); renderStats(); renderAll(); updateYearFilter(); syncCustomerFilter();
   // Firebase同期（バックグラウンド）
   try {
@@ -4273,10 +4286,104 @@ function _getStatFilteredCases(){
     return true;
   });
 }
+// v111: 上部カードの表示期間（-1=全期間、1以上=その期）
+let _statsPeriod = -1;
+function _initStatsPeriod(){
+  const current = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
+  try {
+    const saved = localStorage.getItem('statsPeriod');
+    _statsPeriod = (saved!=null && saved!=='') ? parseInt(saved) : current;
+    if (isNaN(_statsPeriod)) _statsPeriod = current;
+  } catch(e) { _statsPeriod = current; }
+}
+function _buildStatsPeriodOptions(){
+  const sel = document.getElementById('statsPeriodSelect');
+  if (!sel) return;
+  const current = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
+  const used = new Set();
+  (cases||[]).forEach(c => {
+    [c.receptionDate, c.contractStart].forEach(ds => {
+      if (!ds) return;
+      const dt = new Date(ds+'T00:00:00');
+      if (!isNaN(dt)) used.add(calcPeriod(dt.getFullYear(), dt.getMonth()));
+    });
+    (c.parkingLots||[]).forEach(pl => {
+      if (pl && pl.contractStart) {
+        const dt = new Date(pl.contractStart+'T00:00:00');
+        if (!isNaN(dt)) used.add(calcPeriod(dt.getFullYear(), dt.getMonth()));
+      }
+    });
+  });
+  used.add(current);
+  const periods = [...used].filter(p => p >= 1).sort((a,b) => b - a);
+  let html = '<option value="-1"'+(_statsPeriod===-1?' selected':'')+'>全期間（累計）</option>';
+  periods.forEach(p => {
+    const sy = periodStartYear(p);
+    const prefix = (p===current) ? '今期 第'+p+'期' : '第'+p+'期';
+    html += '<option value="'+p+'"'+(p===_statsPeriod?' selected':'')+'>'+prefix+'（'+sy+'/6〜'+(sy+1)+'/5）</option>';
+  });
+  sel.innerHTML = html;
+}
+function _updateStatsPeriodBadge(){
+  const el = document.getElementById('statsPeriodBadge');
+  if (!el) return;
+  if (_statsPeriod === -1) { el.textContent='現在表示：全期間（累計）'; return; }
+  const sy = periodStartYear(_statsPeriod);
+  const current = Math.max(1, calcPeriod(new Date().getFullYear(), new Date().getMonth()));
+  const lbl = (_statsPeriod===current) ? '今期（第'+_statsPeriod+'期）' : '第'+_statsPeriod+'期';
+  el.textContent = '現在表示：'+lbl+'（'+sy+'/6〜'+(sy+1)+'/5）';
+}
+function onStatsPeriodChange(){
+  const sel = document.getElementById('statsPeriodSelect');
+  if (!sel) return;
+  _statsPeriod = parseInt(sel.value);
+  if (isNaN(_statsPeriod)) _statsPeriod = -1;
+  try { localStorage.setItem('statsPeriod', String(_statsPeriod)); } catch(e) {}
+  _updateStatsPeriodBadge();
+  renderAll();
+}
+function _dateInStatsPeriod(dateStr){
+  if (_statsPeriod === -1) return true;
+  if (!dateStr) return false;
+  const d = new Date(dateStr+'T00:00:00');
+  if (isNaN(d)) return false;
+  return calcPeriod(d.getFullYear(), d.getMonth()) === _statsPeriod;
+}
+// 受付日ベース判定（進捗カード用）
+function _caseInPeriodByReception(c){
+  if (_statsPeriod === -1) return true;
+  if (c.receptionDate) return _dateInStatsPeriod(c.receptionDate);
+  // 受付日未入力：案件番号年から推定（6月以降=その年の期、以前=前年の期）
+  const yr = parseInt((c.caseNo||'').split('-')[0]);
+  if (!isNaN(yr)) return (yr - FISCAL_BASE_YEAR + 1) === _statsPeriod;
+  return false;
+}
+// 契約開始日ベース判定（売上系カード用）
+function _caseInPeriodByContract(c){
+  if (_statsPeriod === -1) return true;
+  if (_dateInStatsPeriod(c.contractStart||'')) return true;
+  return (c.parkingLots||[]).some(pl => pl && _dateInStatsPeriod(pl.contractStart||''));
+}
+// 請求日ベース判定（未収金用）
+function _caseInPeriodByInvoice(c){
+  if (_statsPeriod === -1) return true;
+  if (c.invoiceDate) return _dateInStatsPeriod(c.invoiceDate);
+  // 請求日未入力なら契約開始日で代替
+  return _caseInPeriodByContract(c);
+}
+
 function renderStats(){
   // v111: 統計カードは詳細検索フィルタ（入金期日/保証金/部分一致/入金有無/テキスト検索）を反映する。
   //       ただし stat-card クリックによる activeStatuses と filterUnpaidPL は除外（自己参照によるゼロ化を防ぐ）。
-  const _statCases = _getStatFilteredCases();
+  _updateStatsPeriodBadge();
+  _buildStatsPeriodOptions();
+  const _statCasesRaw = _getStatFilteredCases();
+  // 進捗カード（依頼受付日ベース）
+  const _statCases = _statCasesRaw.filter(_caseInPeriodByReception);
+  // 売上系カード（契約開始日ベース）
+  const _salesCases = _statCasesRaw.filter(_caseInPeriodByContract);
+  // 未収金（請求日ベース）
+  const _invoiceCases = _statCasesRaw.filter(_caseInPeriodByInvoice);
   const baseCases=_statCases.filter(c=>!c.caseType||c.caseType==='通常');
   const addCount=_statCases.filter(c=>c.caseType==='追加').length;
   const extCount=_statCases.filter(c=>c.caseType==='延長').length;
@@ -4286,7 +4393,7 @@ function renderStats(){
   const cntMiMoshikomi=_statCases.filter(c=>c.status==='未申込').length;
   const cntKeiyaku=_statCases.filter(c=>c.status==='契約中').length;
   const cntMiSeikyu=_statCases.filter(c=>c.status==='未請求').length;
-  const ordered=_statCases.filter(c=>ORDERED_STATUSES.includes(c.status));
+  const ordered=_salesCases.filter(c=>ORDERED_STATUSES.includes(c.status));
   // v111: 月次レポート(buildMonthlyData)と同じアルゴリズムで再計算
   //       契約期間/台数のフォールバックも同じなので両者は常に一致する
   let totalFS=0, totalFP=0;
@@ -4298,11 +4405,13 @@ function renderStats(){
     });
   });
   const totalTI = Math.round(totalFS * 1.1);
-  const unpaid=_statCases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
+  // 未収金は請求日ベースで判定（請求がその期に発生したかどうか）
+  const unpaid=_invoiceCases.filter(c=>c.status==='未請求'||c.status==='請求済').length;
   // v111: 仕入未振込駐車場の件数（受注以降のステータスで pl.units あり かつ supplierPaymentDate 未入力）
+  //       「今」の状態を示すカードなので期フィルタは適用しない（_statCasesRawを使用）
   const PAY_TARGET_STATUSES = ['契約中','未請求','請求済','入金済'];
   let supplierUnpaidCount = 0;
-  _statCases.forEach(c => {
+  _statCasesRaw.forEach(c => {
     if (!PAY_TARGET_STATUSES.includes(c.status)) return;
     (c.parkingLots || []).forEach(pl => {
       // 契約済み駐車場（contractStart/End/units あり）で支払日が未入力ならカウント
@@ -4312,8 +4421,9 @@ function renderStats(){
     });
   });
   // v111: 要解約連絡（cancelNoticeRequired かつ 未送信 かつ 期限まで30日以内 or 超過）
+  //       「今」の状態なので期フィルタ無視
   let cancelNoticeCount = 0;
-  _statCases.forEach(c => {
+  _statCasesRaw.forEach(c => {
     if (!PAY_TARGET_STATUSES.includes(c.status)) return;
     (c.parkingLots || []).forEach(pl => {
       if (!pl || !pl.cancelNoticeRequired) return;
@@ -4324,9 +4434,10 @@ function renderStats(){
     });
   });
   // v111: 保証金未返還駐車場（返還予定＋契約終了後未返還を合算）
+  //       「今」の状態なので期フィルタ無視
   let depUnreturnedCount = 0, depUnreturnedTotal = 0, depOverdueCount = 0;
   const _dToday = (typeof _todayLocalISO==='function') ? _todayLocalISO() : new Date().toISOString().slice(0,10);
-  _statCases.forEach(c => {
+  _statCasesRaw.forEach(c => {
     if (!PAY_TARGET_STATUSES.includes(c.status)) return;
     (c.parkingLots || []).forEach(pl => {
       if (!pl) return;
@@ -4342,17 +4453,23 @@ function renderStats(){
   });
   function _isAct(a){return activeStatuses&&JSON.stringify(activeStatuses)===JSON.stringify(a);}
   document.getElementById('statsBar').innerHTML=
+    /* v111: セクション見出し① 進捗（依頼受付日ベース） */
+    '<div class="stats-section-label first" title="依頼受付日で判定">📋 進捗</div>'+
     '<div class="stat-card"><div class="stat-label">依頼数</div><div class="stat-value">'+total+'</div><div class="stat-sub">'+(addCount||extCount?'追加'+addCount+'件・延長'+extCount+'件を除く':'通常案件のみ')+'</div></div>'+
     '<div class="stat-card clickable'+(_isAct(['未調査','調査中','再調査'])?' active':'')+'" onclick="filterByStatuses([&quot;未調査&quot;,&quot;調査中&quot;,&quot;再調査&quot;],this)"><div class="stat-label">未調査・調査中・再調査</div><div class="stat-value" style="color:var(--gray-600)">'+cntMiChosa+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card clickable'+(_isAct(['提案済'])?' active':'')+'" onclick="filterByStatuses([&quot;提案済&quot;],this)"><div class="stat-label">提案済</div><div class="stat-value" style="color:var(--primary)">'+cntTeian+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card clickable'+(_isAct(['未申込'])?' active':'')+'" onclick="filterByStatuses([&quot;未申込&quot;],this)"><div class="stat-label">未申込</div><div class="stat-value" style="color:var(--warning)">'+cntMiMoshikomi+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card clickable'+(_isAct(['契約中'])?' active':'')+'" onclick="filterByStatuses([&quot;契約中&quot;],this)"><div class="stat-label">契約中</div><div class="stat-value" style="color:var(--success)">'+cntKeiyaku+'</div><div class="stat-sub">件</div></div>'+
     '<div class="stat-card clickable'+(_isAct(['未請求'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;],this)"><div class="stat-label">未請求</div><div class="stat-value" style="color:var(--danger)">'+cntMiSeikyu+'</div><div class="stat-sub">件</div></div>'+
+    /* v111: セクション見出し② 売上集計（契約開始日ベース） */
+    '<div class="stats-section-label" title="契約開始日で判定">💰 売上集計</div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalFS)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     '<div class="stat-card"><div class="stat-label">確定売上合計 <span style="font-size:10px;font-weight:400">税込</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(totalTI)+'</div><div class="stat-sub">未請求・請求済・入金済</div></div>'+
     (function(){var _mg = (totalFS>0) ? (totalFP/totalFS*100) : 0; var _mgc = totalFP>=0?'var(--success)':'var(--danger)'; return '<div class="stat-card"><div class="stat-label">確定粗利合計 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px;color:'+_mgc+'">&#165;'+fmt(totalFP)+'</div><div class="stat-sub">粗利率 <b style="color:'+_mgc+';font-size:12px">'+_mg.toFixed(1)+'%</b>／未請求・請求済・入金済</div></div>';})()+
     (function(){var sst=_calcSiteUnitPrice(ordered);return '<div class="stat-card"><div class="stat-label">現場単価 <span style="font-size:10px;font-weight:400">税別</span></div><div class="stat-value" style="font-size:17px">&#165;'+fmt(Math.round(sst.avgPerSite))+'</div><div class="stat-sub">'+sst.siteCount+'現場の平均</div></div>';})()+
     '<div class="stat-card clickable'+(_isAct(['未請求','請求済'])?' active':'')+'" onclick="filterByStatuses([&quot;未請求&quot;,&quot;請求済&quot;],this)"><div class="stat-label">未収金案件</div><div class="stat-value" style="color:var(--warning)">'+unpaid+'</div><div class="stat-sub">未請求・請求済</div></div>'+
+    /* v111: セクション見出し③ 状態アラート（期の影響なし） */
+    '<div class="stats-section-label" title="期の影響なし／今の状態">🚨 要対応</div>'+
     /* v111: 仕入未振込駐車場（地主・管理会社への振込未完了） */
     '<div class="stat-card clickable'+(filterUnpaidPL?' active':'')+'" onclick="filterUnpaidParking(this)"><div class="stat-label">未振込駐車場 <span style="font-size:10px;font-weight:400">仕入</span></div><div class="stat-value" style="color:'+(supplierUnpaidCount>0?'var(--danger)':'var(--gray-500)')+'">'+supplierUnpaidCount+'</div><div class="stat-sub">契約中以降・支払日未入力</div></div>'+
     /* v111: 要解約連絡（30日以内or期限超過・未送信） */
