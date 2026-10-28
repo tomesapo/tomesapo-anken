@@ -10611,12 +10611,20 @@ function renderSalesCustomer() {
   const map = {};
   src.forEach(c => {
     const key = c.customerName || '（未設定）';
-    if (!map[key]) map[key] = { name: key, total: 0, purchase: 0, caseCount: 0, addCount: 0, extCount: 0, sites: {} };
+    if (!map[key]) map[key] = { name: key, total: 0, purchase: 0, caseCount: 0, addCount: 0, extCount: 0, sites: {}, contractUnits: 0, baseCount: 0 };
     const g = map[key];
     const isBase = !c.caseType || c.caseType === '通常';
     if (isBase) g.caseCount++;
     if (c.caseType === '追加') g.addCount++;
     if (c.caseType === '延長') g.extCount++;
+    // v111: 契約台数（契約済PL合算）＋平均の分母（通常＋追加のみ）
+    if (c.caseType !== '延長') g.baseCount++;
+    (c.parkingLots||[]).forEach(pl => {
+      if (!pl) return;
+      if (!pl.contractStart || !pl.contractEnd) return;
+      const u = parseInt(pl.units) || 0;
+      if (u > 0) g.contractUnits += u;
+    });
     // v111: 月次レポートと一致する _plFixedTotalsAllPeriod でリアルタイム再計算
     let caseSales = 0, casePurchase = 0;
     (c.parkingLots || []).forEach(function(pl){
@@ -10632,7 +10640,7 @@ function renderSalesCustomer() {
   });
   // 依頼だけあって売上0の顧客も表示するため、reqMap側のキーも map にマージ
   Object.keys(reqMap).forEach(k => {
-    if (!map[k]) map[k] = { name:k, total:0, purchase:0, caseCount:0, addCount:0, extCount:0, sites:{} };
+    if (!map[k]) map[k] = { name:k, total:0, purchase:0, caseCount:0, addCount:0, extCount:0, sites:{}, contractUnits:0, baseCount:0 };
   });
   const rows = Object.values(map).sort((a,b) => b.total - a.total);
   const totSales = rows.reduce((s,r)=>s+r.total,0);
@@ -10650,12 +10658,15 @@ function renderSalesCustomer() {
   html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">案件数（通常）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + totCases + '</div></div>';
   html += '<div><div style="font-size:11px;color:#6b7280;font-weight:600">売上合計（税別）</div><div style="font-size:18px;font-weight:700;color:#1e3a5f">' + f(totSales) + '</div></div>';
   html += '</div>';
-  // v111: 依頼件数/受注率/失注件数 列を追加
+  // v111: 依頼件数/受注率/失注件数/契約台数/平均契約台数 列を追加
   const totReq = Object.values(reqMap).reduce((s,v)=>s+v.reqTotal,0);
   const totOrdered = Object.values(reqMap).reduce((s,v)=>s+v.ordered,0);
   const totLost = Object.values(reqMap).reduce((s,v)=>s+v.lost,0);
+  const totContractUnits = rows.reduce((s,r)=>s+(r.contractUnits||0),0);
+  const totBaseCount = rows.reduce((s,r)=>s+(r.baseCount||0),0);
   const pctReq = (n,d) => d>0 ? Math.round(n/d*100)+'%' : '-';
-  html += '<table class="sv-table"><thead><tr><th>顧客名</th><th>依頼数</th><th>受注率</th><th>失注</th><th>契約数</th><th>追加/延長</th><th>現場数</th><th>確定売上（税別）</th><th>現場単価</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
+  const avgN = (n,d) => d>0 ? (n/d).toFixed(1) : '-';
+  html += '<table class="sv-table"><thead><tr><th>顧客名</th><th>依頼数</th><th>受注率</th><th>失注</th><th>契約数</th><th>追加/延長</th><th>契約台数</th><th>平均契約</th><th>現場数</th><th>確定売上（税別）</th><th>現場単価</th><th>確定仕入（税別）</th><th>確定粗利</th><th>粗利率</th></tr></thead><tbody>';
   rows.forEach(r => {
     const profit = r.total - r.purchase;
     const sites = Object.keys(r.sites).length;
@@ -10664,10 +10675,10 @@ function renderSalesCustomer() {
     const extBadge = r.extCount ? `<span class="sv-badge-ext">延長×${r.extCount}</span>` : '';
     const rq = reqMap[r.name] || { reqTotal:0, ordered:0, lost:0 };
     const orderRateCls = (rq.ordered/Math.max(1,rq.reqTotal) >= 0.5) ? 'color:#15803d;font-weight:600' : 'color:#6b7280';
-    html += `<tr><td>${esc(r.name)}</td><td style="text-align:right">${rq.reqTotal||'-'}</td><td style="text-align:right;${orderRateCls}">${pctReq(rq.ordered,rq.reqTotal)}</td><td style="text-align:right;color:${rq.lost>0?'#dc2626':'#6b7280'}">${rq.lost||'-'}</td><td style="text-align:right">${r.caseCount}件</td><td style="text-align:left">${addBadge}${extBadge}</td><td style="text-align:right">${sites}</td><td>${f(r.total)}</td><td style="font-weight:600">${f(avgPerSite)}</td><td>${f(r.purchase)}</td><td${profitCls(profit)}>${f(profit)}</td><td>${pct(r.total,r.purchase)}</td></tr>`;
+    html += `<tr><td>${esc(r.name)}</td><td style="text-align:right">${rq.reqTotal||'-'}</td><td style="text-align:right;${orderRateCls}">${pctReq(rq.ordered,rq.reqTotal)}</td><td style="text-align:right;color:${rq.lost>0?'#dc2626':'#6b7280'}">${rq.lost||'-'}</td><td style="text-align:right">${r.caseCount}件</td><td style="text-align:left">${addBadge}${extBadge}</td><td style="text-align:right;color:#0e7490;font-weight:600">${r.contractUnits||'-'}</td><td style="text-align:right;color:#6d28d9">${avgN(r.contractUnits,r.baseCount)}</td><td style="text-align:right">${sites}</td><td>${f(r.total)}</td><td style="font-weight:600">${f(avgPerSite)}</td><td>${f(r.purchase)}</td><td${profitCls(profit)}>${f(profit)}</td><td>${pct(r.total,r.purchase)}</td></tr>`;
   });
   const totProfit = totSales - totPurchase;
-  html += `<tr class="sv-total"><td>合計</td><td style="text-align:right">${totReq||'-'}</td><td style="text-align:right">${pctReq(totOrdered,totReq)}</td><td style="text-align:right">${totLost||'-'}</td><td style="text-align:right">${totCases}件</td><td></td><td style="text-align:right">${overall.siteCount}</td><td>${f(totSales)}</td><td style="font-weight:700">${f(overall.avgPerSite)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
+  html += `<tr class="sv-total"><td>合計</td><td style="text-align:right">${totReq||'-'}</td><td style="text-align:right">${pctReq(totOrdered,totReq)}</td><td style="text-align:right">${totLost||'-'}</td><td style="text-align:right">${totCases}件</td><td></td><td style="text-align:right">${totContractUnits}</td><td style="text-align:right">${avgN(totContractUnits,totBaseCount)}</td><td style="text-align:right">${overall.siteCount}</td><td>${f(totSales)}</td><td style="font-weight:700">${f(overall.avgPerSite)}</td><td>${f(totPurchase)}</td><td${profitCls(totProfit)}>${f(totProfit)}</td><td>${pct(totSales,totPurchase)}</td></tr>`;
   html += '</tbody></table>';
   return html;
 }
@@ -10834,7 +10845,8 @@ function _rsRenderCustomerTab() {
     const key = c.customerName || '（未設定）';
     if (!map[key]) map[key] = {
       name:key, total:0, normal:0, add:0, ext:0,
-      byStatus:{}, orderedCount:0, lostCount:0, siteSet:new Set(), lastReception:''
+      byStatus:{}, orderedCount:0, lostCount:0, siteSet:new Set(), lastReception:'',
+      reqUnits:0, reqUnitsCount:0, contractUnits:0, baseCount:0
     };
     const g = map[key];
     g.total++;
@@ -10842,6 +10854,8 @@ function _rsRenderCustomerTab() {
     if (t==='追加') g.add++;
     else if (t==='延長') g.ext++;
     else g.normal++;
+    // 平均の分母: 通常＋追加のみ（延長は除外）
+    if (t !== '延長') g.baseCount++;
     g.byStatus[c.status] = (g.byStatus[c.status]||0) + 1;
     if (RS_CONTRACT_PLUS.includes(c.status)) g.orderedCount++;
     if (c.status === RS_LOST_STATUS) g.lostCount++;
@@ -10851,6 +10865,16 @@ function _rsRenderCustomerTab() {
     // 直近依頼日
     const rd = c.receptionDate || '';
     if (rd && rd > g.lastReception) g.lastReception = rd;
+    // 依頼台数（入力あり案件のみ分子・分母に算入）
+    const ru = parseInt(c.requestUnits);
+    if (!isNaN(ru) && ru > 0) { g.reqUnits += ru; g.reqUnitsCount++; }
+    // 契約台数（契約済みPLの units 合計）
+    (c.parkingLots||[]).forEach(pl => {
+      if (!pl) return;
+      if (!pl.contractStart || !pl.contractEnd) return;
+      const u = parseInt(pl.units) || 0;
+      if (u > 0) g.contractUnits += u;
+    });
   });
   const rows = Object.values(map).sort((a,b)=>b.total-a.total);
   const totCases = rows.reduce((s,r)=>s+r.total,0);
@@ -10861,7 +10885,13 @@ function _rsRenderCustomerTab() {
   const totLost = rows.reduce((s,r)=>s+r.lostCount,0);
   const totSites = new Set();
   src.forEach(c => { const b = c.parentCaseNo || c.caseNo || ''; if (b) totSites.add(b); });
+  // 台数集計
+  const totReqUnits = rows.reduce((s,r)=>s+r.reqUnits,0);
+  const totReqUnitsCount = rows.reduce((s,r)=>s+r.reqUnitsCount,0);
+  const totContractUnits = rows.reduce((s,r)=>s+r.contractUnits,0);
+  const totBaseCount = rows.reduce((s,r)=>s+r.baseCount,0);
   const fmtPct = (n,d) => d>0 ? (n/d*100).toFixed(1)+'%' : '-';
+  const fmtAvg = (n,d) => d>0 ? (n/d).toFixed(1) : '-';
   const fmtD = d => { if(!d)return '-'; const p=d.split('-'); return p.length>=3 ? p[0]+'/'+parseInt(p[1])+'/'+parseInt(p[2]) : d; };
   // KPIサマリー
   let html = '<div style="padding:12px 16px">';
@@ -10872,6 +10902,12 @@ function _rsRenderCustomerTab() {
   html += '<div style="background:#fefce8;border:1px solid #fef08a;border-radius:8px;padding:10px"><div style="font-size:11px;color:#854d0e;font-weight:600">受注率</div><div style="font-size:20px;font-weight:700;color:#ca8a04">'+fmtPct(totOrdered,totCases)+'</div><div style="font-size:11px;color:#6b7280">受注÷全依頼</div></div>';
   html += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px"><div style="font-size:11px;color:#991b1b;font-weight:600">失注数</div><div style="font-size:20px;font-weight:700;color:#dc2626">'+totLost+'</div><div style="font-size:11px;color:#6b7280">'+fmtPct(totLost,totCases)+'</div></div>';
   html += '<div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:10px"><div style="font-size:11px;color:#7e22ce;font-weight:600">顧客数</div><div style="font-size:20px;font-weight:700;color:#9333ea">'+rows.length+'</div><div style="font-size:11px;color:#6b7280">依頼のあった顧客</div></div>';
+  // v111: 台数系KPI（5枚）
+  html += '<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:10px"><div style="font-size:11px;color:#155e75;font-weight:600">依頼台数合計</div><div style="font-size:20px;font-weight:700;color:#0e7490">'+totReqUnits+'</div><div style="font-size:11px;color:#6b7280">'+totReqUnitsCount+'件分</div></div>';
+  html += '<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:10px"><div style="font-size:11px;color:#155e75;font-weight:600">契約台数合計</div><div style="font-size:20px;font-weight:700;color:#0e7490">'+totContractUnits+'</div><div style="font-size:11px;color:#6b7280">契約済PL合算</div></div>';
+  html += '<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px"><div style="font-size:11px;color:#78350f;font-weight:600">充足率</div><div style="font-size:20px;font-weight:700;color:#b45309">'+fmtPct(totContractUnits,totReqUnits)+'</div><div style="font-size:11px;color:#6b7280">契約÷依頼</div></div>';
+  html += '<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px"><div style="font-size:11px;color:#5b21b6;font-weight:600">平均依頼台数</div><div style="font-size:20px;font-weight:700;color:#6d28d9">'+fmtAvg(totReqUnits,totReqUnitsCount)+'</div><div style="font-size:11px;color:#6b7280">／入力あり件</div></div>';
+  html += '<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px"><div style="font-size:11px;color:#5b21b6;font-weight:600">平均契約台数</div><div style="font-size:20px;font-weight:700;color:#6d28d9">'+fmtAvg(totContractUnits,totBaseCount)+'</div><div style="font-size:11px;color:#6b7280">／通常＋追加件</div></div>';
   html += '</div>';
   // 円グラフ＋テーブル 2カラム
   html += '<div style="display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start">';
@@ -10880,6 +10916,11 @@ function _rsRenderCustomerTab() {
   html += '<th style="text-align:left">顧客名</th>';
   html += '<th style="text-align:right">依頼件数</th>';
   html += '<th style="text-align:left">内訳</th>';
+  html += '<th style="text-align:right">依頼台数</th>';
+  html += '<th style="text-align:right">平均依頼</th>';
+  html += '<th style="text-align:right">契約台数</th>';
+  html += '<th style="text-align:right">平均契約</th>';
+  html += '<th style="text-align:right">充足率</th>';
   html += '<th style="text-align:right">現場数</th>';
   html += '<th style="text-align:right">受注数</th>';
   html += '<th style="text-align:right">受注率</th>';
@@ -10891,10 +10932,17 @@ function _rsRenderCustomerTab() {
     if (r.normal) breakdown.push('通常'+r.normal);
     if (r.add) breakdown.push('追加'+r.add);
     if (r.ext) breakdown.push('延長'+r.ext);
+    const fulfillRate = r.reqUnits > 0 ? (r.contractUnits/r.reqUnits*100) : null;
+    const fulfillCls = fulfillRate==null ? 'color:#9ca3af' : (fulfillRate>=100 ? 'color:#15803d;font-weight:600' : fulfillRate>=70 ? 'color:#ca8a04;font-weight:600' : 'color:#dc2626;font-weight:600');
     html += '<tr>';
     html += '<td style="text-align:left">'+esc(r.name)+'</td>';
     html += '<td style="text-align:right;font-weight:700;color:#1e3a5f">'+r.total+'</td>';
     html += '<td style="text-align:left;color:#6b7280;font-size:11px">'+breakdown.join(' / ')+'</td>';
+    html += '<td style="text-align:right;color:#0e7490">'+(r.reqUnits||'-')+'</td>';
+    html += '<td style="text-align:right;color:#6d28d9">'+fmtAvg(r.reqUnits,r.reqUnitsCount)+'</td>';
+    html += '<td style="text-align:right;color:#0e7490;font-weight:600">'+(r.contractUnits||'-')+'</td>';
+    html += '<td style="text-align:right;color:#6d28d9">'+fmtAvg(r.contractUnits,r.baseCount)+'</td>';
+    html += '<td style="text-align:right;'+fulfillCls+'">'+(fulfillRate==null?'-':fulfillRate.toFixed(1)+'%')+'</td>';
     html += '<td style="text-align:right">'+r.siteSet.size+'</td>';
     html += '<td style="text-align:right;color:#15803d;font-weight:600">'+r.orderedCount+'</td>';
     html += '<td style="text-align:right;color:'+(r.orderedCount/r.total>=0.5?'#15803d':'#6b7280')+';font-weight:600">'+fmtPct(r.orderedCount,r.total)+'</td>';
@@ -10902,7 +10950,7 @@ function _rsRenderCustomerTab() {
     html += '<td style="text-align:left;color:#6b7280">'+fmtD(r.lastReception)+'</td>';
     html += '</tr>';
   });
-  html += '<tr class="sv-total"><td style="text-align:left">合計</td><td style="text-align:right">'+totCases+'</td><td style="text-align:left;font-size:11px">通常'+totNormal+'/追加'+totAdd+'/延長'+totExt+'</td><td style="text-align:right">'+totSites.size+'</td><td style="text-align:right">'+totOrdered+'</td><td style="text-align:right">'+fmtPct(totOrdered,totCases)+'</td><td style="text-align:right">'+totLost+'</td><td></td></tr>';
+  html += '<tr class="sv-total"><td style="text-align:left">合計</td><td style="text-align:right">'+totCases+'</td><td style="text-align:left;font-size:11px">通常'+totNormal+'/追加'+totAdd+'/延長'+totExt+'</td><td style="text-align:right">'+totReqUnits+'</td><td style="text-align:right">'+fmtAvg(totReqUnits,totReqUnitsCount)+'</td><td style="text-align:right">'+totContractUnits+'</td><td style="text-align:right">'+fmtAvg(totContractUnits,totBaseCount)+'</td><td style="text-align:right">'+fmtPct(totContractUnits,totReqUnits)+'</td><td style="text-align:right">'+totSites.size+'</td><td style="text-align:right">'+totOrdered+'</td><td style="text-align:right">'+fmtPct(totOrdered,totCases)+'</td><td style="text-align:right">'+totLost+'</td><td></td></tr>';
   html += '</tbody></table></div>';
   html += '</div>'; // grid
   html += '</div>'; // padding
@@ -10944,43 +10992,72 @@ function _rsDrawCustomerPie() {
 }
 
 // ─ 月次推移タブ ─
+let _rsMonthlyChartMode = 'count'; // 'count' or 'units'
+function switchRsMonthlyChartMode(mode) {
+  _rsMonthlyChartMode = mode;
+  document.getElementById('rsChartTabCount')?.classList.toggle('active', mode==='count');
+  document.getElementById('rsChartTabUnits')?.classList.toggle('active', mode==='units');
+  _rsDrawMonthlyBar();
+}
 function _rsRenderMonthlyTab() {
   const src = (cases||[]).filter(c => !c.deleted && _rsCaseInPeriod(c));
   if (!src.length) {
     return '<div style="padding:40px;text-align:center;color:#9ca3af">対象期間に依頼がありません</div>';
   }
-  // 月次集計: ym => {normal, add, ext}
+  // 月次集計: ym => {normal, add, ext, reqUnits, reqUnitsCount, contractUnits, baseCount}
   const monthly = {};
   src.forEach(c => {
     let ym = '';
     if (c.receptionDate) ym = c.receptionDate.slice(0,7);
     else if (c.createdAt) ym = c.createdAt.slice(0,7);
     if (!ym) return;
-    if (!monthly[ym]) monthly[ym] = { normal:0, add:0, ext:0, total:0 };
-    monthly[ym].total++;
+    if (!monthly[ym]) monthly[ym] = { normal:0, add:0, ext:0, total:0, reqUnits:0, reqUnitsCount:0, contractUnits:0, baseCount:0 };
+    const m = monthly[ym];
+    m.total++;
     const t = c.caseType || '通常';
-    if (t==='追加') monthly[ym].add++;
-    else if (t==='延長') monthly[ym].ext++;
-    else monthly[ym].normal++;
+    if (t==='追加') m.add++;
+    else if (t==='延長') m.ext++;
+    else m.normal++;
+    if (t !== '延長') m.baseCount++;
+    const ru = parseInt(c.requestUnits);
+    if (!isNaN(ru) && ru > 0) { m.reqUnits += ru; m.reqUnitsCount++; }
+    (c.parkingLots||[]).forEach(pl => {
+      if (!pl) return;
+      if (!pl.contractStart || !pl.contractEnd) return;
+      const u = parseInt(pl.units) || 0;
+      if (u > 0) m.contractUnits += u;
+    });
   });
   const labels = Object.keys(monthly).sort();
   const total = labels.reduce((s,l)=>s+monthly[l].total,0);
   const avg = labels.length ? (total/labels.length).toFixed(1) : '0';
+  const totReqUnits = labels.reduce((s,l)=>s+monthly[l].reqUnits,0);
+  const totContractUnits = labels.reduce((s,l)=>s+monthly[l].contractUnits,0);
+  const avgReqUnits = labels.length ? (totReqUnits/labels.length).toFixed(1) : '0';
+  const avgContractUnits = labels.length ? (totContractUnits/labels.length).toFixed(1) : '0';
+  const fmtPct = (n,d) => d>0 ? (n/d*100).toFixed(1)+'%' : '-';
   let html = '<div style="padding:12px 16px">';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px">';
   html += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px"><div style="font-size:11px;color:#1e40af;font-weight:600">総依頼件数</div><div style="font-size:20px;font-weight:700;color:#1e3a5f">'+total+'</div></div>';
-  html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px"><div style="font-size:11px;color:#166534;font-weight:600">月平均</div><div style="font-size:20px;font-weight:700;color:#15803d">'+avg+'</div><div style="font-size:11px;color:#6b7280">件/月</div></div>';
+  html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px"><div style="font-size:11px;color:#166534;font-weight:600">月平均件数</div><div style="font-size:20px;font-weight:700;color:#15803d">'+avg+'</div><div style="font-size:11px;color:#6b7280">件/月</div></div>';
   html += '<div style="background:#fefce8;border:1px solid #fef08a;border-radius:8px;padding:10px"><div style="font-size:11px;color:#854d0e;font-weight:600">対象月数</div><div style="font-size:20px;font-weight:700;color:#ca8a04">'+labels.length+'</div></div>';
+  html += '<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:10px"><div style="font-size:11px;color:#155e75;font-weight:600">月平均依頼台数</div><div style="font-size:20px;font-weight:700;color:#0e7490">'+avgReqUnits+'</div><div style="font-size:11px;color:#6b7280">台/月</div></div>';
+  html += '<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:10px"><div style="font-size:11px;color:#155e75;font-weight:600">月平均契約台数</div><div style="font-size:20px;font-weight:700;color:#0e7490">'+avgContractUnits+'</div><div style="font-size:11px;color:#6b7280">台/月</div></div>';
   html += '</div>';
-  // グラフ
+  // v111: グラフ上部に件数/台数サブタブ
+  html += '<div style="display:flex;gap:6px;margin-bottom:8px">';
+  html += '<button id="rsChartTabCount" class="sv-tab'+( _rsMonthlyChartMode==='count'?' active':'')+'" onclick="switchRsMonthlyChartMode(\'count\')" style="padding:5px 12px;border:1px solid #d1d5db;background:'+(_rsMonthlyChartMode==='count'?'#1e3a5f':'white')+';color:'+(_rsMonthlyChartMode==='count'?'white':'#374151')+';border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📊 件数グラフ</button>';
+  html += '<button id="rsChartTabUnits" class="sv-tab'+( _rsMonthlyChartMode==='units'?' active':'')+'" onclick="switchRsMonthlyChartMode(\'units\')" style="padding:5px 12px;border:1px solid #d1d5db;background:'+(_rsMonthlyChartMode==='units'?'#1e3a5f':'white')+';color:'+(_rsMonthlyChartMode==='units'?'white':'#374151')+';border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🚗 台数グラフ</button>';
+  html += '</div>';
   html += '<div style="height:400px;background:white;padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px"><canvas id="rsMonthlyCanvas"></canvas></div>';
   // テーブル
-  html += '<table class="sv-table" style="font-size:12px"><thead><tr><th style="text-align:left">月</th><th style="text-align:right">通常</th><th style="text-align:right">追加</th><th style="text-align:right">延長</th><th style="text-align:right">合計</th></tr></thead><tbody>';
+  html += '<table class="sv-table" style="font-size:12px"><thead><tr><th style="text-align:left">月</th><th style="text-align:right">通常</th><th style="text-align:right">追加</th><th style="text-align:right">延長</th><th style="text-align:right">合計</th><th style="text-align:right">依頼台数</th><th style="text-align:right">契約台数</th><th style="text-align:right">充足率</th></tr></thead><tbody>';
   labels.forEach(l => {
     const m = monthly[l];
     const [yy,mm] = l.split('-');
-    html += '<tr><td style="text-align:left">'+yy+'年'+parseInt(mm)+'月</td><td style="text-align:right">'+m.normal+'</td><td style="text-align:right">'+m.add+'</td><td style="text-align:right">'+m.ext+'</td><td style="text-align:right;font-weight:700">'+m.total+'</td></tr>';
+    html += '<tr><td style="text-align:left">'+yy+'年'+parseInt(mm)+'月</td><td style="text-align:right">'+m.normal+'</td><td style="text-align:right">'+m.add+'</td><td style="text-align:right">'+m.ext+'</td><td style="text-align:right;font-weight:700">'+m.total+'</td><td style="text-align:right;color:#0e7490">'+(m.reqUnits||'-')+'</td><td style="text-align:right;color:#0e7490;font-weight:600">'+(m.contractUnits||'-')+'</td><td style="text-align:right">'+fmtPct(m.contractUnits,m.reqUnits)+'</td></tr>';
   });
+  html += '<tr class="sv-total"><td style="text-align:left">合計</td><td style="text-align:right">'+labels.reduce((s,l)=>s+monthly[l].normal,0)+'</td><td style="text-align:right">'+labels.reduce((s,l)=>s+monthly[l].add,0)+'</td><td style="text-align:right">'+labels.reduce((s,l)=>s+monthly[l].ext,0)+'</td><td style="text-align:right">'+total+'</td><td style="text-align:right">'+totReqUnits+'</td><td style="text-align:right">'+totContractUnits+'</td><td style="text-align:right">'+fmtPct(totContractUnits,totReqUnits)+'</td></tr>';
   html += '</tbody></table>';
   html += '</div>';
   window._rsMonthlyData = { labels, monthly };
@@ -10992,26 +11069,31 @@ function _rsDrawMonthlyBar() {
   if (!canvas || !window.Chart || !window._rsMonthlyData) return;
   const d = window._rsMonthlyData;
   const dispLabels = d.labels.map(l => { const [yy,mm]=l.split('-'); return yy+'/'+parseInt(mm); });
-  const normalData = d.labels.map(l => d.monthly[l].normal);
-  const addData = d.labels.map(l => d.monthly[l].add);
-  const extData = d.labels.map(l => d.monthly[l].ext);
   if (_rsChartInstances.monthly) { try { _rsChartInstances.monthly.destroy(); } catch(_){} }
+  let datasets, yAxisLabel;
+  if (_rsMonthlyChartMode === 'count') {
+    datasets = [
+      { label: '通常', data: d.labels.map(l => d.monthly[l].normal), backgroundColor: '#3b82f6', stack: 's1' },
+      { label: '追加', data: d.labels.map(l => d.monthly[l].add),    backgroundColor: '#f59e0b', stack: 's1' },
+      { label: '延長', data: d.labels.map(l => d.monthly[l].ext),    backgroundColor: '#10b981', stack: 's1' }
+    ];
+    yAxisLabel = '件数';
+  } else {
+    datasets = [
+      { label: '依頼台数', data: d.labels.map(l => d.monthly[l].reqUnits),      backgroundColor: '#06b6d4' },
+      { label: '契約台数', data: d.labels.map(l => d.monthly[l].contractUnits), backgroundColor: '#0ea5e9' }
+    ];
+    yAxisLabel = '台数';
+  }
   _rsChartInstances.monthly = new Chart(canvas, {
     type: 'bar',
-    data: {
-      labels: dispLabels,
-      datasets: [
-        { label: '通常', data: normalData, backgroundColor: '#3b82f6', stack: 's1' },
-        { label: '追加', data: addData, backgroundColor: '#f59e0b', stack: 's1' },
-        { label: '延長', data: extData, backgroundColor: '#10b981', stack: 's1' }
-      ]
-    },
+    data: { labels: dispLabels, datasets: datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: { legend: { position: 'top' }, title: { display:true, text:'月別'+yAxisLabel+'推移', font:{size:12} } },
       scales: {
-        x: { stacked: true },
-        y: { stacked: true, ticks: { stepSize: 1 } }
+        x: { stacked: _rsMonthlyChartMode==='count' },
+        y: { stacked: _rsMonthlyChartMode==='count', ticks: { stepSize: 1 }, title: { display:true, text: yAxisLabel } }
       }
     }
   });
