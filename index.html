@@ -1284,22 +1284,14 @@
       </div>
       <!-- 設定タブ（振込先 + 督促） -->
       <div id="mtab-settings" class="master-tab-pane">
-<!-- 振込先設定 -->
+<!-- v111: 振込先設定（複数口座対応） -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
-        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">🏦 振込先設定（請求書に記載）</div>
-        <div class="master-field-grid">
-          <div class="master-field-group"><div class="master-field-label">金融機関名</div><input class="master-field-input" id="bankName" placeholder="○○銀行" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">支店名</div><input class="master-field-input" id="bankBranchName" placeholder="○○支店" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">預金種目</div>
-            <select class="master-field-select" id="bankAccountType" onchange="updateBankInfo()">
-              <option value="">── 選択 ──</option>
-              <option value="普通預金">普通預金</option>
-              <option value="当座預金">当座預金</option>
-            </select>
-          </div>
-          <div class="master-field-group"><div class="master-field-label">口座番号</div><input class="master-field-input" id="bankAccountNo" placeholder="0000000" oninput="updateBankInfo()"></div>
-          <div class="master-field-group"><div class="master-field-label">口座名義（カナ）</div><input class="master-field-input" id="bankAccountName" placeholder="カ）トメサポ" oninput="updateBankInfo()"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:2px solid var(--primary-light);padding-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.8px">🏦 振込先口座（請求書に記載）</div>
+          <button class="btn btn-primary btn-xs" onclick="addBankAccount()">＋ 口座を追加</button>
         </div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px">複数口座を登録でき、顧客ごとに使い分けができます。既定口座は、顧客側で指定がない場合に使用されます。</div>
+        <div id="bankListContainer"></div>
       </div>
 <!-- 督促タイミング設定 -->
       <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--gray-50)">
@@ -1849,14 +1841,21 @@ function renderMaster() {
         '</div></td></tr>' +
         '</tbody></table></div></div>';
     }).join('') || '<p style="color:var(--gray-500);font-size:13px;padding:8px 0">拠点がありません</p>';
+    // v111: 顧客ごとの請求書使用口座
+    const _banks = (masterData && masterData.banks) || [];
+    const bankOpts = '<option value="">既定口座を使用</option>' + _banks.map(b =>
+      '<option value="'+b.id+'"'+(cust.defaultBankId===b.id?' selected':'')+'>'+esc(b.label||b.bankName||'無題')+(b.isDefault?'（既定）':'')+'</option>'
+    ).join('');
     return '<div class="master-customer-card">' +
       '<div class="master-customer-header" onclick="toggleCustomerBody(\'' + cust.id + '\')">' +
-      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
       '<span style="font-weight:700">' + esc(cust.name) + '</span>' +
       '<span style="font-size:12px;color:var(--gray-500)">顧客番号: ' + cust.code + '</span>' +
       '<span style="font-size:12px;color:var(--gray-500)">' + cust.bases.length + ' 拠点</span>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">' +
+      '<label style="font-size:11px;color:#6b7280;font-weight:600">💰 請求書口座：</label>' +
+      '<select onchange="updateCustomerBank(\''+cust.id+'\',this.value)" style="padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;background:white">'+bankOpts+'</select>' +
       '<button class="btn btn-danger btn-xs" onclick="deleteCustomer(\'' + cust.id + '\')">顧客削除</button>' +
       '<span style="color:var(--gray-500);font-size:16px">&#9660;</span>' +
       '</div></div>' +
@@ -1875,19 +1874,9 @@ function openMasterModal() {
   _populateDunningSettings();
   // メールテンプレートタブを初期化
   switchMailTab('proposal');
-  // 振込先フィールドを現在の値で埋める
-  const bank = masterData.bankInfo || {};
-  ['bankName','bankBranchName','bankAccountNo','bankAccountName'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = bank[id.replace('bank','').replace(/^([A-Z])/,m=>m.toLowerCase())] || bank[id] || '';
-  });
-  // bankAccountTypeはkeyが違うので個別に
-  const sel = document.getElementById('bankAccountType');
-  if (sel) sel.value = bank.accountType || '';
-  document.getElementById('bankName').value = bank.bankName || '';
-  document.getElementById('bankBranchName').value = bank.branchName || '';
-  document.getElementById('bankAccountNo').value = bank.accountNo || '';
-  document.getElementById('bankAccountName').value = bank.accountName || '';
+  // v111: 振込先口座（複数対応）
+  _migrateBanks();
+  renderBankList();
   // テンプレート状態表示
   const tmplName = localStorage.getItem('invoiceTemplateName');
   const tmplStatus = document.getElementById('invoiceTmplStatus');
@@ -1921,15 +1910,151 @@ function clearInvoiceTemplate() {
   if (el) el.textContent = '未設定';
   showToast('テンプレートをリセットしました');
 }
+// v111: 顧客ごとの使用口座更新
+function updateCustomerBank(custId, bankId) {
+  const cust = (masterData.customers||[]).find(x => x.id === custId);
+  if (!cust) return;
+  cust.defaultBankId = bankId || '';
+  saveMasterToFS();
+}
+
 function updateBankInfo() {
+  // v111: 旧UI互換（単一口座）— 非表示だが呼ばれた場合は既定口座を更新
+  _migrateBanks();
+  const def = _getDefaultBank();
+  if (def) {
+    def.bankName    = document.getElementById('bankName')?.value.trim() || def.bankName;
+    def.branchName  = document.getElementById('bankBranchName')?.value.trim() || def.branchName;
+    def.accountType = document.getElementById('bankAccountType')?.value || def.accountType;
+    def.accountNo   = document.getElementById('bankAccountNo')?.value.trim() || def.accountNo;
+    def.accountName = document.getElementById('bankAccountName')?.value.trim() || def.accountName;
+  }
+  // 旧 bankInfo も同期（既存コード互換）
   masterData.bankInfo = {
-    bankName:     document.getElementById('bankName').value.trim(),
-    branchName:   document.getElementById('bankBranchName').value.trim(),
-    accountType:  document.getElementById('bankAccountType').value,
-    accountNo:    document.getElementById('bankAccountNo').value.trim(),
-    accountName:  document.getElementById('bankAccountName').value.trim(),
+    bankName:    def?.bankName||'', branchName:  def?.branchName||'',
+    accountType: def?.accountType||'', accountNo: def?.accountNo||'', accountName: def?.accountName||''
   };
   saveMasterToFS();
+}
+
+// v111: 複数振込先口座管理 ──────────────────────────────
+function _migrateBanks() {
+  if (!masterData) return;
+  if (!masterData.banks || !Array.isArray(masterData.banks)) masterData.banks = [];
+  if (masterData.banks.length === 0 && masterData.bankInfo) {
+    const b = masterData.bankInfo;
+    if (b.bankName || b.accountNo || b.accountName) {
+      masterData.banks.push({
+        id: 'bank-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+        label: b.bankName || '既定口座',
+        bankName: b.bankName||'', branchName: b.branchName||'',
+        accountType: b.accountType||'', accountNo: b.accountNo||'',
+        accountName: b.accountName||'', isDefault: true
+      });
+    }
+  }
+  if (masterData.banks.length && !masterData.banks.some(x => x.isDefault)) {
+    masterData.banks[0].isDefault = true;
+  }
+}
+function _getDefaultBank() {
+  if (!masterData || !masterData.banks || !masterData.banks.length) return null;
+  return masterData.banks.find(x => x.isDefault) || masterData.banks[0];
+}
+function _getBankById(id) {
+  if (!id || !masterData || !masterData.banks) return null;
+  return masterData.banks.find(x => x.id === id) || null;
+}
+function _getBankForCustomer(customerName) {
+  _migrateBanks();
+  const cust = (typeof getCustomerByName==='function') ? getCustomerByName(customerName) : null;
+  if (cust && cust.defaultBankId) {
+    const b = _getBankById(cust.defaultBankId);
+    if (b) return b;
+  }
+  return _getDefaultBank();
+}
+function addBankAccount() {
+  _migrateBanks();
+  masterData.banks.push({
+    id: 'bank-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+    label: '新規口座', bankName: '', branchName: '',
+    accountType: '', accountNo: '', accountName: '',
+    isDefault: masterData.banks.length === 0
+  });
+  saveMasterToFS();
+  renderBankList();
+}
+function deleteBankAccount(id) {
+  _migrateBanks();
+  const bank = _getBankById(id);
+  if (!bank) return;
+  if (!confirm('口座「'+(bank.label||bank.bankName||'')+'」を削除します。よろしいですか？\n（この口座を使用している顧客は「既定口座を使用」に戻ります）')) return;
+  masterData.banks = masterData.banks.filter(x => x.id !== id);
+  // 既定が消えたら先頭を既定に
+  if (masterData.banks.length && !masterData.banks.some(x => x.isDefault)) {
+    masterData.banks[0].isDefault = true;
+  }
+  // この口座を使っていた顧客をクリア
+  (masterData.customers||[]).forEach(c => { if (c.defaultBankId === id) c.defaultBankId = ''; });
+  saveMasterToFS();
+  renderBankList();
+  renderMaster();
+}
+function setBankDefault(id) {
+  _migrateBanks();
+  masterData.banks.forEach(x => x.isDefault = (x.id === id));
+  saveMasterToFS();
+  renderBankList();
+  renderMaster(); // 顧客側ドロップダウンの既定表示を更新
+}
+function updateBankField(id, field, value) {
+  _migrateBanks();
+  const b = _getBankById(id);
+  if (!b) return;
+  b[field] = (typeof value==='string') ? value.trim() : value;
+  // 旧 bankInfo も既定口座と同期
+  const def = _getDefaultBank();
+  if (def) {
+    masterData.bankInfo = {
+      bankName: def.bankName||'', branchName: def.branchName||'',
+      accountType: def.accountType||'', accountNo: def.accountNo||'', accountName: def.accountName||''
+    };
+  }
+  saveMasterToFS();
+}
+function renderBankList() {
+  _migrateBanks();
+  const container = document.getElementById('bankListContainer');
+  if (!container) return;
+  const banks = masterData.banks || [];
+  let html = '';
+  if (!banks.length) {
+    html = '<div style="color:#9ca3af;font-size:12px;padding:12px;text-align:center">口座が登録されていません。「＋口座を追加」から登録してください</div>';
+  } else {
+    banks.forEach(b => {
+      const atOpts = ['','普通預金','当座預金'].map(v =>
+        '<option value="'+v+'"'+(b.accountType===v?' selected':'')+'>'+(v||'── 選択 ──')+'</option>').join('');
+      html += '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;background:white">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
+      html += b.isDefault
+        ? '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:3px 8px;border-radius:12px;font-weight:700">★ 既定口座</span>'
+        : '<button class="btn btn-outline btn-xs" onclick="setBankDefault(\''+b.id+'\')" title="この口座を既定にする">既定にする</button>';
+      html += '<input type="text" value="'+esc(b.label||'')+'" placeholder="表示名（例：GMOあおぞら法人）" oninput="updateBankField(\''+b.id+'\',\'label\',this.value)" style="flex:1;min-width:150px;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-weight:600">';
+      html += '<button class="btn btn-danger btn-xs" onclick="deleteBankAccount(\''+b.id+'\')">削除</button>';
+      html += '</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">';
+      html += '<input type="text" value="'+esc(b.bankName||'')+'" placeholder="金融機関名" oninput="updateBankField(\''+b.id+'\',\'bankName\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">';
+      html += '<input type="text" value="'+esc(b.branchName||'')+'" placeholder="支店名" oninput="updateBankField(\''+b.id+'\',\'branchName\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">';
+      html += '</div>';
+      html += '<div style="display:grid;grid-template-columns:auto 1fr 2fr;gap:6px">';
+      html += '<select onchange="updateBankField(\''+b.id+'\',\'accountType\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">'+atOpts+'</select>';
+      html += '<input type="text" value="'+esc(b.accountNo||'')+'" placeholder="口座番号" oninput="updateBankField(\''+b.id+'\',\'accountNo\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">';
+      html += '<input type="text" value="'+esc(b.accountName||'')+'" placeholder="口座名義（カ）トメサポ）" oninput="updateBankField(\''+b.id+'\',\'accountName\',this.value)" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">';
+      html += '</div></div>';
+    });
+  }
+  container.innerHTML = html;
 }
 
 // ── 印鑑画像のアップロード ──
@@ -9472,7 +9597,8 @@ async function _genInvoiceFromTemplate(c, sealMode) {
     showToast('Excelテンプレートライブラリ読み込み中です。');
     return;
   }
-  const bank = masterData.bankInfo || {};
+  // v111: 顧客ごとの振込先を参照（未指定なら既定口座、どちらもなければ旧bankInfoへフォールバック）
+  const bank = _getBankForCustomer(c.customerName) || masterData.bankInfo || {};
 
   const fmtD = d => {
     if (!d) return '';
